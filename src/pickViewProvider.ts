@@ -105,17 +105,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         candidates: this.controller.getStatus().candidateDetails
       });
 
-      // If only one candidate, skip to final result
-      if (uniqueCandidates.length === 1) {
-        this.sendMessage({ 
-          type: 'status', 
-          message: 'Only one unique regex generated. Showing result directly.' 
-        });
-        await this.handleFinalResult();
-        return;
-      }
-
-      // Generate first word pair
+      // Generate first word pair (or proceed to final result if only 1 candidate)
       this.handleRequestNextPair();
       
     } catch (error) {
