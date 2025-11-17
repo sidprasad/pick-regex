@@ -77,7 +77,7 @@ export class PickController {
   /**
    * Generate the next distinguishing word pair
    */
-  generateNextPair(): WordPair {
+  async generateNextPair(): Promise<WordPair> {
     const activeCandidates = this.getActiveCandidates();
     
     if (activeCandidates.length <= 1) {
@@ -85,7 +85,7 @@ export class PickController {
     }
 
     try {
-      const result = this.analyzer.generateTwoDistinguishingWords(
+      const result = await this.analyzer.generateTwoDistinguishingWords(
         activeCandidates,
         Array.from(this.usedWords)
       );
@@ -161,7 +161,7 @@ export class PickController {
   /**
    * Generate example words IN and OUT of the final regex
    */
-  generateFinalExamples(count: number = 5): { wordsIn: string[]; wordsOut: string[] } {
+  async generateFinalExamples(count: number = 5): Promise<{ wordsIn: string[]; wordsOut: string[] }> {
     if (!this.finalRegex) {
       throw new Error('No final regex available');
     }
@@ -180,7 +180,7 @@ export class PickController {
       // Generate words OUT of the regex
       for (let i = 0; i < count; i++) {
         try {
-          const pair = this.analyzer.generateWordPair(
+          const pair = await this.analyzer.generateWordPair(
             this.finalRegex,
             Array.from(this.usedWords)
           );

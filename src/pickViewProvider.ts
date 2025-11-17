@@ -88,17 +88,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private handleRequestNextPair() {
+  private async handleRequestNextPair() {
     try {
       const activeCount = this.controller.getActiveCandidateCount();
       
       if (activeCount <= 1) {
         // We're done! Show final result
-        this.handleFinalResult();
+        await this.handleFinalResult();
         return;
       }
 
-      const pair = this.controller.generateNextPair();
+      const pair = await this.controller.generateNextPair();
       const status = this.controller.getStatus();
       
       this.sendMessage({
@@ -114,7 +114,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private handleVote(acceptedWord: string) {
+  private async handleVote(acceptedWord: string) {
     try {
       this.controller.processVote(acceptedWord);
       
@@ -122,7 +122,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       const status = this.controller.getStatus();
       
       if (state === PickState.FINAL_RESULT) {
-        this.handleFinalResult();
+        await this.handleFinalResult();
       } else {
         // Send updated status
         this.sendMessage({
@@ -141,14 +141,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private handleFinalResult() {
+  private async handleFinalResult() {
     try {
       const finalRegex = this.controller.getFinalRegex();
       if (!finalRegex) {
         throw new Error('No final regex available');
       }
 
-      const examples = this.controller.generateFinalExamples(5);
+      const examples = await this.controller.generateFinalExamples(5);
       
       this.sendMessage({
         type: 'finalResult',

@@ -4,7 +4,7 @@
   "description": "Generate a REGEX from LLMs and human classifications.",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.106.0"
+    "vscode": "^1.95.0"
   },
   "categories": [
     "Other"
@@ -30,18 +30,7 @@
         }
       ]
     },
-    "commands": [
-      {
-        "command": "regexGen.generateFromPrompt",
-        "title": "Regex: Generate from Prompt",
-        "category": "RegexGen"
-      },
-      {
-        "command": "pick.helloWorld",
-        "title": "Hello World",
-        "category": "PICK"
-      }
-    ]
+    "commands": []
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

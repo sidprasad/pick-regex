@@ -1,5 +1,12 @@
 import RandExp from 'randexp';
-import { RB } from '@gruhn/regex-utils';
+
+/**
+ * Lazy load the ES module
+ */
+async function getRB() {
+  const module = await import('@gruhn/regex-utils');
+  return module.RB;
+}
 
 /**
  * Represents the relationship between two regular expressions
@@ -78,8 +85,9 @@ export class RegexAnalyzer {
   /**
    * 2. Analyze relationship between two regexes using automata
    */
-  analyzeRelationship(regexA: string, regexB: string): RelationshipResult {
+  async analyzeRelationship(regexA: string, regexB: string): Promise<RelationshipResult> {
     try {
+      const RB = await getRB();
       const rbA = RB(new RegExp(`^${regexA}$`));
       const rbB = RB(new RegExp(`^${regexB}$`));
       
@@ -90,8 +98,25 @@ export class RegexAnalyzer {
       const isDisjoint = rbA.isDisjointFrom(new RegExp(`^${regexB}$`));
       
       // Collect examples
-      const samplesA = Array.from(rbA.sample().take(5)) as string[];
-      const samplesB = Array.from(rbB.sample().take(5)) as string[];
+      const samplesA: string[] = [];
+      const samplesB: string[] = [];
+      
+      const genA = rbA.sample();
+      for (let i = 0; i < 5; i++) {
+        const next = genA.next();
+        if (!next.done) {
+          samplesA.push(next.value);
+        }
+      }
+      
+      const genB = rbB.sample();
+      for (let i = 0; i < 5; i++) {
+        const next = genB.next();
+        if (!next.done) {
+          samplesB.push(next.value);
+        }
+      }
+      
       const reA = new RegExp(`^${regexA}$`);
       const reB = new RegExp(`^${regexB}$`);
       
@@ -132,8 +157,9 @@ export class RegexAnalyzer {
   /**
    * 3. Generate a word IN and a word NOT IN a regex
    */
-  generateWordPair(regex: string, excludedWords: string[] = []): WordPairResult {
+  async generateWordPair(regex: string, excludedWords: string[] = []): Promise<WordPairResult> {
     try {
+      const RB = await getRB();
       const re = new RegExp(`^${regex}$`);
       
       // Word that matches
@@ -146,10 +172,15 @@ export class RegexAnalyzer {
       let wordNotIn = '';
       try {
         // Try to generate from complement
-        for (const word of complement.sample().take(10)) {
-          if (!excludedWords.includes(word) && word !== wordIn) {
-            wordNotIn = word;
-            break;
+        const gen = complement.sample();
+        for (let i = 0; i < 10; i++) {
+          const next = gen.next();
+          if (!next.done) {
+            const word = next.value;
+            if (!excludedWords.includes(word) && word !== wordIn) {
+              wordNotIn = word;
+              break;
+            }
           }
         }
       } catch {
@@ -220,12 +251,13 @@ export class RegexAnalyzer {
   /**
    * Generate distinguishing words between two regexes
    */
-  generateDistinguishingWords(
+  async generateDistinguishingWords(
     regex1: string,
     regex2: string,
     excludedWords: string[] = []
-  ): DistinguishingWordsResult {
+  ): Promise<DistinguishingWordsResult> {
     try {
+      const RB = await getRB();
       const rb1 = RB(new RegExp(`^${regex1}$`));
       const rb2 = RB(new RegExp(`^${regex2}$`));
       
@@ -239,10 +271,15 @@ export class RegexAnalyzer {
       
       // Try to sample from differences
       try {
-        for (const word of onlyIn1.sample().take(10)) {
-          if (!excludedWords.includes(word)) {
-            word1 = word;
-            break;
+        const gen1 = onlyIn1.sample();
+        for (let i = 0; i < 10; i++) {
+          const next = gen1.next();
+          if (!next.done) {
+            const word = next.value;
+            if (!excludedWords.includes(word)) {
+              word1 = word;
+              break;
+            }
           }
         }
       } catch {
@@ -251,10 +288,15 @@ export class RegexAnalyzer {
       }
       
       try {
-        for (const word of onlyIn2.sample().take(10)) {
-          if (!excludedWords.includes(word) && word !== word1) {
-            word2 = word;
-            break;
+        const gen2 = onlyIn2.sample();
+        for (let i = 0; i < 10; i++) {
+          const next = gen2.next();
+          if (!next.done) {
+            const word = next.value;
+            if (!excludedWords.includes(word) && word !== word1) {
+              word2 = word;
+              break;
+            }
           }
         }
       } catch {
@@ -276,10 +318,10 @@ export class RegexAnalyzer {
   /**
    * Generate two distinguishing words from candidates
    */
-  generateTwoDistinguishingWords(
+  async generateTwoDistinguishingWords(
     candidateRegexes: string[],
     excludedWords: string[] = []
-  ): TwoDistinguishingWordsResult {
+  ): Promise<TwoDistinguishingWordsResult> {
     if (candidateRegexes.length === 0) {
       throw new Error('Need at least one candidate regex');
     }

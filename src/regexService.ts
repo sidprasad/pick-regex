@@ -44,8 +44,8 @@ export async function generateRegexFromDescription(
 
   let fullText = '';
   for await (const chunk of response.stream) {
-    if (chunk.kind === 'text') {
-      fullText += chunk.text;
+    if (chunk instanceof vscode.LanguageModelTextPart) {
+      fullText += chunk.value;
     }
   }
 
