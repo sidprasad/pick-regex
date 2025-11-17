@@ -415,26 +415,29 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     
     .word-card {
       flex: 1;
-      padding: 20px;
+      padding: 18px;
       background: var(--vscode-editor-background);
-      border: 2px solid var(--vscode-input-border);
-      border-radius: 4px;
+      border: 1px solid var(--vscode-input-border);
+      border-radius: 8px;
       text-align: center;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 0 0 1px transparent;
     }
-    
+
     .word-card:hover {
       border-color: var(--vscode-focusBorder);
+      box-shadow: 0 0 0 1px var(--vscode-focusBorder);
       background: var(--vscode-list-hoverBackground);
     }
-    
+
     .word-card .word {
-      font-size: 1.5em;
+      font-size: 1.4em;
       font-weight: bold;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
       color: var(--vscode-editor-foreground);
-      font-family: monospace;
+      font-family: var(--vscode-editor-font-family, monospace);
+      letter-spacing: 0.5px;
     }
     
     .status-bar {
@@ -451,14 +454,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
     
     .candidate-item {
-      padding: 8px;
+      padding: 10px;
       margin: 4px 0;
       background: var(--vscode-list-inactiveSelectionBackground);
-      border-radius: 2px;
-      font-family: monospace;
+      border-radius: 6px;
+      font-family: var(--vscode-editor-font-family, monospace);
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
+      gap: 12px;
     }
     
     .candidate-item.eliminated {
@@ -469,8 +473,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     .candidate-item.active {
       background: var(--vscode-list-activeSelectionBackground);
       border-left: 3px solid var(--vscode-focusBorder);
+      box-shadow: inset 0 0 0 1px var(--vscode-focusBorder);
     }
-    
+
     .badge {
       background: var(--vscode-badge-background);
       color: var(--vscode-badge-foreground);
@@ -478,19 +483,61 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       border-radius: 10px;
       font-size: 0.85em;
     }
-    
+
+    .regex-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--vscode-focusBorder);
+      background: linear-gradient(
+        90deg,
+        var(--vscode-textCodeBlock-background),
+        var(--vscode-textPreformat-background, var(--vscode-editor-selectionBackground))
+      );
+      font-size: 0.95em;
+      word-break: break-all;
+    }
+
+    .regex-chip code {
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 1em;
+    }
+
+    .candidate-votes {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
     .final-result {
       text-align: center;
     }
-    
+
     .regex-display {
-      font-size: 1.5em;
-      font-family: monospace;
-      padding: 15px;
-      background: var(--vscode-textCodeBlock-background);
-      border-radius: 4px;
+      font-size: 1.4em;
+      font-family: var(--vscode-editor-font-family, monospace);
+      padding: 18px;
+      background: linear-gradient(120deg,
+        rgba(45, 125, 154, 0.25),
+        var(--vscode-textCodeBlock-background),
+        rgba(45, 125, 154, 0.25));
+      border-radius: 10px;
       margin: 15px 0;
       word-break: break-all;
+      border: 1px solid var(--vscode-focusBorder);
+      box-shadow: 0 0 10px rgba(0,0,0,0.25);
+    }
+
+    .regex-display::before {
+      content: 'Current regex';
+      display: block;
+      font-size: 0.7em;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 6px;
+      color: var(--vscode-descriptionForeground);
     }
     
     .examples {
@@ -554,13 +601,21 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       margin-top: 10px;
     }
 
+    button.icon-button {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      margin: 0 4px;
+    }
+
     button.accept {
       background: #4caf50;
       color: white;
-    }
-
-    button.accept:hover {
-      background: #45a049;
     }
 
     button.reject {
@@ -568,17 +623,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       color: white;
     }
 
-    button.reject:hover {
-      background: #da190b;
-    }
-
     button.unsure {
       background: #ff9800;
       color: white;
-    }
-
-    button.unsure:hover {
-      background: #e68900;
     }
 
     .word-card.classified {
@@ -881,10 +928,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         const div = document.createElement('div');
         div.className = \`candidate-item \${c.eliminated ? 'eliminated' : 'active'}\`;
         div.innerHTML = \`
-          <span>\${c.pattern}</span>
+          <span class="regex-chip" title="\${c.pattern}"><code>\${c.pattern}</code></span>
           <div class="candidate-votes">
-            <span class="badge" style="background: #4caf50;">✓ \${c.positiveVotes}</span>
-            <span class="badge" style="background: #f44336;">✗ \${c.negativeVotes}</span>
+            <span class="badge" style="background: #4caf50;">👍 \${c.positiveVotes}</span>
+            <span class="badge" style="background: #f44336;">👎 \${c.negativeVotes}</span>
           </div>
         \`;
         candidatesList.appendChild(div);
@@ -927,17 +974,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         <div class="word-card" id="card-\${pair.word1}">
           <div class="word">\${pair.word1}</div>
           <div class="word-actions">
-            <button class="accept" onclick="classifyWord('\${pair.word1}', 'accept')">✓ Accept</button>
-            <button class="reject" onclick="classifyWord('\${pair.word1}', 'reject')">✗ Reject</button>
-            <button class="unsure" onclick="classifyWord('\${pair.word1}', 'unsure')">? Unsure</button>
+            <button class="icon-button accept" title="Accept" aria-label="Accept" onclick="classifyWord('\\${pair.word1}', 'accept')">👍</button>
+            <button class="icon-button reject" title="Reject" aria-label="Reject" onclick="classifyWord('\\${pair.word1}', 'reject')">👎</button>
+            <button class="icon-button unsure" title="Unsure" aria-label="Unsure" onclick="classifyWord('\\${pair.word1}', 'unsure')">🤔</button>
           </div>
         </div>
         <div class="word-card" id="card-\${pair.word2}">
           <div class="word">\${pair.word2}</div>
           <div class="word-actions">
-            <button class="accept" onclick="classifyWord('\${pair.word2}', 'accept')">✓ Accept</button>
-            <button class="reject" onclick="classifyWord('\${pair.word2}', 'reject')">✗ Reject</button>
-            <button class="unsure" onclick="classifyWord('\${pair.word2}', 'unsure')">? Unsure</button>
+            <button class="icon-button accept" title="Accept" aria-label="Accept" onclick="classifyWord('\\${pair.word2}', 'accept')">👍</button>
+            <button class="icon-button reject" title="Reject" aria-label="Reject" onclick="classifyWord('\\${pair.word2}', 'reject')">👎</button>
+            <button class="icon-button unsure" title="Unsure" aria-label="Unsure" onclick="classifyWord('\\${pair.word2}', 'unsure')">🤔</button>
           </div>
         </div>
       \`;
@@ -960,9 +1007,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           </div>
           <div class="history-classification">
             <select onchange="updateClassification(\${index}, this.value)">
-              <option value="accept" \${item.classification === 'accept' ? 'selected' : ''}>✓ Accept</option>
-              <option value="reject" \${item.classification === 'reject' ? 'selected' : ''}>✗ Reject</option>
-              <option value="unsure" \${item.classification === 'unsure' ? 'selected' : ''}>? Unsure</option>
+              <option value="accept" \${item.classification === 'accept' ? 'selected' : ''}>👍 Accept</option>
+              <option value="reject" \${item.classification === 'reject' ? 'selected' : ''}>👎 Reject</option>
+              <option value="unsure" \${item.classification === 'unsure' ? 'selected' : ''}>🤔 Unsure</option>
             </select>
           </div>
         \`;
