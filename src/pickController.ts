@@ -105,10 +105,9 @@ export class PickController {
    */
   async generateNextPair(): Promise<WordPair> {
     const activeCandidates = this.getActiveCandidates();
-    logger.info(`Request to generate next pair with ${activeCandidates.length} active candidates.`);
-
-    if (activeCandidates.length <= 1) {
-      throw new Error('Not enough active candidates to generate pairs');
+    
+    if (activeCandidates.length === 0) {
+      throw new Error('No active candidates to generate pairs');
     }
 
     try {
@@ -237,28 +236,25 @@ export class PickController {
     const activeCount = activeCandidates.length;
 
     if (activeCount === 1) {
-      const candidate = this.candidates.find(c => !c.eliminated);
-      // Select if it has at least one positive vote OR if it's the only candidate from the start
-      if (candidate && (candidate.positiveVotes > 0 || this.wordHistory.length === 0)) {
+      // Check if user has accepted a word that matches this regex
+      const remainingRegex = activeCandidates[0];
+      const hasAcceptedMatchingWord = this.wordHistory.some(
+        record => 
+          record.classification === WordClassification.ACCEPT && 
+          record.matchingRegexes.includes(remainingRegex)
+      );
+      
+      if (hasAcceptedMatchingWord) {
+        // User has accepted a word IN the remaining regex - we're done!
         this.state = PickState.FINAL_RESULT;
-        this.finalRegex = candidate.pattern;
-        logger.info(`Final regex selected with remaining candidate: ${this.finalRegex}`);
+        this.finalRegex = remainingRegex;
       }
     } else if (activeCount === 0) {
-      // All eliminated - pick the one with most positive votes, or least negative votes
-      const best = this.candidates.reduce((prev, curr) => {
-        if (curr.positiveVotes > prev.positiveVotes) {
-          return curr;
-        }
-        if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
-          return curr;
-        }
-        return prev;
-      });
+      // All eliminated - NO REGEX IS CORRECT
       this.state = PickState.FINAL_RESULT;
-      this.finalRegex = best.pattern;
-      logger.warn('All candidates eliminated; selected best remaining regex based on votes.');
+      this.finalRegex = null;
     }
+    // When there's 1 candidate but no accepted word yet, continue showing pairs
   }
 
   /**
@@ -412,6 +408,39 @@ export class PickController {
     this.finalRegex = null;
     this.wordHistory = [];
     logger.info('Reset PickController state to INITIAL.');
+  }
+
+  /**
+   * Manually finish and select the final regex
+   */
+  finishSelection(): void {
+    const activeCandidates = this.getActiveCandidates();
+    
+    if (activeCandidates.length === 0) {
+      // Pick best from eliminated candidates
+      const best = this.candidates.reduce((prev, curr) => {
+        if (curr.positiveVotes > prev.positiveVotes) {
+          return curr;
+        }
+        if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
+          return curr;
+        }
+        return prev;
+      });
+      this.finalRegex = best.pattern;
+    } else if (activeCandidates.length === 1) {
+      // Select the remaining candidate
+      this.finalRegex = activeCandidates[0];
+    } else {
+      // Multiple candidates - pick the one with most positive votes
+      const activeDetails = this.candidates.filter(c => !c.eliminated);
+      const best = activeDetails.reduce((prev, curr) => 
+        curr.positiveVotes > prev.positiveVotes ? curr : prev
+      );
+      this.finalRegex = best.pattern;
+    }
+    
+    this.state = PickState.FINAL_RESULT;
   }
 
   /**

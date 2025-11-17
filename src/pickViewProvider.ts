@@ -123,9 +123,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     try {
       const activeCount = this.controller.getActiveCandidateCount();
       
-      if (activeCount <= 1) {
-        // We're done! Show final result
-        await this.handleFinalResult();
+      if (activeCount === 0) {
+        // No candidates left - show error
+        this.sendMessage({ 
+          type: 'error', 
+          message: 'No active candidates remaining' 
+        });
         return;
       }
 
@@ -264,8 +267,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private async handleFinalResult() {
     try {
       const finalRegex = this.controller.getFinalRegex();
-      if (!finalRegex) {
-        throw new Error('No final regex available');
+      
+      if (finalRegex === null) {
+        // All candidates were eliminated - none are correct
+        this.sendMessage({
+          type: 'noRegexFound',
+          message: 'All candidate regexes were eliminated. None of them match your requirements.',
+          candidateDetails: this.controller.getStatus().candidateDetails
+        });
+        return;
       }
 
       const examples = await this.controller.generateFinalExamples(5);
@@ -797,6 +807,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'finalResult':
           showFinalResult(message.regex, message.wordsIn, message.wordsOut);
           break;
+        case 'noRegexFound':
+          showNoRegexFound(message.message, message.candidateDetails);
+          break;
         case 'insufficientWords':
           showInsufficientWords(message.candidates, message.status);
           break;
@@ -980,6 +993,29 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       wordsOut.innerHTML = outWords.map(w => 
         \`<div class="example-item">\${w}</div>\`
       ).join('');
+    }
+
+    function showNoRegexFound(message, candidateDetails) {
+      showSection('final');
+      finalRegex.textContent = 'No regex found';
+      finalRegex.style.color = '#f48771';
+      
+      const detailsHtml = candidateDetails.map(c => 
+        \`<div class="example-item" style="opacity: 0.7;">
+          <strong>\${c.pattern}</strong> - Eliminated with \${c.negativeVotes} negative votes
+        </div>\`
+      ).join('');
+      
+      wordsIn.innerHTML = \`
+        <div style="padding: 10px; background: var(--vscode-editorWarning-background); color: var(--vscode-editorWarning-foreground); border-radius: 4px; margin-bottom: 10px;">
+          \${message}
+        </div>
+        <div style="margin-top: 10px; font-size: 12px; opacity: 0.8;">
+          <strong>All candidates were eliminated:</strong>
+        </div>
+        \${detailsHtml}
+      \`;
+      wordsOut.innerHTML = '';
     }
 
     function resetUI() {

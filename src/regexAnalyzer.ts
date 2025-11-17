@@ -330,6 +330,21 @@ export class RegexAnalyzer {
       throw new Error('Need at least one candidate regex');
     }
 
+    // Special case: only one candidate - show word IN and word NOT IN
+    if (candidateRegexes.length === 1) {
+      const regex = candidateRegexes[0];
+      const pair = await this.generateWordPair(regex, excludedWords);
+      
+      return {
+        words: [pair.wordIn, pair.wordNotIn],
+        explanation: `Single candidate: '${pair.wordIn}' matches, '${pair.wordNotIn}' doesn't`,
+        properties: [
+          'Matches the regex',
+          'Does not match the regex'
+        ]
+      };
+    }
+
     try {
       const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
       
