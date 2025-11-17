@@ -316,6 +316,10 @@ export class RegexAnalyzer {
   }
 
   /**
+   * 
+   * TODO: This is buggy -- sometimes the two words are the same?
+   * What about all the edge cases?
+   * 
    * Generate two distinguishing words from candidates
    */
   async generateTwoDistinguishingWords(
