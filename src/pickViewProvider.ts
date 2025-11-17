@@ -247,7 +247,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PICK - Regex Learner</title>
+  <title>PICK - Regex Builder</title>
   <style>
     body {
       padding: 10px;
@@ -596,10 +596,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   <div class="container">
     <!-- Initial Prompt -->
     <div id="promptSection" class="section">
-      <h2>🎯 PICK: Regex Builder</h2>
-      <p>Describe the pattern you want to match:</p>
+      <h2>PICK: Regex Builder</h2>
+      <p>Describe the regex you want to build:</p>
       <input type="text" id="promptInput" placeholder="e.g., email addresses, phone numbers, dates..." />
-      <button id="generateBtn">Generate Candidates</button>
+      <button id="generateBtn">Start PICKing</button>
     </div>
 
     <!-- Status Bar -->
@@ -611,7 +611,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       <div class="word-pair" id="wordPair"></div>
       <div class="candidates-list" id="candidatesList"></div>
       <div class="word-history" id="wordHistory">
-        <h3>📋 Word Classification History</h3>
+        <h3>Word Classification History</h3>
         <div id="historyItems"></div>
       </div>
     </div>
@@ -619,7 +619,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     <!-- Final Result -->
     <div id="finalSection" class="section hidden">
       <div class="final-result">
-        <h2>🎉 Final Regex</h2>
+        <h2>Final Regex</h2>
         <div class="regex-display" id="finalRegex"></div>
         <div class="examples">
           <div class="example-box in">
@@ -631,7 +631,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
             <div id="wordsOut"></div>
           </div>
         </div>
-        <button id="resetBtn">Start Over</button>
+        <button id="resetBtn">Build another REGEX</button>
       </div>
     </div>
 
