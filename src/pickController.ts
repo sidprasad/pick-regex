@@ -1,4 +1,5 @@
 import { createRegexAnalyzer, RegexAnalyzer } from './regexAnalyzer';
+import * as vscode from 'vscode';
 
 interface CandidateRegex {
   pattern: string;
@@ -47,6 +48,9 @@ export class PickController {
 
   constructor() {
     this.analyzer = createRegexAnalyzer();
+    // Read threshold from configuration
+    const config = vscode.workspace.getConfiguration('pick');
+    this.thresholdVotes = config.get<number>('eliminationThreshold', 2);
   }
 
   /**

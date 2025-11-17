@@ -9,11 +9,14 @@ export async function generateRegexFromDescription(
   description: string,
   token: vscode.CancellationToken
 ): Promise<RegexGenerationResult> {
-  // 1. Pick a model from whatever providers are available.
-  //    Here we prefer Copilot but you can relax this filter later.
+  // Read configuration
+  const config = vscode.workspace.getConfiguration('pick');
+  const vendor = config.get<string>('llm.vendor', 'copilot');
+  const family = config.get<string>('llm.family', 'gpt-4o');
+
   const models = await vscode.lm.selectChatModels({
-    vendor: 'copilot',       // or omit vendor to accept any
-    family: 'gpt-4o'         // can also omit to accept any family
+    vendor: vendor as 'copilot' | 'openai' | 'anthropic',
+    family: family
   });
 
   if (models.length === 0) {
