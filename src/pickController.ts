@@ -218,8 +218,8 @@ export class PickController {
 
     if (activeCount === 1) {
       const candidate = this.candidates.find(c => !c.eliminated);
-      // Only select if it has at least one positive vote
-      if (candidate && candidate.positiveVotes > 0) {
+      // Select if it has at least one positive vote OR if it's the only candidate from the start
+      if (candidate && (candidate.positiveVotes > 0 || this.wordHistory.length === 0)) {
         this.state = PickState.FINAL_RESULT;
         this.finalRegex = candidate.pattern;
       }
