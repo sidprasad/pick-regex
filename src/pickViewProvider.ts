@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import { PickController, PickState, WordPair, WordClassification } from './pickController';
 import { generateRegexFromDescription } from './regexService';
+import { createRegexAnalyzer, RegexRelationship } from './regexAnalyzer';
 
 export class PickViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'pick.pickView';
   private view?: vscode.WebviewView;
   private controller: PickController;
+  private analyzer = createRegexAnalyzer();
 
   constructor(private readonly extensionUri: vscode.Uri) {
     this.controller = new PickController();
@@ -67,23 +69,43 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         }
       }
 
-      if (candidates.length < 2) {
+      if (candidates.length === 0) {
         this.sendMessage({ 
           type: 'error', 
-          message: 'Could not generate enough candidate regexes. Please try again.' 
+          message: 'Could not generate any candidate regexes. Please try again.' 
         });
         return;
       }
 
-      // Initialize controller with candidates
-      await this.controller.generateCandidates(prompt, candidates);
+      // Filter out equivalent/duplicate regexes
+      this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
+      const uniqueCandidates = await this.filterEquivalentRegexes(candidates);
+      
+      // Inform user if duplicates were removed
+      if (uniqueCandidates.length < candidates.length) {
+        this.sendMessage({ 
+          type: 'status', 
+          message: `Removed ${candidates.length - uniqueCandidates.length} duplicate regex(es). Proceeding with ${uniqueCandidates.length} unique candidate(s).` 
+        });
+      }
+
+      if (uniqueCandidates.length === 0) {
+        this.sendMessage({ 
+          type: 'error', 
+          message: 'All generated regexes were duplicates. Please try again with a different prompt.' 
+        });
+        return;
+      }
+
+      // Initialize controller with unique candidates
+      await this.controller.generateCandidates(prompt, uniqueCandidates);
       
       this.sendMessage({
         type: 'candidatesGenerated',
         candidates: this.controller.getStatus().candidateDetails
       });
 
-      // Generate first word pair
+      // Generate first word pair (or proceed to final result if only 1 candidate)
       this.handleRequestNextPair();
       
     } catch (error) {
@@ -113,10 +135,31 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         status
       });
     } catch (error) {
-      this.sendMessage({ 
-        type: 'error', 
-        message: `Error generating pair: ${error}` 
-      });
+      // Check if the error is about running out of words
+      const errorMessage = String(error);
+      if (errorMessage.includes('Could not generate unique word') || 
+          errorMessage.includes('Failed to generate')) {
+        // We ran out of words - show best candidates so far
+        const status = this.controller.getStatus();
+        const activeCandidates = status.candidateDetails.filter(c => !c.eliminated);
+        
+        this.sendMessage({ 
+          type: 'warning', 
+          message: `Unable to generate more distinguishing words. ${activeCandidates.length} candidate(s) remain. These may be your best options:` 
+        });
+        
+        // Show current best candidates
+        this.sendMessage({
+          type: 'insufficientWords',
+          candidates: activeCandidates,
+          status
+        });
+      } else {
+        this.sendMessage({ 
+          type: 'error', 
+          message: `Error generating pair: ${error}` 
+        });
+      }
     }
   }
 
@@ -233,6 +276,37 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private handleReset() {
     this.controller.reset();
     this.sendMessage({ type: 'reset' });
+  }
+
+  /**
+   * Filter out equivalent/duplicate regexes
+   */
+  private async filterEquivalentRegexes(regexes: string[]): Promise<string[]> {
+    const unique: string[] = [];
+    
+    for (const regex of regexes) {
+      let isEquivalent = false;
+      
+      // Check against all already added unique regexes
+      for (const uniqueRegex of unique) {
+        try {
+          const result = await this.analyzer.analyzeRelationship(regex, uniqueRegex);
+          if (result.relationship === RegexRelationship.EQUIVALENT) {
+            isEquivalent = true;
+            break;
+          }
+        } catch (error) {
+          // If analysis fails, be conservative and keep both
+          console.warn(`Failed to analyze relationship between regexes: ${error}`);
+        }
+      }
+      
+      if (!isEquivalent) {
+        unique.push(regex);
+      }
+    }
+    
+    return unique;
   }
 
   private sendMessage(message: any) {
@@ -685,6 +759,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'error':
           showError(message.message);
           break;
+        case 'warning':
+          showWarning(message.message);
+          break;
         case 'candidatesGenerated':
           updateCandidates(message.candidates, 2);
           break;
@@ -706,6 +783,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'finalResult':
           showFinalResult(message.regex, message.wordsIn, message.wordsOut);
+          break;
+        case 'insufficientWords':
+          showInsufficientWords(message.candidates, message.status);
           break;
         case 'reset':
           resetUI();
@@ -739,6 +819,27 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     function showError(message) {
       errorSection.textContent = message;
       errorSection.classList.remove('hidden');
+    }
+
+    function showWarning(message) {
+      statusBar.textContent = '⚠️ ' + message;
+      statusBar.classList.remove('hidden');
+    }
+
+    function showInsufficientWords(candidates, status) {
+      showSection('voting');
+      updateCandidates(candidates, status.threshold);
+      updateWordHistory(status.wordHistory);
+      
+      // Show a message in the word pair area
+      wordPair.innerHTML = \`
+        <div style="text-align: center; padding: 20px; background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); border-radius: 4px;">
+          <h3>⚠️ Unable to Generate More Words</h3>
+          <p>The system ran out of distinguishing words to generate.</p>
+          <p>Here are the remaining candidates - you may need to choose manually or start over with a different prompt.</p>
+          <button onclick="location.reload()" style="margin-top: 10px;">Start Over</button>
+        </div>
+      \`;
     }
 
     function updateCandidates(candidates, threshold) {

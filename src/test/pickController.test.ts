@@ -165,4 +165,24 @@ suite('PickController Test Suite', () => {
     controller.setThreshold(0); // should be clamped to minimum 1
     assert.strictEqual(controller.getThreshold(), 1);
   });
+
+  test('Should handle single candidate from start', async () => {
+    const patterns = ['[a-z]+'];
+    await controller.generateCandidates('test', patterns);
+    
+    assert.strictEqual(controller.getState(), PickState.VOTING);
+    assert.strictEqual(controller.getActiveCandidateCount(), 1);
+    
+    // When single candidate with no votes, checkFinalState should transition to FINAL_RESULT
+    const status = controller.getStatus();
+    assert.strictEqual(status.activeCandidates, 1);
+  });
+
+  test('Should handle empty candidates array', async () => {
+    const patterns: string[] = [];
+    await controller.generateCandidates('test', patterns);
+    
+    assert.strictEqual(controller.getState(), PickState.VOTING);
+    assert.strictEqual(controller.getActiveCandidateCount(), 0);
+  });
 });
