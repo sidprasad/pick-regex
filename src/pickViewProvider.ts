@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { PickController, PickState, WordPair } from './pickController';
+import { PickController, PickState, WordPair, WordClassification } from './pickController';
 import { generateRegexFromDescription } from './regexService';
 
 export class PickViewProvider implements vscode.WebviewViewProvider {
@@ -30,6 +30,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       switch (data.type) {
         case 'generateCandidates':
           await this.handleGenerateCandidates(data.prompt);
+          break;
+        case 'classifyWord':
+          this.handleClassifyWord(data.word, data.classification);
+          break;
+        case 'updateClassification':
+          this.handleUpdateClassification(data.index, data.classification);
           break;
         case 'vote':
           this.handleVote(data.acceptedWord);
@@ -110,6 +116,66 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.sendMessage({ 
         type: 'error', 
         message: `Error generating pair: ${error}` 
+      });
+    }
+  }
+
+  private async handleClassifyWord(word: string, classification: string) {
+    try {
+      const classificationEnum = classification as WordClassification;
+      this.controller.classifyWord(word, classificationEnum);
+      
+      const state = this.controller.getState();
+      const status = this.controller.getStatus();
+      
+      if (state === PickState.FINAL_RESULT) {
+        await this.handleFinalResult();
+      } else {
+        // Check if both words are classified
+        if (this.controller.areBothWordsClassified()) {
+          this.controller.clearCurrentPair();
+          
+          // Send updated status
+          this.sendMessage({
+            type: 'wordClassified',
+            status,
+            bothClassified: true
+          });
+          
+          // Generate next pair
+          this.handleRequestNextPair();
+        } else {
+          // Send updated status but don't generate next pair yet
+          this.sendMessage({
+            type: 'wordClassified',
+            status,
+            bothClassified: false
+          });
+        }
+      }
+    } catch (error) {
+      this.sendMessage({ 
+        type: 'error', 
+        message: `Error classifying word: ${error}` 
+      });
+    }
+  }
+
+  private handleUpdateClassification(index: number, classification: string) {
+    try {
+      const classificationEnum = classification as WordClassification;
+      this.controller.updateClassification(index, classificationEnum);
+      
+      const status = this.controller.getStatus();
+      
+      this.sendMessage({
+        type: 'classificationUpdated',
+        status
+      });
+    } catch (error) {
+      this.sendMessage({ 
+        type: 'error', 
+        message: `Error updating classification: ${error}` 
       });
     }
   }
@@ -382,6 +448,148 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       border-radius: 4px;
       margin: 10px 0;
     }
+
+    /* New styles for word classification UI */
+    .word-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    button.accept {
+      background: #4caf50;
+      color: white;
+    }
+
+    button.accept:hover {
+      background: #45a049;
+    }
+
+    button.reject {
+      background: #f44336;
+      color: white;
+    }
+
+    button.reject:hover {
+      background: #da190b;
+    }
+
+    button.unsure {
+      background: #ff9800;
+      color: white;
+    }
+
+    button.unsure:hover {
+      background: #e68900;
+    }
+
+    .word-card.classified {
+      opacity: 0.7;
+      border-color: var(--vscode-descriptionForeground);
+    }
+
+    .word-card.classified-accept {
+      border-color: #4caf50;
+      background: rgba(76, 175, 80, 0.1);
+    }
+
+    .word-card.classified-reject {
+      border-color: #f44336;
+      background: rgba(244, 67, 54, 0.1);
+    }
+
+    .word-card.classified-unsure {
+      border-color: #ff9800;
+      background: rgba(255, 152, 0, 0.1);
+    }
+
+    .word-history {
+      margin-top: 20px;
+      padding: 15px;
+      background: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .word-history h3 {
+      margin-top: 0;
+      font-size: 1em;
+      color: var(--vscode-titleBar-activeForeground);
+    }
+
+    .history-item {
+      padding: 10px;
+      margin: 8px 0;
+      background: var(--vscode-list-inactiveSelectionBackground);
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .history-word {
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 1.1em;
+    }
+
+    .history-classification {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .history-classification select {
+      padding: 4px 8px;
+      background: var(--vscode-dropdown-background);
+      color: var(--vscode-dropdown-foreground);
+      border: 1px solid var(--vscode-dropdown-border);
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .classification-badge {
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      font-weight: bold;
+    }
+
+    .classification-badge.accept {
+      background: #4caf50;
+      color: white;
+    }
+
+    .classification-badge.reject {
+      background: #f44336;
+      color: white;
+    }
+
+    .classification-badge.unsure {
+      background: #ff9800;
+      color: white;
+    }
+
+    .history-matches {
+      font-size: 0.85em;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 4px;
+    }
+
+    .threshold-info {
+      font-size: 0.9em;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 5px;
+    }
+
+    .candidate-votes {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
@@ -399,9 +607,13 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
     <!-- Voting Section -->
     <div id="votingSection" class="section hidden">
-      <h2>Choose the word that better matches your intent:</h2>
+      <h2>Classify each word - Accept, Reject, or Unsure:</h2>
       <div class="word-pair" id="wordPair"></div>
       <div class="candidates-list" id="candidatesList"></div>
+      <div class="word-history" id="wordHistory">
+        <h3>📋 Word Classification History</h3>
+        <div id="historyItems"></div>
+      </div>
     </div>
 
     <!-- Final Result -->
@@ -440,10 +652,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     const promptInput = document.getElementById('promptInput');
     const wordPair = document.getElementById('wordPair');
     const candidatesList = document.getElementById('candidatesList');
+    const historyItems = document.getElementById('historyItems');
     const finalRegex = document.getElementById('finalRegex');
     const wordsIn = document.getElementById('wordsIn');
     const wordsOut = document.getElementById('wordsOut');
     const resetBtn = document.getElementById('resetBtn');
+
+    // Track classified words in current pair
+    let classifiedWords = new Set();
 
     // Event Listeners
     generateBtn.addEventListener('click', () => {
@@ -470,14 +686,23 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           showError(message.message);
           break;
         case 'candidatesGenerated':
-          updateCandidates(message.candidates);
+          updateCandidates(message.candidates, 2);
           break;
         case 'newPair':
+          classifiedWords.clear();
           showWordPair(message.pair, message.status);
           break;
+        case 'wordClassified':
+          updateStatus(message.status);
+          if (message.bothClassified) {
+            classifiedWords.clear();
+          }
+          break;
+        case 'classificationUpdated':
+          updateStatus(message.status);
+          break;
         case 'voteProcessed':
-          updateCandidates(message.status.candidateDetails);
-          showStatus(\`Active candidates: \${message.status.activeCandidates}\`);
+          updateStatus(message.status);
           break;
         case 'finalResult':
           showFinalResult(message.regex, message.wordsIn, message.wordsOut);
@@ -516,34 +741,114 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       errorSection.classList.remove('hidden');
     }
 
-    function updateCandidates(candidates) {
-      candidatesList.innerHTML = '<h3>Candidates:</h3>';
+    function updateCandidates(candidates, threshold) {
+      candidatesList.innerHTML = '<h3>Candidate Regexes:</h3>';
+      if (threshold !== undefined) {
+        const thresholdDiv = document.createElement('div');
+        thresholdDiv.className = 'threshold-info';
+        thresholdDiv.textContent = \`Rejection threshold: \${threshold} negative votes\`;
+        candidatesList.appendChild(thresholdDiv);
+      }
+      
       candidates.forEach(c => {
         const div = document.createElement('div');
         div.className = \`candidate-item \${c.eliminated ? 'eliminated' : 'active'}\`;
         div.innerHTML = \`
           <span>\${c.pattern}</span>
-          <span class="badge">❌ \${c.votes}</span>
+          <div class="candidate-votes">
+            <span class="badge" style="background: #4caf50;">✓ \${c.positiveVotes}</span>
+            <span class="badge" style="background: #f44336;">✗ \${c.negativeVotes}</span>
+          </div>
         \`;
         candidatesList.appendChild(div);
       });
     }
 
+    function updateStatus(status) {
+      updateCandidates(status.candidateDetails, status.threshold);
+      updateWordHistory(status.wordHistory);
+      showStatus(\`Active: \${status.activeCandidates}/\${status.totalCandidates} | Words classified: \${status.wordHistory.length}\`);
+    }
+
+    function classifyWord(word, classification) {
+      classifiedWords.add(word);
+      vscode.postMessage({ 
+        type: 'classifyWord', 
+        word: word, 
+        classification: classification 
+      });
+      
+      // Update UI to show word is classified
+      const wordCards = document.querySelectorAll('.word-card');
+      wordCards.forEach(card => {
+        const cardWord = card.querySelector('.word').textContent;
+        if (cardWord === word) {
+          card.classList.add('classified', \`classified-\${classification}\`);
+          const buttons = card.querySelectorAll('button');
+          buttons.forEach(btn => btn.disabled = true);
+        }
+      });
+    }
+
     function showWordPair(pair, status) {
       showSection('voting');
-      updateCandidates(status.candidateDetails);
-      showStatus(\`Active: \${status.activeCandidates}/\${status.totalCandidates} | Words used: \${status.usedWords}\`);
+      updateCandidates(status.candidateDetails, status.threshold);
+      updateWordHistory(status.wordHistory);
+      showStatus(\`Active: \${status.activeCandidates}/\${status.totalCandidates} | Words classified: \${status.wordHistory.length}\`);
       
       wordPair.innerHTML = \`
-        <div class="word-card" onclick="vote('\${pair.word1}')">
+        <div class="word-card" id="card-\${pair.word1}">
           <div class="word">\${pair.word1}</div>
-          <button>Select This</button>
+          <div class="word-actions">
+            <button class="accept" onclick="classifyWord('\${pair.word1}', 'accept')">✓ Accept</button>
+            <button class="reject" onclick="classifyWord('\${pair.word1}', 'reject')">✗ Reject</button>
+            <button class="unsure" onclick="classifyWord('\${pair.word1}', 'unsure')">? Unsure</button>
+          </div>
         </div>
-        <div class="word-card" onclick="vote('\${pair.word2}')">
+        <div class="word-card" id="card-\${pair.word2}">
           <div class="word">\${pair.word2}</div>
-          <button>Select This</button>
+          <div class="word-actions">
+            <button class="accept" onclick="classifyWord('\${pair.word2}', 'accept')">✓ Accept</button>
+            <button class="reject" onclick="classifyWord('\${pair.word2}', 'reject')">✗ Reject</button>
+            <button class="unsure" onclick="classifyWord('\${pair.word2}', 'unsure')">? Unsure</button>
+          </div>
         </div>
       \`;
+    }
+
+    function updateWordHistory(history) {
+      if (!history || history.length === 0) {
+        historyItems.innerHTML = '<p style="color: var(--vscode-descriptionForeground); font-style: italic;">No words classified yet.</p>';
+        return;
+      }
+
+      historyItems.innerHTML = '';
+      history.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = \`
+          <div>
+            <div class="history-word">\${item.word}</div>
+            <div class="history-matches">\${item.matchingRegexes.length} regex(es) match this word</div>
+          </div>
+          <div class="history-classification">
+            <select onchange="updateClassification(\${index}, this.value)">
+              <option value="accept" \${item.classification === 'accept' ? 'selected' : ''}>✓ Accept</option>
+              <option value="reject" \${item.classification === 'reject' ? 'selected' : ''}>✗ Reject</option>
+              <option value="unsure" \${item.classification === 'unsure' ? 'selected' : ''}>? Unsure</option>
+            </select>
+          </div>
+        \`;
+        historyItems.appendChild(div);
+      });
+    }
+
+    function updateClassification(index, newClassification) {
+      vscode.postMessage({
+        type: 'updateClassification',
+        index: index,
+        classification: newClassification
+      });
     }
 
     function vote(word) {
@@ -565,9 +870,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
     function resetUI() {
       promptInput.value = '';
+      classifiedWords.clear();
       showSection('prompt');
       statusBar.classList.add('hidden');
     }
+
+    // Make functions available globally for inline onclick handlers
+    window.classifyWord = classifyWord;
+    window.updateClassification = updateClassification;
+    window.vote = vote;
   </script>
 </body>
 </html>`;
