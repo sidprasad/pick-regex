@@ -6,7 +6,7 @@ import { PickViewProvider } from './pickViewProvider';
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	console.log('PICK: Interactive Regex Learner is now active!');
+	console.log('PICK: Regex Builder is now active!');
 
 	// Register the PICK webview provider
 	const provider = new PickViewProvider(context.extensionUri);

@@ -596,7 +596,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   <div class="container">
     <!-- Initial Prompt -->
     <div id="promptSection" class="section">
-      <h2>🎯 PICK: Interactive Regex Learner</h2>
+      <h2>🎯 PICK: Regex Builder</h2>
       <p>Describe the pattern you want to match:</p>
       <input type="text" id="promptInput" placeholder="e.g., email addresses, phone numbers, dates..." />
       <button id="generateBtn">Generate Candidates</button>
