@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { PickController, PickState, WordPair, WordClassification } from './pickController';
 import { generateRegexFromDescription } from './regexService';
+import { logger } from './logger';
 
 export class PickViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'pick.pickView';
@@ -62,8 +63,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         try {
           const result = await generateRegexFromDescription(prompt, tokenSource.token);
           candidates.push(result.regex);
+          logger.info(`Generated candidate ${i + 1}: ${result.regex}`);
         } catch (error) {
-          console.error(`Failed to generate candidate ${i}:`, error);
+          logger.error(error, `Failed to generate candidate ${i + 1}`);
         }
       }
 
@@ -87,9 +89,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.handleRequestNextPair();
       
     } catch (error) {
-      this.sendMessage({ 
-        type: 'error', 
-        message: `Error: ${error}` 
+      logger.error(error, 'Error generating candidates');
+      this.sendMessage({
+        type: 'error',
+        message: `Error: ${error}`
       });
     }
   }
@@ -113,9 +116,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         status
       });
     } catch (error) {
-      this.sendMessage({ 
-        type: 'error', 
-        message: `Error generating pair: ${error}` 
+      logger.error(error, 'Error generating next pair');
+      this.sendMessage({
+        type: 'error',
+        message: `Error generating pair: ${error}`
       });
     }
   }
@@ -154,9 +158,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         }
       }
     } catch (error) {
-      this.sendMessage({ 
-        type: 'error', 
-        message: `Error classifying word: ${error}` 
+      logger.error(error, 'Error classifying word');
+      this.sendMessage({
+        type: 'error',
+        message: `Error classifying word: ${error}`
       });
     }
   }
@@ -173,9 +178,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         status
       });
     } catch (error) {
-      this.sendMessage({ 
-        type: 'error', 
-        message: `Error updating classification: ${error}` 
+      logger.error(error, 'Error updating classification');
+      this.sendMessage({
+        type: 'error',
+        message: `Error updating classification: ${error}`
       });
     }
   }
@@ -200,9 +206,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         this.handleRequestNextPair();
       }
     } catch (error) {
-      this.sendMessage({ 
-        type: 'error', 
-        message: `Error processing vote: ${error}` 
+      logger.error(error, 'Error processing vote');
+      this.sendMessage({
+        type: 'error',
+        message: `Error processing vote: ${error}`
       });
     }
   }
@@ -223,15 +230,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         wordsOut: examples.wordsOut
       });
     } catch (error) {
-      this.sendMessage({ 
-        type: 'error', 
-        message: `Error showing results: ${error}` 
+      logger.error(error, 'Error showing final results');
+      this.sendMessage({
+        type: 'error',
+        message: `Error showing results: ${error}`
       });
     }
   }
 
   private handleReset() {
     this.controller.reset();
+    logger.info('Reset requested from webview.');
     this.sendMessage({ type: 'reset' });
   }
 
