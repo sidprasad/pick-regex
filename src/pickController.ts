@@ -1,5 +1,6 @@
 import { createRegexAnalyzer, RegexAnalyzer } from './regexAnalyzer';
 import * as vscode from 'vscode';
+import { logger } from './logger';
 
 interface CandidateRegex {
   pattern: string;
@@ -51,6 +52,7 @@ export class PickController {
     // Read threshold from configuration
     const config = vscode.workspace.getConfiguration('pick');
     this.thresholdVotes = config.get<number>('eliminationThreshold', 2);
+    logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}`);
   }
 
   /**
@@ -65,7 +67,8 @@ export class PickController {
    */
   async generateCandidates(prompt: string, candidatePatterns: string[]): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
-    
+    logger.info(`Generating candidates for prompt: ${prompt}`);
+
     // Initialize candidates
     this.candidates = candidatePatterns.map(pattern => ({
       pattern,
@@ -73,10 +76,12 @@ export class PickController {
       positiveVotes: 0,
       eliminated: false
     }));
-    
+    logger.info(`Initialized ${this.candidates.length} candidate regexes.`);
+
     this.usedWords.clear();
     this.wordHistory = [];
     this.state = PickState.VOTING;
+    logger.info('Transitioned to VOTING state.');
   }
 
   /**
@@ -100,7 +105,8 @@ export class PickController {
    */
   async generateNextPair(): Promise<WordPair> {
     const activeCandidates = this.getActiveCandidates();
-    
+    logger.info(`Request to generate next pair with ${activeCandidates.length} active candidates.`);
+
     if (activeCandidates.length <= 1) {
       throw new Error('Not enough active candidates to generate pairs');
     }
@@ -110,18 +116,23 @@ export class PickController {
         activeCandidates,
         Array.from(this.usedWords)
       );
-      
+
       this.currentPair = {
         word1: result.words[0],
         word2: result.words[1]
       };
-      
+
       // Mark words as used
       this.usedWords.add(result.words[0]);
       this.usedWords.add(result.words[1]);
-      
+
+      logger.info(
+        `Generated distinguishing pair: "${result.words[0]}" vs "${result.words[1]}". Used words count: ${this.usedWords.size}.`
+      );
+
       return this.currentPair;
     } catch (error) {
+      logger.error(error, 'Failed to generate word pair');
       throw new Error(`Failed to generate word pair: ${error}`);
     }
   }
@@ -157,6 +168,9 @@ export class PickController {
     // Process classification
     if (classification === WordClassification.ACCEPT) {
       // Give positive votes to matching regexes
+      logger.info(
+        `Classified "${word}" as ACCEPT. Updating ${this.candidates.length} candidates for positive votes.`
+      );
       for (const candidate of this.candidates) {
         if (candidate.eliminated) {
           continue;
@@ -167,16 +181,22 @@ export class PickController {
       }
     } else if (classification === WordClassification.REJECT) {
       // Give negative votes to matching regexes
+      logger.info(
+        `Classified "${word}" as REJECT. Applying elimination threshold ${this.thresholdVotes}.`
+      );
       for (const candidate of this.candidates) {
         if (candidate.eliminated) {
           continue;
         }
         if (this.analyzer.verifyMatch(word, candidate.pattern)) {
           candidate.negativeVotes++;
-          
+
           // Eliminate if threshold reached
           if (candidate.negativeVotes >= this.thresholdVotes) {
             candidate.eliminated = true;
+            logger.info(
+              `Eliminated candidate ${candidate.pattern} after ${candidate.negativeVotes} negative votes.`
+            );
           }
         }
       }
@@ -222,6 +242,7 @@ export class PickController {
       if (candidate && (candidate.positiveVotes > 0 || this.wordHistory.length === 0)) {
         this.state = PickState.FINAL_RESULT;
         this.finalRegex = candidate.pattern;
+        logger.info(`Final regex selected with remaining candidate: ${this.finalRegex}`);
       }
     } else if (activeCount === 0) {
       // All eliminated - pick the one with most positive votes, or least negative votes
@@ -236,6 +257,7 @@ export class PickController {
       });
       this.state = PickState.FINAL_RESULT;
       this.finalRegex = best.pattern;
+      logger.warn('All candidates eliminated; selected best remaining regex based on votes.');
     }
   }
 
@@ -251,10 +273,14 @@ export class PickController {
 
     const record = this.wordHistory[index];
     const oldClassification = record.classification;
-    
+
     // Update the record
     record.classification = newClassification;
     record.timestamp = Date.now();
+
+    logger.info(
+      `Updated classification for word "${record.word}" from ${oldClassification} to ${newClassification}.`
+    );
 
     // Recalculate all votes from scratch
     this.recalculateVotes();
@@ -270,6 +296,8 @@ export class PickController {
       candidate.positiveVotes = 0;
       candidate.eliminated = false;
     }
+
+    logger.info('Recalculating votes from word history.');
 
     // Replay all classifications
     for (const record of this.wordHistory) {
@@ -290,6 +318,8 @@ export class PickController {
         }
       }
     }
+
+    logger.info('Finished recalculating votes. Checking final state.');
 
     // Check if state needs to change
     this.checkFinalState();
@@ -337,6 +367,7 @@ export class PickController {
     }
 
     try {
+      logger.info(`Generating final examples for regex ${this.finalRegex}`);
       const wordsIn: string[] = [];
       const wordsOut: string[] = [];
       
@@ -362,9 +393,10 @@ export class PickController {
           break;
         }
       }
-      
+
       return { wordsIn, wordsOut };
     } catch (error) {
+      logger.error(error, 'Failed to generate final examples');
       throw new Error(`Failed to generate examples: ${error}`);
     }
   }
@@ -379,6 +411,7 @@ export class PickController {
     this.currentPair = null;
     this.finalRegex = null;
     this.wordHistory = [];
+    logger.info('Reset PickController state to INITIAL.');
   }
 
   /**
@@ -419,6 +452,7 @@ export class PickController {
    */
   setThreshold(threshold: number): void {
     this.thresholdVotes = Math.max(1, threshold);
+    logger.info(`Updated elimination threshold to ${this.thresholdVotes}`);
   }
 
   /**
