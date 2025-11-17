@@ -3,12 +3,26 @@ import { createRegexAnalyzer, RegexAnalyzer } from './regexAnalyzer';
 interface CandidateRegex {
   pattern: string;
   negativeVotes: number;
+  positiveVotes: number;
   eliminated: boolean;
 }
 
 export interface WordPair {
   word1: string;
   word2: string;
+}
+
+export enum WordClassification {
+  ACCEPT = 'accept',
+  REJECT = 'reject',
+  UNSURE = 'unsure'
+}
+
+export interface WordClassificationRecord {
+  word: string;
+  classification: WordClassification;
+  timestamp: number;
+  matchingRegexes: string[];
 }
 
 export enum PickState {
@@ -29,6 +43,7 @@ export class PickController {
   private thresholdVotes = 2;
   private currentPair: WordPair | null = null;
   private finalRegex: string | null = null;
+  private wordHistory: WordClassificationRecord[] = [];
 
   constructor() {
     this.analyzer = createRegexAnalyzer();
@@ -51,10 +66,12 @@ export class PickController {
     this.candidates = candidatePatterns.map(pattern => ({
       pattern,
       negativeVotes: 0,
+      positiveVotes: 0,
       eliminated: false
     }));
     
     this.usedWords.clear();
+    this.wordHistory = [];
     this.state = PickState.VOTING;
   }
 
@@ -106,7 +123,183 @@ export class PickController {
   }
 
   /**
-   * Process user vote on current word pair
+   * Classify a word as Accept, Reject, or Unsure
+   * @param word The word to classify
+   * @param classification The classification type
+   */
+  classifyWord(word: string, classification: WordClassification): void {
+    if (!this.currentPair) {
+      throw new Error('No current pair to classify');
+    }
+
+    const { word1, word2 } = this.currentPair;
+    if (word !== word1 && word !== word2) {
+      throw new Error('Word is not in the current pair');
+    }
+
+    // Get matching regexes for this word
+    const matchingRegexes = this.candidates
+      .filter(c => !c.eliminated && this.analyzer.verifyMatch(word, c.pattern))
+      .map(c => c.pattern);
+
+    // Record classification
+    this.wordHistory.push({
+      word,
+      classification,
+      timestamp: Date.now(),
+      matchingRegexes
+    });
+
+    // Process classification
+    if (classification === WordClassification.ACCEPT) {
+      // Give positive votes to matching regexes
+      for (const candidate of this.candidates) {
+        if (candidate.eliminated) {
+          continue;
+        }
+        if (this.analyzer.verifyMatch(word, candidate.pattern)) {
+          candidate.positiveVotes++;
+        }
+      }
+    } else if (classification === WordClassification.REJECT) {
+      // Give negative votes to matching regexes
+      for (const candidate of this.candidates) {
+        if (candidate.eliminated) {
+          continue;
+        }
+        if (this.analyzer.verifyMatch(word, candidate.pattern)) {
+          candidate.negativeVotes++;
+          
+          // Eliminate if threshold reached
+          if (candidate.negativeVotes >= this.thresholdVotes) {
+            candidate.eliminated = true;
+          }
+        }
+      }
+    }
+    // If UNSURE, don't update any votes
+
+    // Check if we need to transition to final result
+    this.checkFinalState();
+  }
+
+  /**
+   * Check if both words in current pair have been classified
+   */
+  areBothWordsClassified(): boolean {
+    if (!this.currentPair) {
+      return false;
+    }
+
+    const { word1, word2 } = this.currentPair;
+    const word1Classified = this.wordHistory.some(r => r.word === word1);
+    const word2Classified = this.wordHistory.some(r => r.word === word2);
+
+    return word1Classified && word2Classified;
+  }
+
+  /**
+   * Clear current pair (call after both words are classified)
+   */
+  clearCurrentPair(): void {
+    this.currentPair = null;
+  }
+
+  /**
+   * Check if we should transition to final result state
+   */
+  private checkFinalState(): void {
+    const activeCandidates = this.getActiveCandidates();
+    const activeCount = activeCandidates.length;
+
+    if (activeCount === 1) {
+      const candidate = this.candidates.find(c => !c.eliminated);
+      // Only select if it has at least one positive vote
+      if (candidate && candidate.positiveVotes > 0) {
+        this.state = PickState.FINAL_RESULT;
+        this.finalRegex = candidate.pattern;
+      }
+    } else if (activeCount === 0) {
+      // All eliminated - pick the one with most positive votes, or least negative votes
+      const best = this.candidates.reduce((prev, curr) => {
+        if (curr.positiveVotes > prev.positiveVotes) {
+          return curr;
+        }
+        if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
+          return curr;
+        }
+        return prev;
+      });
+      this.state = PickState.FINAL_RESULT;
+      this.finalRegex = best.pattern;
+    }
+  }
+
+  /**
+   * Update a previous classification
+   * @param index Index in word history
+   * @param newClassification New classification
+   */
+  updateClassification(index: number, newClassification: WordClassification): void {
+    if (index < 0 || index >= this.wordHistory.length) {
+      throw new Error('Invalid history index');
+    }
+
+    const record = this.wordHistory[index];
+    const oldClassification = record.classification;
+    
+    // Update the record
+    record.classification = newClassification;
+    record.timestamp = Date.now();
+
+    // Recalculate all votes from scratch
+    this.recalculateVotes();
+  }
+
+  /**
+   * Recalculate all votes from word history
+   */
+  private recalculateVotes(): void {
+    // Reset all votes
+    for (const candidate of this.candidates) {
+      candidate.negativeVotes = 0;
+      candidate.positiveVotes = 0;
+      candidate.eliminated = false;
+    }
+
+    // Replay all classifications
+    for (const record of this.wordHistory) {
+      if (record.classification === WordClassification.ACCEPT) {
+        for (const candidate of this.candidates) {
+          if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
+            candidate.positiveVotes++;
+          }
+        }
+      } else if (record.classification === WordClassification.REJECT) {
+        for (const candidate of this.candidates) {
+          if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
+            candidate.negativeVotes++;
+            if (candidate.negativeVotes >= this.thresholdVotes) {
+              candidate.eliminated = true;
+            }
+          }
+        }
+      }
+    }
+
+    // Check if state needs to change
+    this.checkFinalState();
+  }
+
+  /**
+   * Get word classification history
+   */
+  getWordHistory(): WordClassificationRecord[] {
+    return [...this.wordHistory];
+  }
+
+  /**
+   * Process user vote on current word pair (legacy method for compatibility)
    * @param acceptedWord The word the user accepted (word1 or word2)
    */
   processVote(acceptedWord: string): void {
@@ -117,36 +310,9 @@ export class PickController {
     const { word1, word2 } = this.currentPair;
     const rejectedWord = acceptedWord === word1 ? word2 : word1;
 
-    // Find which regexes match the rejected word and increment their negative votes
-    for (const candidate of this.candidates) {
-      if (candidate.eliminated) {
-        continue;
-      }
-
-      const matches = this.analyzer.verifyMatch(rejectedWord, candidate.pattern);
-      if (matches) {
-        candidate.negativeVotes++;
-        
-        // Eliminate if threshold reached
-        if (candidate.negativeVotes >= this.thresholdVotes) {
-          candidate.eliminated = true;
-        }
-      }
-    }
-
-    // Check if we're done
-    const activeCount = this.getActiveCandidateCount();
-    if (activeCount === 1) {
-      this.state = PickState.FINAL_RESULT;
-      this.finalRegex = this.getActiveCandidates()[0];
-    } else if (activeCount === 0) {
-      // All eliminated - pick the one with fewest negative votes
-      const best = this.candidates.reduce((prev, curr) => 
-        curr.negativeVotes < prev.negativeVotes ? curr : prev
-      );
-      this.state = PickState.FINAL_RESULT;
-      this.finalRegex = best.pattern;
-    }
+    // Classify accepted word as ACCEPT and rejected as REJECT
+    this.classifyWord(acceptedWord, WordClassification.ACCEPT);
+    this.classifyWord(rejectedWord, WordClassification.REJECT);
 
     this.currentPair = null;
   }
@@ -208,6 +374,7 @@ export class PickController {
     this.state = PickState.INITIAL;
     this.currentPair = null;
     this.finalRegex = null;
+    this.wordHistory = [];
   }
 
   /**
@@ -218,18 +385,28 @@ export class PickController {
     activeCandidates: number;
     totalCandidates: number;
     usedWords: number;
-    candidateDetails: Array<{ pattern: string; votes: number; eliminated: boolean }>;
+    threshold: number;
+    candidateDetails: Array<{ 
+      pattern: string; 
+      negativeVotes: number;
+      positiveVotes: number;
+      eliminated: boolean;
+    }>;
+    wordHistory: WordClassificationRecord[];
   } {
     return {
       state: this.state,
       activeCandidates: this.getActiveCandidateCount(),
       totalCandidates: this.candidates.length,
       usedWords: this.usedWords.size,
+      threshold: this.thresholdVotes,
       candidateDetails: this.candidates.map(c => ({
         pattern: c.pattern,
-        votes: c.negativeVotes,
+        negativeVotes: c.negativeVotes,
+        positiveVotes: c.positiveVotes,
         eliminated: c.eliminated
-      }))
+      })),
+      wordHistory: this.getWordHistory()
     };
   }
 
