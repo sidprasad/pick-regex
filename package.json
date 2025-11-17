@@ -1,0 +1,68 @@
+{
+  "name": "pick",
+  "displayName": "pick",
+  "description": "Generate a REGEX from LLMs and human classifications.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.106.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pick-explorer",
+          "title": "PICK Regex Learner",
+          "icon": "$(regex)"
+        }
+      ]
+    },
+    "views": {
+      "pick-explorer": [
+        {
+          "type": "webview",
+          "id": "pick.pickView",
+          "name": "Regex Learner",
+          "icon": "$(regex)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "regexGen.generateFromPrompt",
+        "title": "Regex: Generate from Prompt",
+        "category": "RegexGen"
+      },
+      {
+        "command": "pick.helloWorld",
+        "title": "Hello World",
+        "category": "PICK"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.106.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.3"
+  },
+  "dependencies": {
+    "randexp": "^0.5.3",
+    "@gruhn/regex-utils": "^2.7.3"
+  }
+}
