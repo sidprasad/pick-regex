@@ -2,7 +2,7 @@
   "name": "pick",
   "displayName": "pick",
   "description": "Generate a REGEX from LLMs and human classifications.",
-  "publisher": "REPLACE_WITH_YOUR_PUBLISHER_ID",
+  "publisher": "SiddharthaPrasad",
   "version": "0.0.1",
   "repository": "https://github.com/sidprasad/pick-regex",
   "engines": {
@@ -61,6 +61,7 @@
     "compile": "tsc -p ./",
     "package:vsix": "npx vsce package",
     "publish:vsce": "npx vsce publish -p $VSCE_TOKEN",
+    "release:tag": "node ./util/publish.js",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
