@@ -9,6 +9,9 @@
     "type": "git",
     "url": "https://github.com/sidprasad/pick-regex"
   },
+  "bugs": {
+    "url": "https://github.com/sidprasad/pick-regex/issues"
+  },
   "engines": {
     "vscode": "^1.95.0",
     "node": ">=20.18.1"
