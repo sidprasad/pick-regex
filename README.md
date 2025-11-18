@@ -13,7 +13,7 @@ Key ideas:
 
 Quick start
 -----------
-1. In VS Code, press F1 and select: "PICK: Start Regex Builder".
+1. In VS Code, open the PICK Regex Builder view in the Activity Bar (left sidebar).
 2. Enter a short description of the regex you want (e.g., "IPv4 octet, from 0–255").
 3. Classify example strings until PICK converges to a final regex, or the candidates are exhausted.
 4. **Refine Your Prompt**: If you want to iterate on your prompt without losing your work, click "Refine Prompt" to generate new candidates while preserving your existing classifications.
@@ -91,6 +91,16 @@ Settings are under `pick`:
 - `pick.eliminationThreshold` — number of negative votes required to eliminate a candidate (default: 2)
 - `pick.llm.vendor` — LLM vendor to use for candidate generation (default: `copilot`)
 - `pick.llm.family` — LLM model family to prefer (default: `gpt-4o`)
+
+Troubleshooting
+---------------
+If you encounter issues with the extension, check the logs for detailed information:
+
+1. Open the Output panel in VS Code (View → Output, or Ctrl+Shift+U / Cmd+Shift+U)
+2. In the dropdown at the top right of the Output panel, select "PICK Regex Builder"
+3. The logs will show detailed information about extension operations, LLM requests, and any errors
+
+The logs include timestamps and are categorized by severity (INFO, WARN, ERROR) to help with debugging.
 
 Publishing (release process)
  We use GitHub Actions to build (CI) and publish the extension.
