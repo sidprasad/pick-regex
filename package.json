@@ -3,7 +3,7 @@
   "displayName": "pick",
   "description": "Generate a REGEX from LLMs and human classifications.",
   "publisher": "SiddharthaPrasad",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": "https://github.com/sidprasad/pick-regex",
   "engines": {
     "vscode": "^1.95.0",
