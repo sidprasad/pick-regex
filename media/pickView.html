@@ -621,7 +621,6 @@
     <div class="container">
         <!-- Initial Prompt -->
         <div id="promptSection" class="section">
-            <h2>PICK: Regex Builder</h2>
             <p>Describe the regex you want to build:</p>
             <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="text" id="promptInput" placeholder="e.g., email addresses, phone numbers, dates..." style="flex: 1; margin-bottom: 0;" />
@@ -1016,7 +1015,7 @@
         }
 
         function updateCandidates(candidates, threshold) {
-            candidatesList.innerHTML = '<h3>Candidate Regexes:</h3>';
+            candidatesList.innerHTML = '<h3>Candidate Regexes Produced by the LLM:</h3>';
             if (threshold !== undefined) {
                 const thresholdDiv = document.createElement('div');
                 thresholdDiv.className = 'threshold-info';
