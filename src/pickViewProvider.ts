@@ -9,6 +9,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private controller: PickController;
   private analyzer = createRegexAnalyzer();
+  private cancellationTokenSource?: vscode.CancellationTokenSource;
 
   constructor(private readonly extensionUri: vscode.Uri) {
     this.controller = new PickController();
@@ -52,6 +53,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'requestNextPair':
           this.handleRequestNextPair();
           break;
+        case 'cancel':
+          this.handleCancel();
+          break;
       }
     });
   }
@@ -61,11 +65,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.sendMessage({ type: 'status', message: 'Generating candidate regexes...' });
 
       // Generate candidate regexes using LLM
-      const tokenSource = new vscode.CancellationTokenSource();
+      // Dispose any existing cancellation token
+      if (this.cancellationTokenSource) {
+        this.cancellationTokenSource.dispose();
+      }
+      this.cancellationTokenSource = new vscode.CancellationTokenSource();
       
       let candidates: string[] = [];
       try {
-        const result = await generateRegexFromDescription(prompt, tokenSource.token);
+        const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token);
         candidates = result.candidates.map(c => c.regex);
         logger.info(`Generated ${candidates.length} candidates from LLM`);
         
@@ -74,6 +82,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           logger.info(`Candidate ${i + 1}: ${c.regex} (confidence: ${c.confidence ?? 'N/A'}) - ${c.explanation}`);
         });
       } catch (error) {
+        // Check if it was cancelled
+        if (this.cancellationTokenSource.token.isCancellationRequested) {
+          logger.info('Candidate generation was cancelled by user');
+          this.sendMessage({ 
+            type: 'cancelled', 
+            message: 'Operation cancelled by user.' 
+          });
+          return;
+        }
         logger.error(error, 'Failed to generate candidate regexes');
         this.sendMessage({ 
           type: 'error', 
@@ -314,11 +331,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       const sessionData = this.controller.getSessionData();
       
       // Generate new candidate regexes using LLM
-      const tokenSource = new vscode.CancellationTokenSource();
+      // Dispose any existing cancellation token
+      if (this.cancellationTokenSource) {
+        this.cancellationTokenSource.dispose();
+      }
+      this.cancellationTokenSource = new vscode.CancellationTokenSource();
       
       let candidates: string[] = [];
       try {
-        const result = await generateRegexFromDescription(prompt, tokenSource.token);
+        const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token);
         candidates = result.candidates.map(c => c.regex);
         logger.info(`Generated ${candidates.length} candidates from LLM for refinement`);
         
@@ -327,6 +348,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           logger.info(`Candidate ${i + 1}: ${c.regex} (confidence: ${c.confidence ?? 'N/A'}) - ${c.explanation}`);
         });
       } catch (error) {
+        // Check if it was cancelled
+        if (this.cancellationTokenSource.token.isCancellationRequested) {
+          logger.info('Candidate refinement was cancelled by user');
+          this.sendMessage({ 
+            type: 'cancelled', 
+            message: 'Operation cancelled by user.' 
+          });
+          return;
+        }
         logger.error(error, 'Failed to generate candidate regexes during refinement');
         this.sendMessage({ 
           type: 'error', 
@@ -388,6 +418,26 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     this.controller.reset(preserveClassifications);
     logger.info(`Reset requested from webview (preserveClassifications: ${preserveClassifications}).`);
     this.sendMessage({ type: 'reset', preserveClassifications });
+  }
+
+  private handleCancel() {
+    logger.info('Cancel requested from webview');
+    
+    // Cancel any ongoing LLM request
+    if (this.cancellationTokenSource) {
+      this.cancellationTokenSource.cancel();
+      this.cancellationTokenSource.dispose();
+      this.cancellationTokenSource = undefined;
+    }
+    
+    // Reset controller state
+    this.controller.reset(false);
+    
+    // Notify webview
+    this.sendMessage({ 
+      type: 'cancelled', 
+      message: 'Operation cancelled by user.' 
+    });
   }
 
   /**
@@ -844,6 +894,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
     <!-- Status Bar -->
     <div id="statusBar" class="status-bar hidden"></div>
+    <div id="cancelSection" class="hidden" style="margin-bottom: 15px;">
+      <button id="cancelBtn" class="secondary">Cancel Operation</button>
+    </div>
 
     <!-- Voting Section -->
     <div id="votingSection" class="section hidden">
@@ -856,6 +909,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         <div id="historyItems"></div>
       </div>
       <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--vscode-panel-border);">
+        <button id="cancelVotingBtn" class="secondary">Cancel</button>
         <button id="refineBtn" class="secondary">Refine Prompt</button>
         <button id="startFreshBtn" class="secondary">Start Fresh</button>
       </div>
@@ -894,6 +948,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     const votingSection = document.getElementById('votingSection');
     const finalSection = document.getElementById('finalSection');
     const statusBar = document.getElementById('statusBar');
+    const cancelSection = document.getElementById('cancelSection');
     const errorSection = document.getElementById('errorSection');
     const generateBtn = document.getElementById('generateBtn');
     const promptInput = document.getElementById('promptInput');
@@ -907,6 +962,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     const refineBtn = document.getElementById('refineBtn');
     const startFreshBtn = document.getElementById('startFreshBtn');
     const refineResultBtn = document.getElementById('refineResultBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const cancelVotingBtn = document.getElementById('cancelVotingBtn');
     const currentPromptDisplay = document.getElementById('currentPromptDisplay');
     const finalPromptDisplay = document.getElementById('finalPromptDisplay');
 
@@ -951,6 +1008,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
     refineResultBtn.addEventListener('click', () => {
       showRefinePromptDialog();
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      vscode.postMessage({ type: 'cancel' });
+    });
+
+    cancelVotingBtn.addEventListener('click', () => {
+      vscode.postMessage({ type: 'cancel' });
     });
 
     // Handle messages from extension
@@ -1002,6 +1067,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'reset':
           resetUI(message.preserveClassifications);
           break;
+        case 'cancelled':
+          handleCancelled(message.message);
+          break;
       }
     });
 
@@ -1010,6 +1078,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       votingSection.classList.add('hidden');
       finalSection.classList.add('hidden');
       errorSection.classList.add('hidden');
+      cancelSection.classList.add('hidden');
       
       if (section === 'prompt') {
         promptSection.classList.remove('hidden');
@@ -1020,12 +1089,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         finalSection.classList.remove('hidden');
       } else if (section === 'loading') {
         statusBar.classList.remove('hidden');
+        cancelSection.classList.remove('hidden');
       }
     }
 
     function showStatus(message) {
       statusBar.textContent = message;
       statusBar.classList.remove('hidden');
+      cancelSection.classList.remove('hidden');
     }
 
     function showError(message) {
@@ -1243,6 +1314,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       classifiedWords.clear();
       showSection('prompt');
       statusBar.classList.add('hidden');
+      cancelSection.classList.add('hidden');
+    }
+
+    function handleCancelled(message) {
+      showStatus(message || 'Operation cancelled');
+      setTimeout(() => {
+        resetUI(false);
+      }, 2000);
     }
 
     function showRefinePromptDialog() {
