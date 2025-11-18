@@ -306,6 +306,34 @@
             color: var(--vscode-descriptionForeground);
         }
 
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--vscode-panel-border);
+            border-top-color: var(--vscode-focusBorder);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            background: var(--vscode-textBlockQuote-background);
+            border-left: 4px solid var(--vscode-focusBorder);
+            border-radius: 4px;
+            margin: 10px 0;
+            color: var(--vscode-foreground);
+        }
+
         .error {
             padding: 10px;
             background: var(--vscode-inputValidation-errorBackground);
@@ -595,14 +623,10 @@
         <div id="promptSection" class="section">
             <h2>PICK: Regex Builder</h2>
             <p>Describe the regex you want to build:</p>
-            <input type="text" id="promptInput" placeholder="e.g., email addresses, phone numbers, dates..." />
-            <button id="generateBtn">Start PICKing</button>
-        </div>
-
-        <!-- Status Bar -->
-        <div id="statusBar" class="status-bar hidden"></div>
-        <div id="cancelSection" class="hidden" style="margin-bottom: 15px;">
-            <button id="cancelBtn" class="secondary" style="background: #f44336; color: white; border-color: #d32f2f;">⏹️ Cancel Operation</button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="text" id="promptInput" placeholder="e.g., email addresses, phone numbers, dates..." style="flex: 1; margin-bottom: 0;" />
+                <button id="generateBtn" style="padding: 8px 12px; min-width: auto;" title="Start PICKing">▶</button>
+            </div>
         </div>
 
         <!-- Voting Section -->
@@ -616,13 +640,19 @@
                 </label>
             </div>
             <div class="word-pair" id="wordPair"></div>
+            
+            <!-- Status Bar (shown during operations) -->
+            <div id="statusBar" class="status-bar hidden"></div>
+            <div id="cancelSection" class="hidden" style="margin-bottom: 15px;">
+                <button id="cancelBtn" class="secondary" style="background: #f44336; color: white; border-color: #d32f2f;">⏹️ Cancel Operation</button>
+            </div>
+            
             <div class="candidates-list" id="candidatesList"></div>
             <div class="word-history" id="wordHistory">
                 <h3>Word Classification History</h3>
                 <div id="historyItems"></div>
             </div>
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--vscode-panel-border);">
-                <button id="refineBtn" class="secondary">Refine Prompt</button>
                 <button id="startFreshBtn" class="secondary">Start Fresh</button>
             </div>
         </div>
@@ -643,7 +673,6 @@
                         <div id="wordsOut"></div>
                     </div>
                 </div>
-                <button id="refineResultBtn" class="secondary">Refine Prompt</button>
                 <button id="resetBtn">Start Fresh</button>
             </div>
         </div>
@@ -670,9 +699,7 @@
         const promptInput = document.getElementById('promptInput');
         const generateBtn = document.getElementById('generateBtn');
         const resetBtn = document.getElementById('resetBtn');
-        const refineBtn = document.getElementById('refineBtn');
         const startFreshBtn = document.getElementById('startFreshBtn');
-        const refineResultBtn = document.getElementById('refineResultBtn');
         const cancelBtn = document.getElementById('cancelBtn');
         const wordPair = document.getElementById('wordPair');
         const candidatesList = document.getElementById('candidatesList');
@@ -695,7 +722,10 @@
         function updatePromptDisplay(prompt) {
             const html = `
         <div class="prompt-label">Your Prompt</div>
-        <div class="prompt-text">${prompt}</div>
+        <div class="prompt-text" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>${prompt}</span>
+            <button onclick="editPrompt()" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Edit and refine prompt">✏️ Edit</button>
+        </div>
       `;
             if (currentPromptDisplay) {
                 currentPromptDisplay.innerHTML = html;
@@ -703,6 +733,51 @@
             if (finalPromptDisplay) {
                 finalPromptDisplay.innerHTML = html;
             }
+        }
+
+        function editPrompt() {
+            const currentPrompt = promptInput.value;
+            const editHtml = `
+        <div class="prompt-label">Edit Your Prompt</div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="editPromptInput" value="${currentPrompt}" 
+                   style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;" 
+                   placeholder="Enter a refined description..." />
+            <button onclick="submitEditedPrompt()" style="padding: 6px 12px; min-width: auto;" title="Generate new candidates with edited prompt">▶</button>
+            <button onclick="cancelEditPrompt()" style="padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);" title="Cancel">✕</button>
+        </div>
+      `;
+            
+            if (currentPromptDisplay) {
+                currentPromptDisplay.innerHTML = editHtml;
+                // Focus the input
+                setTimeout(() => {
+                    const input = document.getElementById('editPromptInput');
+                    if (input) input.focus();
+                }, 10);
+            } else if (finalPromptDisplay) {
+                finalPromptDisplay.innerHTML = editHtml;
+                setTimeout(() => {
+                    const input = document.getElementById('editPromptInput');
+                    if (input) input.focus();
+                }, 10);
+            }
+        }
+
+        function submitEditedPrompt() {
+            const editInput = document.getElementById('editPromptInput');
+            const newPrompt = editInput.value.trim();
+            if (newPrompt) {
+                promptInput.value = newPrompt;
+                updatePromptDisplay(newPrompt);
+                vscode.postMessage({ type: 'refineCandidates', prompt: newPrompt });
+                showSection('loading');
+            }
+        }
+
+        function cancelEditPrompt() {
+            const currentPrompt = promptInput.value;
+            updatePromptDisplay(currentPrompt);
         }
 
         function copyRegex(pattern) {
@@ -793,16 +868,8 @@
             vscode.postMessage({ type: 'reset', preserveClassifications: false });
         });
 
-        refineBtn.addEventListener('click', () => {
-            showRefinePromptDialog();
-        });
-
         startFreshBtn.addEventListener('click', () => {
             vscode.postMessage({ type: 'reset', preserveClassifications: false });
-        });
-
-        refineResultBtn.addEventListener('click', () => {
-            showRefinePromptDialog();
         });
 
         cancelBtn.addEventListener('click', () => {
@@ -830,10 +897,15 @@
                     showWarning(message.message);
                     break;
                 case 'candidatesGenerated':
+                    // Hide cancel button - candidates are ready
+                    cancelSection.classList.add('hidden');
+                    statusBar.classList.add('hidden');
                     updateCandidates(message.candidates, 2);
                     break;
                 case 'candidatesRefined':
-                    showStatus(`Refined with ${message.preservedClassifications} preserved classification(s)`);
+                    // Hide cancel button - candidates are ready
+                    cancelSection.classList.add('hidden');
+                    statusBar.classList.add('hidden');
                     updateCandidates(message.candidates, 2);
                     break;
                 case 'newPair':
@@ -856,7 +928,10 @@
                     showFinalResult(message.regex, message.wordsIn, message.wordsOut);
                     break;
                 case 'copied':
-                    showStatus('Copied to clipboard');
+                    showStatusWithoutCancel('Copied to clipboard');
+                    setTimeout(() => {
+                        statusBar.classList.add('hidden');
+                    }, 2000);
                     break;
                 case 'noRegexFound':
                     showNoRegexFound(message.message, message.candidateDetails);
@@ -895,9 +970,15 @@
         }
 
         function showStatus(message) {
-            statusBar.textContent = message;
+            statusBar.innerHTML = `<span class="loading-spinner"></span><span>${message}</span>`;
             statusBar.classList.remove('hidden');
             cancelSection.classList.remove('hidden');
+        }
+
+        function showStatusWithoutCancel(message) {
+            statusBar.innerHTML = `<span>${message}</span>`;
+            statusBar.classList.remove('hidden');
+            cancelSection.classList.add('hidden');
         }
 
         function showError(message) {
@@ -958,7 +1039,7 @@
         function updateStatus(status) {
             updateCandidates(status.candidateDetails, status.threshold);
             updateWordHistory(status.wordHistory);
-            showStatus(`Active: ${status.activeCandidates}/${status.totalCandidates} | Words classified: ${status.wordHistory.length}`);
+            showStatusWithoutCancel(`Active: ${status.activeCandidates}/${status.totalCandidates} | Words classified: ${status.wordHistory.length}`);
         }
 
         function classifyWord(word, classification) {
@@ -985,7 +1066,7 @@
             showSection('voting');
             updateCandidates(status.candidateDetails, status.threshold);
             updateWordHistory(status.wordHistory);
-            showStatus(`Active: ${status.activeCandidates}/${status.totalCandidates} | Words classified: ${status.wordHistory.length}`);
+            showStatusWithoutCancel(`Active: ${status.activeCandidates}/${status.totalCandidates} | Words classified: ${status.wordHistory.length}`);
 
             wordPair.innerHTML = `
         <div class="word-card" id="card-${pair.word1}" data-word="${pair.word1.replace(/"/g, '&quot;')}">
@@ -1154,14 +1235,16 @@
         }
 
         function handleCancelled(message) {
-            showStatus(message || 'Operation cancelled');
+            statusBar.innerHTML = `<span>${message || 'Operation cancelled'}</span>`;
+            statusBar.classList.remove('hidden');
+            cancelSection.classList.add('hidden');
             setTimeout(() => {
                 resetUI(false);
             }, 2000);
         }
 
         function showRefinePromptDialog() {
-            // Create a simple inline prompt form in the voting section
+            // Create a simple inline prompt form
             const currentPrompt = promptInput.value;
             const dialogHtml = `
         <div style="padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--vscode-focusBorder); border-radius: 4px; margin: 20px 0;">
@@ -1183,14 +1266,34 @@
         </div>
       `;
 
-            // Show dialog in the word pair area or at the top of voting section
+            // Show dialog in the appropriate section
             const dialogContainer = document.createElement('div');
             dialogContainer.id = 'refineDialog';
             dialogContainer.innerHTML = dialogHtml;
 
-            // Insert at the beginning of voting section
-            const votingSectionElement = document.getElementById('votingSection');
-            votingSectionElement.insertBefore(dialogContainer, votingSectionElement.firstChild);
+            // Check which section is visible and insert there
+            if (!votingSection.classList.contains('hidden')) {
+                // Hide the current prompt display while refining
+                if (currentPromptDisplay) {
+                    currentPromptDisplay.style.display = 'none';
+                }
+                // Insert at the beginning of voting section
+                votingSection.insertBefore(dialogContainer, votingSection.firstChild);
+            } else if (!finalSection.classList.contains('hidden')) {
+                // Hide the final prompt display while refining
+                if (finalPromptDisplay) {
+                    finalPromptDisplay.style.display = 'none';
+                }
+                // Insert at the beginning of final section
+                finalSection.insertBefore(dialogContainer, finalSection.firstChild);
+            } else {
+                // Fallback: show voting section and insert there
+                showSection('voting');
+                if (currentPromptDisplay) {
+                    currentPromptDisplay.style.display = 'none';
+                }
+                votingSection.insertBefore(dialogContainer, votingSection.firstChild);
+            }
         }
 
         function submitRefinedPrompt() {
@@ -1220,8 +1323,9 @@
         window.classifyWord = classifyWord;
         window.updateClassification = updateClassification;
         window.vote = vote;
-        window.submitRefinedPrompt = submitRefinedPrompt;
-        window.cancelRefine = cancelRefine;
+        window.editPrompt = editPrompt;
+        window.submitEditedPrompt = submitEditedPrompt;
+        window.cancelEditPrompt = cancelEditPrompt;
         window.copyRegex = copyRegex;
         window.toLiteralString = toLiteralString;
         window.highlightRegex = highlightRegex;
