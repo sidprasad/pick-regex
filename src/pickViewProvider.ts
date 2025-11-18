@@ -317,13 +317,20 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      const examples = await this.controller.generateFinalExamples(5);
+      // Get the actual words the user classified
+      const wordHistory = this.controller.getWordHistory();
+      const wordsIn = wordHistory
+        .filter(record => record.classification === 'accept')
+        .map(record => record.word);
+      const wordsOut = wordHistory
+        .filter(record => record.classification === 'reject')
+        .map(record => record.word);
       
       this.sendMessage({
         type: 'finalResult',
         regex: finalRegex,
-        wordsIn: examples.wordsIn,
-        wordsOut: examples.wordsOut
+        wordsIn,
+        wordsOut
       });
     } catch (error) {
       logger.error(error, 'Error showing final results');
