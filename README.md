@@ -9,12 +9,15 @@ Key ideas:
 - Iterate: show two example strings and ask which one is "IN" (matches) or "OUT" (doesn't match). The controller uses these judgments to eliminate candidates.
 - Continue until you accept an example for one regex (we select it), or all candidates are eliminated (then we tell you none matched).
 - The extension ensures examples are unique and tries to maximize information gained from each judgment.
+- **Session Management**: Refine your prompt while preserving your existing classifications, or start fresh with a new prompt.
 
 Quick start
 -----------
 1. In VS Code, press F1 and select: "PICK: Start Regex Builder".
 2. Enter a short description of the regex you want (e.g., "IPv4 octet, from 0–255").
 3. Classify example strings until PICK converges to a final regex, or the candidates are exhausted.
+4. **Refine Your Prompt**: If you want to iterate on your prompt without losing your work, click "Refine Prompt" to generate new candidates while preserving your existing classifications.
+5. **Start Fresh**: If you want to begin a completely new regex task, click "Start Fresh" to clear all state and begin anew.
 
 Developer workflow / Try it locally
 ------------------
@@ -63,6 +66,24 @@ If `npm ci` fails with a message like "package.json and package-lock.json are no
 
 # Use "Extensions: Install from VSIX..." in VS Code to install the generated .vsix
 ```
+
+Session Management
+------------------
+PICK now supports session management to help you iteratively refine your regex without losing your work:
+
+- **Refine Prompt**: Click "Refine Prompt" during the classification phase or after getting a final result. This allows you to:
+  - Update your natural language description
+  - Generate new candidate regexes based on the refined prompt
+  - **Preserve all your existing word classifications** (Accept/Reject/Unsure)
+  - Apply those classifications to the new candidates automatically
+  - Continue from where you left off with better candidates
+
+- **Start Fresh**: Click "Start Fresh" to completely reset the session:
+  - Clears all candidates and classifications
+  - Returns to the initial prompt screen
+  - Use this when you want to work on a completely different regex task
+
+This two-level reset system allows you to iterate efficiently on your regex without repetitive work, while still providing a clean slate when needed.
 
 Configuration
 -------------
