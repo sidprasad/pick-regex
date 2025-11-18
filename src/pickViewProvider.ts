@@ -34,6 +34,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'generateCandidates':
           await this.handleGenerateCandidates(data.prompt);
           break;
+        case 'refineCandidates':
+          await this.handleRefineCandidates(data.prompt);
+          break;
         case 'classifyWord':
           this.handleClassifyWord(data.word, data.classification);
           break;
@@ -44,7 +47,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           this.handleVote(data.acceptedWord);
           break;
         case 'reset':
-          this.handleReset();
+          this.handleReset(data.preserveClassifications);
           break;
         case 'requestNextPair':
           this.handleRequestNextPair();
@@ -303,10 +306,88 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private handleReset() {
-    this.controller.reset();
-    logger.info('Reset requested from webview.');
-    this.sendMessage({ type: 'reset' });
+  private async handleRefineCandidates(prompt: string) {
+    try {
+      this.sendMessage({ type: 'status', message: 'Refining with new candidates...' });
+
+      // Get session data before refinement
+      const sessionData = this.controller.getSessionData();
+      
+      // Generate new candidate regexes using LLM
+      const tokenSource = new vscode.CancellationTokenSource();
+      
+      let candidates: string[] = [];
+      try {
+        const result = await generateRegexFromDescription(prompt, tokenSource.token);
+        candidates = result.candidates.map(c => c.regex);
+        logger.info(`Generated ${candidates.length} candidates from LLM for refinement`);
+        
+        // Log each candidate with explanation
+        result.candidates.forEach((c, i) => {
+          logger.info(`Candidate ${i + 1}: ${c.regex} (confidence: ${c.confidence ?? 'N/A'}) - ${c.explanation}`);
+        });
+      } catch (error) {
+        logger.error(error, 'Failed to generate candidate regexes during refinement');
+        this.sendMessage({ 
+          type: 'error', 
+          message: 'Could not generate any candidate regexes. Please try again.' 
+        });
+        return;
+      }
+
+      if (candidates.length === 0) {
+        this.sendMessage({ 
+          type: 'error', 
+          message: 'Could not generate any candidate regexes. Please try again.' 
+        });
+        return;
+      }
+
+      // Filter out equivalent/duplicate regexes
+      this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
+      const uniqueCandidates = await this.filterEquivalentRegexes(candidates);
+      
+      // Inform user if duplicates were removed
+      if (uniqueCandidates.length < candidates.length) {
+        this.sendMessage({ 
+          type: 'status', 
+          message: `Removed ${candidates.length - uniqueCandidates.length} duplicate regex(es). Proceeding with ${uniqueCandidates.length} unique candidate(s). Preserving ${sessionData.wordHistory.length} existing classifications.` 
+        });
+      }
+
+      if (uniqueCandidates.length === 0) {
+        this.sendMessage({ 
+          type: 'error', 
+          message: 'All generated regexes were duplicates. Please try again with a different prompt.' 
+        });
+        return;
+      }
+
+      // Refine candidates with preserved classifications
+      await this.controller.refineCandidates(prompt, uniqueCandidates);
+      
+      this.sendMessage({
+        type: 'candidatesRefined',
+        candidates: this.controller.getStatus().candidateDetails,
+        preservedClassifications: sessionData.wordHistory.length
+      });
+
+      // Generate first word pair (or proceed to final result if only 1 candidate)
+      this.handleRequestNextPair();
+      
+    } catch (error) {
+      logger.error(error, 'Error refining candidates');
+      this.sendMessage({
+        type: 'error',
+        message: `Error: ${error}`
+      });
+    }
+  }
+
+  private handleReset(preserveClassifications = false) {
+    this.controller.reset(preserveClassifications);
+    logger.info(`Reset requested from webview (preserveClassifications: ${preserveClassifications}).`);
+    this.sendMessage({ type: 'reset', preserveClassifications });
   }
 
   /**
@@ -749,6 +830,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         <h3>Word Classification History</h3>
         <div id="historyItems"></div>
       </div>
+      <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--vscode-panel-border);">
+        <button id="refineBtn" class="secondary">Refine Prompt</button>
+        <button id="startFreshBtn" class="secondary">Start Fresh</button>
+      </div>
     </div>
 
     <!-- Final Result -->
@@ -766,7 +851,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
             <div id="wordsOut"></div>
           </div>
         </div>
-        <button id="resetBtn">Build another REGEX</button>
+        <button id="refineResultBtn" class="secondary">Refine Prompt</button>
+        <button id="resetBtn">Start Fresh</button>
       </div>
     </div>
 
@@ -792,6 +878,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     const wordsIn = document.getElementById('wordsIn');
     const wordsOut = document.getElementById('wordsOut');
     const resetBtn = document.getElementById('resetBtn');
+    const refineBtn = document.getElementById('refineBtn');
+    const startFreshBtn = document.getElementById('startFreshBtn');
+    const refineResultBtn = document.getElementById('refineResultBtn');
 
     // Track classified words in current pair
     let classifiedWords = new Set();
@@ -806,7 +895,19 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     });
 
     resetBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'reset' });
+      vscode.postMessage({ type: 'reset', preserveClassifications: false });
+    });
+
+    refineBtn.addEventListener('click', () => {
+      showRefinePromptDialog();
+    });
+
+    startFreshBtn.addEventListener('click', () => {
+      vscode.postMessage({ type: 'reset', preserveClassifications: false });
+    });
+
+    refineResultBtn.addEventListener('click', () => {
+      showRefinePromptDialog();
     });
 
     // Handle messages from extension
@@ -824,6 +925,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           showWarning(message.message);
           break;
         case 'candidatesGenerated':
+          updateCandidates(message.candidates, 2);
+          break;
+        case 'candidatesRefined':
+          showStatus(\`Refined with \${message.preservedClassifications} preserved classification(s)\`);
           updateCandidates(message.candidates, 2);
           break;
         case 'newPair':
@@ -852,7 +957,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           showInsufficientWords(message.candidates, message.status);
           break;
         case 'reset':
-          resetUI();
+          resetUI(message.preserveClassifications);
           break;
       }
     });
@@ -1082,17 +1187,76 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       wordsOut.innerHTML = '';
     }
 
-    function resetUI() {
-      promptInput.value = '';
+    function resetUI(preserveClassifications = false) {
+      if (!preserveClassifications) {
+        promptInput.value = '';
+      }
       classifiedWords.clear();
       showSection('prompt');
       statusBar.classList.add('hidden');
+    }
+
+    function showRefinePromptDialog() {
+      // Create a simple inline prompt form in the voting section
+      const currentPrompt = promptInput.value;
+      const dialogHtml = \`
+        <div style="padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--vscode-focusBorder); border-radius: 4px; margin: 20px 0;">
+          <h3 style="margin-top: 0;">Refine Your Prompt</h3>
+          <p style="color: var(--vscode-descriptionForeground);">
+            Update your prompt to generate new candidates while preserving your existing classifications.
+          </p>
+          <input type="text" id="refinePromptInput" value="\${currentPrompt}" 
+                 style="width: 100%; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px; margin-bottom: 10px;" 
+                 placeholder="Enter a refined description..." />
+          <div>
+            <button onclick="submitRefinedPrompt()" style="background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 2px; padding: 8px 16px; cursor: pointer; margin-right: 8px;">
+              Generate New Candidates
+            </button>
+            <button onclick="cancelRefine()" style="background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; border-radius: 2px; padding: 8px 16px; cursor: pointer;">
+              Cancel
+            </button>
+          </div>
+        </div>
+      \`;
+      
+      // Show dialog in the word pair area or at the top of voting section
+      const dialogContainer = document.createElement('div');
+      dialogContainer.id = 'refineDialog';
+      dialogContainer.innerHTML = dialogHtml;
+      
+      // Insert at the beginning of voting section
+      const votingSectionElement = document.getElementById('votingSection');
+      votingSectionElement.insertBefore(dialogContainer, votingSectionElement.firstChild);
+    }
+
+    function submitRefinedPrompt() {
+      const refineInput = document.getElementById('refinePromptInput');
+      const newPrompt = refineInput.value.trim();
+      if (newPrompt) {
+        promptInput.value = newPrompt;
+        vscode.postMessage({ type: 'refineCandidates', prompt: newPrompt });
+        // Remove dialog
+        const dialog = document.getElementById('refineDialog');
+        if (dialog) {
+          dialog.remove();
+        }
+        showSection('loading');
+      }
+    }
+
+    function cancelRefine() {
+      const dialog = document.getElementById('refineDialog');
+      if (dialog) {
+        dialog.remove();
+      }
     }
 
     // Make functions available globally for inline onclick handlers
     window.classifyWord = classifyWord;
     window.updateClassification = updateClassification;
     window.vote = vote;
+    window.submitRefinedPrompt = submitRefinedPrompt;
+    window.cancelRefine = cancelRefine;
   </script>
 </body>
 </html>`;

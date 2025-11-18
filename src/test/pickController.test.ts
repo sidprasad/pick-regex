@@ -185,4 +185,127 @@ suite('PickController Test Suite', () => {
     assert.strictEqual(controller.getState(), PickState.VOTING);
     assert.strictEqual(controller.getActiveCandidateCount(), 0);
   });
+
+  test('Should preserve current prompt', async () => {
+    const prompt = 'test prompt';
+    const patterns = ['[a-z]+', '[0-9]+'];
+    await controller.generateCandidates(prompt, patterns);
+    
+    assert.strictEqual(controller.getCurrentPrompt(), prompt);
+  });
+
+  test('Should refine candidates while preserving classifications', async () => {
+    // Initial setup
+    const patterns = ['[a-z]+', '[0-9]+'];
+    await controller.generateCandidates('initial prompt', patterns);
+    
+    // Generate pair and classify
+    const pair = await controller.generateNextPair();
+    controller.classifyWord(pair.word1, WordClassification.ACCEPT);
+    controller.classifyWord(pair.word2, WordClassification.REJECT);
+    
+    const historyBefore = controller.getWordHistory();
+    assert.strictEqual(historyBefore.length, 2);
+    
+    // Refine with new candidates
+    const newPatterns = ['[a-z]{3}', '[0-9]{2}'];
+    await controller.refineCandidates('refined prompt', newPatterns);
+    
+    // Classifications should be preserved
+    const historyAfter = controller.getWordHistory();
+    assert.strictEqual(historyAfter.length, 2);
+    assert.strictEqual(historyAfter[0].word, historyBefore[0].word);
+    assert.strictEqual(historyAfter[0].classification, historyBefore[0].classification);
+    
+    // Prompt should be updated
+    assert.strictEqual(controller.getCurrentPrompt(), 'refined prompt');
+    
+    // New candidates should be initialized
+    assert.strictEqual(controller.getActiveCandidateCount(), 2);
+    const status = controller.getStatus();
+    assert.strictEqual(status.candidateDetails.some(c => c.pattern === '[a-z]{3}'), true);
+  });
+
+  test('Should apply preserved classifications to new candidates during refinement', async () => {
+    // Setup initial candidates and classify a word
+    const patterns = ['[a-z]+', '[0-9]+'];
+    await controller.generateCandidates('initial', patterns);
+    
+    // Classify 'abc' as ACCEPT (matches [a-z]+)
+    const pair = await controller.generateNextPair();
+    controller.classifyWord('abc', WordClassification.ACCEPT);
+    controller.classifyWord(pair.word2, WordClassification.UNSURE);
+    controller.clearCurrentPair();
+    
+    // Refine with new patterns
+    const newPatterns = ['[a-z]{3}', '[0-9]{3}'];
+    await controller.refineCandidates('refined', newPatterns);
+    
+    // Check if votes were applied to new candidates
+    const status = controller.getStatus();
+    const alphaCandidate = status.candidateDetails.find(c => c.pattern === '[a-z]{3}');
+    
+    // 'abc' should match [a-z]{3}, so it should have a positive vote
+    if (alphaCandidate) {
+      assert.strictEqual(alphaCandidate.positiveVotes, 1);
+    }
+  });
+
+  test('Should reset with preserveClassifications flag', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    await controller.generateCandidates('test', patterns);
+    
+    const pair = await controller.generateNextPair();
+    controller.classifyWord(pair.word1, WordClassification.ACCEPT);
+    
+    const historyBefore = controller.getWordHistory();
+    const usedWordsBefore = controller.getStatus().usedWords;
+    
+    // Reset preserving classifications
+    controller.reset(true);
+    
+    assert.strictEqual(controller.getState(), PickState.INITIAL);
+    assert.strictEqual(controller.getActiveCandidateCount(), 0);
+    
+    // Word history should be preserved
+    const historyAfter = controller.getWordHistory();
+    assert.strictEqual(historyAfter.length, historyBefore.length);
+    
+    // Used words should be preserved
+    const usedWordsAfter = controller.getStatus().usedWords;
+    assert.strictEqual(usedWordsAfter, usedWordsBefore);
+  });
+
+  test('Should reset without preserving classifications', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    await controller.generateCandidates('test', patterns);
+    
+    const pair = await controller.generateNextPair();
+    controller.classifyWord(pair.word1, WordClassification.ACCEPT);
+    
+    // Reset without preserving
+    controller.reset(false);
+    
+    assert.strictEqual(controller.getState(), PickState.INITIAL);
+    assert.strictEqual(controller.getActiveCandidateCount(), 0);
+    assert.strictEqual(controller.getWordHistory().length, 0);
+    assert.strictEqual(controller.getStatus().usedWords, 0);
+    assert.strictEqual(controller.getCurrentPrompt(), '');
+  });
+
+  test('Should get session data', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    const prompt = 'test prompt';
+    await controller.generateCandidates(prompt, patterns);
+    
+    const pair = await controller.generateNextPair();
+    controller.classifyWord(pair.word1, WordClassification.ACCEPT);
+    
+    const sessionData = controller.getSessionData();
+    
+    assert.strictEqual(sessionData.currentPrompt, prompt);
+    assert.strictEqual(sessionData.threshold, controller.getThreshold());
+    assert.strictEqual(sessionData.wordHistory.length, 1);
+    assert.strictEqual(sessionData.usedWords.length > 0, true);
+  });
 });
