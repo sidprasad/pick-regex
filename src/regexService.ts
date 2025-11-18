@@ -1,8 +1,13 @@
 import * as vscode from 'vscode';
 
-export interface RegexGenerationResult {
+export interface RegexCandidate {
   regex: string;
   explanation: string;
+  confidence?: number;
+}
+
+export interface RegexGenerationResult {
+  candidates: RegexCandidate[];
 }
 
 export async function generateRegexFromDescription(
@@ -25,18 +30,26 @@ export async function generateRegexFromDescription(
 
   const model = models[0];
 
-  // 2. Build prompt: ask for strict JSON to keep parsing simple.
+  // Build prompt: ask for multiple candidate regexes with explanations and confidence scores
   const messages: vscode.LanguageModelChatMessage[] = [
     vscode.LanguageModelChatMessage.User(
       [
         'You are a regex generator.',
-        'Given a natural-language description, return JSON:',
-        '{"regex": "<REGEX>", "explanation": "<BRIEF EXPLANATION>"}',
+        'Given a natural-language description, generate 3-5 candidate regular expressions.',
+        'Return JSON in this format:',
+        '{',
+        '  "candidates": [',
+        '    {"regex": "<REGEX>", "explanation": "<WHY THIS PATTERN>", "confidence": 0.9},',
+        '    {"regex": "<REGEX>", "explanation": "<WHY THIS PATTERN>", "confidence": 0.7}',
+        '  ]',
+        '}',
         '',
         'Requirements:',
-        '- Only one regex.',
-        '- No backticks, comments, or extra text.',
-        '- Regex should be compatible with most PCRE/JS engines unless otherwise specified.',
+        '- Generate 3-5 diverse candidates (from most specific to more general, or different interpretations).',
+        '- Confidence score between 0 and 1 (how well it matches the description).',
+        '- No backticks, comments, or extra text outside the JSON.',
+        '- Regexes should be compatible with JavaScript/PCRE engines.',
+        '- Each candidate should have a clear explanation of what it matches and why.',
         '',
         `Description: ${description}`
       ].join('\n')
@@ -59,14 +72,24 @@ export async function generateRegexFromDescription(
   }
 
   const parsed = JSON.parse(jsonMatch[0]);
-  if (typeof parsed.regex !== 'string') {
-    throw new Error('Model JSON missing `regex` string.');
+  
+  // Validate the response structure
+  if (!Array.isArray(parsed.candidates)) {
+    throw new Error('Model JSON missing `candidates` array.');
   }
 
-  return {
-    regex: parsed.regex,
-    explanation: typeof parsed.explanation === 'string'
-      ? parsed.explanation
-      : ''
-  };
+  // Validate each candidate
+  const candidates: RegexCandidate[] = parsed.candidates
+    .filter((c: any) => typeof c.regex === 'string')
+    .map((c: any) => ({
+      regex: c.regex,
+      explanation: typeof c.explanation === 'string' ? c.explanation : '',
+      confidence: typeof c.confidence === 'number' ? c.confidence : undefined
+    }));
+
+  if (candidates.length === 0) {
+    throw new Error('No valid regex candidates returned by model.');
+  }
+
+  return { candidates };
 }

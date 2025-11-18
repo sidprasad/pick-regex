@@ -57,18 +57,26 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     try {
       this.sendMessage({ type: 'status', message: 'Generating candidate regexes...' });
 
-      // Generate ~4 candidate regexes using LLM
-      const candidates: string[] = [];
+      // Generate candidate regexes using LLM
       const tokenSource = new vscode.CancellationTokenSource();
       
-      for (let i = 0; i < 4; i++) {
-        try {
-          const result = await generateRegexFromDescription(prompt, tokenSource.token);
-          candidates.push(result.regex);
-          logger.info(`Generated candidate ${i + 1}: ${result.regex}`);
-        } catch (error) {
-          logger.error(error, `Failed to generate candidate ${i + 1}`);
-        }
+      let candidates: string[] = [];
+      try {
+        const result = await generateRegexFromDescription(prompt, tokenSource.token);
+        candidates = result.candidates.map(c => c.regex);
+        logger.info(`Generated ${candidates.length} candidates from LLM`);
+        
+        // Log each candidate with explanation
+        result.candidates.forEach((c, i) => {
+          logger.info(`Candidate ${i + 1}: ${c.regex} (confidence: ${c.confidence ?? 'N/A'}) - ${c.explanation}`);
+        });
+      } catch (error) {
+        logger.error(error, 'Failed to generate candidate regexes');
+        this.sendMessage({ 
+          type: 'error', 
+          message: 'Could not generate any candidate regexes. Please try again.' 
+        });
+        return;
       }
 
       if (candidates.length === 0) {
@@ -415,7 +423,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     
     .word-card {
       flex: 1;
-      padding: 20px;
+      padding: 12px 10px;
       background: var(--vscode-editor-background);
       border: 2px solid var(--vscode-input-border);
       border-radius: 4px;
@@ -430,12 +438,42 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
     
     .word-card .word {
-      font-size: 1.5em;
+      font-size: 1.25em;
       font-weight: bold;
       margin-bottom: 10px;
       color: var(--vscode-editor-foreground);
       font-family: monospace;
     }
+
+    .word-actions {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn {
+      border: none;
+      background: transparent;
+      padding: 6px;
+      border-radius: 6px;
+      cursor: pointer;
+      min-width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn svg { width: 16px; height: 16px; }
+
+  .btn.accept { color: var(--vscode-terminal-ansiGreen, #16a34a); }
+  .btn.reject { color: var(--vscode-terminal-ansiRed, #ef4444); }
+    .btn.unsure { color: var(--vscode-foreground); }
+
+    .btn:hover { background: var(--vscode-list-hoverBackground); }
+
+    .btn:disabled { opacity: 0.6; cursor: default; }
     
     .status-bar {
       padding: 10px;
@@ -618,8 +656,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
 
     .history-item {
-      padding: 10px;
-      margin: 8px 0;
+      padding: 6px 8px;
+      margin: 6px 0;
       background: var(--vscode-list-inactiveSelectionBackground);
       border-radius: 4px;
       display: flex;
@@ -640,7 +678,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
 
     .history-classification select {
-      padding: 4px 8px;
+      padding: 6px 10px;
       background: var(--vscode-dropdown-background);
       color: var(--vscode-dropdown-foreground);
       border: 1px solid var(--vscode-dropdown-border);
@@ -656,18 +694,18 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
 
     .classification-badge.accept {
-      background: #4caf50;
-      color: white;
+      background: var(--vscode-terminal-ansiGreen, #4caf50);
+      color: var(--vscode-foreground);
     }
 
     .classification-badge.reject {
-      background: #f44336;
-      color: white;
+      background: var(--vscode-terminal-ansiRed, #ef4444);
+      color: var(--vscode-foreground);
     }
 
     .classification-badge.unsure {
-      background: #ff9800;
-      color: white;
+      background: var(--vscode-titleBar-activeBackground, #ff9800);
+      color: var(--vscode-foreground);
     }
 
     .history-matches {
@@ -927,17 +965,43 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         <div class="word-card" id="card-\${pair.word1}">
           <div class="word">\${pair.word1}</div>
           <div class="word-actions">
-            <button class="accept" onclick="classifyWord('\${pair.word1}', 'accept')">✓ Accept</button>
-            <button class="reject" onclick="classifyWord('\${pair.word1}', 'reject')">✗ Reject</button>
-            <button class="unsure" onclick="classifyWord('\${pair.word1}', 'unsure')">? Unsure</button>
+            <button class="btn accept" onclick="classifyWord('\${pair.word1}', 'accept')" title="Accept">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="btn reject" onclick="classifyWord('\${pair.word1}', 'reject')" title="Reject">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="btn unsure" onclick="classifyWord('\${pair.word1}', 'unsure')" title="Unsure">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 14v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M11.5 9a1.5 1.5 0 1 1 1.5 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
         </div>
         <div class="word-card" id="card-\${pair.word2}">
           <div class="word">\${pair.word2}</div>
           <div class="word-actions">
-            <button class="accept" onclick="classifyWord('\${pair.word2}', 'accept')">✓ Accept</button>
-            <button class="reject" onclick="classifyWord('\${pair.word2}', 'reject')">✗ Reject</button>
-            <button class="unsure" onclick="classifyWord('\${pair.word2}', 'unsure')">? Unsure</button>
+            <button class="btn accept" onclick="classifyWord('\${pair.word2}', 'accept')" title="Accept">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="btn reject" onclick="classifyWord('\${pair.word2}', 'reject')" title="Reject">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="btn unsure" onclick="classifyWord('\${pair.word2}', 'unsure')" title="Unsure">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 14v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M11.5 9a1.5 1.5 0 1 1 1.5 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
         </div>
       \`;
