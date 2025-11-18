@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PICK - Regex Builder</title>
+    <style>
+        body {
+            padding: 10px;
+            font-family: var(--vscode-font-family);
+            color: var(--vscode-foreground);
+            font-size: var(--vscode-font-size);
+        }
+
+        .container {
+            max-width: 100%;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: var(--vscode-editor-background);
+            border-radius: 4px;
+            border: 1px solid var(--vscode-panel-border);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: var(--vscode-titleBar-activeForeground);
+            font-size: 1.2em;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 2px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        button:hover {
+            background: var(--vscode-button-hoverBackground);
+        }
+
+        button.secondary {
+            background: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+        }
+
+        button.secondary:hover {
+            background: var(--vscode-button-secondaryHoverBackground);
+        }
+
+        .word-pair {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .word-card {
+            flex: 1;
+            padding: 12px 10px;
+            background: var(--vscode-editor-background);
+            border: 2px solid var(--vscode-input-border);
+            border-radius: 4px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .word-card:hover {
+            border-color: var(--vscode-focusBorder);
+            background: var(--vscode-list-hoverBackground);
+        }
+
+        .word-card .word-display {
+            margin-bottom: 10px;
+            color: var(--vscode-editor-foreground);
+            font-family: monospace;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .word-actions {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn {
+            border: none;
+            background: transparent;
+            padding: 6px;
+            border-radius: 6px;
+            cursor: pointer;
+            min-width: 36px;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .btn.accept {
+            color: var(--vscode-terminal-ansiGreen, #16a34a);
+        }
+
+        .btn.reject {
+            color: var(--vscode-terminal-ansiRed, #ef4444);
+        }
+
+        .btn.unsure {
+            color: var(--vscode-foreground);
+        }
+
+        .btn:hover {
+            background: var(--vscode-list-hoverBackground);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        .btn.accept:hover::after {
+            content: "Accept";
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--vscode-quickInput-background);
+            color: var(--vscode-quickInput-foreground);
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            white-space: nowrap;
+            border: 1px solid var(--vscode-widget-border);
+            z-index: 1000;
+        }
+
+        .btn.reject:hover::after {
+            content: "Reject";
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--vscode-quickInput-background);
+            color: var(--vscode-quickInput-foreground);
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            white-space: nowrap;
+            border: 1px solid var(--vscode-widget-border);
+            z-index: 1000;
+        }
+
+        .btn.unsure:hover::after {
+            content: "Unsure";
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--vscode-quickInput-background);
+            color: var(--vscode-quickInput-foreground);
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            white-space: nowrap;
+            border: 1px solid var(--vscode-widget-border);
+            z-index: 1000;
+        }
+
+        .btn.copy {
+            color: var(--vscode-foreground);
+        }
+
+        .status-bar {
+            padding: 10px;
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+
+        .candidates-list {
+            margin-top: 10px;
+        }
+
+        .candidate-item {
+            padding: 8px;
+            margin: 4px 0;
+            background: var(--vscode-list-inactiveSelectionBackground);
+            border-radius: 2px;
+            font-family: monospace;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .candidate-pattern {
+            flex: 1;
+            overflow-x: auto;
+            white-space: nowrap;
+            margin-right: 10px;
+        }
+
+        .candidate-item.eliminated {
+            opacity: 0.5;
+            text-decoration: line-through;
+        }
+
+        .candidate-item.active {
+            background: var(--vscode-list-activeSelectionBackground);
+            border-left: 3px solid var(--vscode-focusBorder);
+        }
+
+        .badge {
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.85em;
+        }
+
+        .final-result {
+            text-align: center;
+        }
+
+        .regex-display {
+            font-size: 1.5em;
+            font-family: monospace;
+            padding: 15px;
+            background: var(--vscode-textCodeBlock-background);
+            border-radius: 4px;
+            margin: 15px 0;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .examples {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .example-box {
+            padding: 10px;
+            background: var(--vscode-editor-background);
+            border-radius: 4px;
+        }
+
+        .example-box h3 {
+            margin-top: 0;
+            font-size: 1em;
+        }
+
+        .example-box.in {
+            border-left: 3px solid #4caf50;
+        }
+
+        .example-box.out {
+            border-left: 3px solid #f44336;
+        }
+
+        .example-item {
+            font-family: monospace;
+            padding: 4px 8px;
+            margin: 4px 0;
+            background: var(--vscode-textCodeBlock-background);
+            border-radius: 2px;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .error {
+            padding: 10px;
+            background: var(--vscode-inputValidation-errorBackground);
+            border: 1px solid var(--vscode-inputValidation-errorBorder);
+            color: var(--vscode-errorForeground);
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        /* New styles for word classification UI */
+        .word-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        button.accept {
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #16a34a;
+        }
+
+        button.accept:hover {
+            background: rgba(34, 197, 94, 0.25);
+            border-color: rgba(34, 197, 94, 0.5);
+        }
+
+        button.reject {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        button.reject:hover {
+            background: rgba(239, 68, 68, 0.25);
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+
+        button.unsure {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            color: #d97706;
+        }
+
+        button.unsure:hover {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+
+        .word-card.classified {
+            opacity: 0.7;
+            border-color: var(--vscode-descriptionForeground);
+        }
+
+        .word-card.classified-accept {
+            border-color: #4caf50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .word-card.classified-reject {
+            border-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+
+        .word-card.classified-unsure {
+            border-color: #ff99006b;
+            background: rgba(255, 152, 0, 0.1);
+        }
+
+        .word-history {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .word-history h3 {
+            margin-top: 0;
+            font-size: 1em;
+            color: var(--vscode-titleBar-activeForeground);
+        }
+
+        .history-item {
+            padding: 6px 8px;
+            margin: 6px 0;
+            background: var(--vscode-list-inactiveSelectionBackground);
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-word {
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 1.1em;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .history-classification {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .history-classification select {
+            padding: 6px 10px;
+            background: var(--vscode-dropdown-background);
+            color: var(--vscode-dropdown-foreground);
+            border: 1px solid var(--vscode-dropdown-border);
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .classification-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .classification-badge.accept {
+            background: var(--vscode-terminal-ansiGreen, #4caf50);
+            color: var(--vscode-foreground);
+        }
+
+        .classification-badge.reject {
+            background: var(--vscode-terminal-ansiRed, #ef4444);
+            color: var(--vscode-foreground);
+        }
+
+        .classification-badge.unsure {
+            background: var(--vscode-titleBar-activeBackground, #ff9800);
+            color: var(--vscode-foreground);
+        }
+
+        .history-matches {
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 4px;
+        }
+
+        .threshold-info {
+            font-size: 0.9em;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 5px;
+        }
+
+        .candidate-votes {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .current-prompt-display {
+            padding: 12px 15px;
+            background: var(--vscode-textBlockQuote-background);
+            border-left: 4px solid var(--vscode-focusBorder);
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-family: var(--vscode-font-family);
+        }
+
+        .current-prompt-display .prompt-label {
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+            font-weight: 600;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .word-display {
+            position: relative;
+            font-family: monospace;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .word-readable, .word-literal {
+            display: none;
+        }
+
+        body[data-literal-mode="false"] .word-readable {
+            display: inline;
+        }
+
+        body[data-literal-mode="true"] .word-literal {
+            display: inline;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 32px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 18px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 12px;
+            width: 12px;
+            left: 2px;
+            bottom: 2px;
+            background-color: var(--vscode-foreground);
+            border-radius: 50%;
+            transition: 0.3s;
+            opacity: 0.6;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: var(--vscode-focusBorder);
+            border-color: var(--vscode-focusBorder);
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(14px);
+            background-color: var(--vscode-foreground);
+            opacity: 1;
+        }
+
+        .toggle-switch:hover .toggle-slider {
+            border-color: var(--vscode-focusBorder);
+        }
+
+        .regex-syntax {
+            font-family: monospace;
+            font-size: 1.1em;
+            line-height: 1.4;
+        }
+
+        .regex-meta {
+            color: var(--vscode-textLink-foreground, #3794ff);
+            font-weight: bold;
+        }
+
+        .regex-group {
+            color: var(--vscode-charts-green, #89d185);
+        }
+
+        .regex-class {
+            color: var(--vscode-charts-orange, #f48771);
+        }
+
+        .regex-quantifier {
+            color: var(--vscode-charts-blue, #4fc1ff);
+        }
+
+        .regex-escape {
+            color: var(--vscode-charts-yellow, #cca700);
+        }
+
+        .regex-literal {
+            color: var(--vscode-editor-foreground);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Initial Prompt -->
+        <div id="promptSection" class="section">
+            <h2>PICK: Regex Builder</h2>
+            <p>Describe the regex you want to build:</p>
+            <input type="text" id="promptInput" placeholder="e.g., email addresses, phone numbers, dates..." />
+            <button id="generateBtn">Start PICKing</button>
+        </div>
+
+        <!-- Status Bar -->
+        <div id="statusBar" class="status-bar hidden"></div>
+        <div id="cancelSection" class="hidden" style="margin-bottom: 15px;">
+            <button id="cancelBtn" class="secondary" style="background: #f44336; color: white; border-color: #d32f2f;">⏹️ Cancel Operation</button>
+        </div>
+
+        <!-- Voting Section -->
+        <div id="votingSection" class="section hidden">
+            <div id="currentPromptDisplay" class="current-prompt-display"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h2>Classify each word - Accept, Reject, or Unsure:</h2>
+                <label class="toggle-switch" title="LITERAL MODE ON">
+                    <input type="checkbox" id="literalToggle" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="word-pair" id="wordPair"></div>
+            <div class="candidates-list" id="candidatesList"></div>
+            <div class="word-history" id="wordHistory">
+                <h3>Word Classification History</h3>
+                <div id="historyItems"></div>
+            </div>
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--vscode-panel-border);">
+                <button id="refineBtn" class="secondary">Refine Prompt</button>
+                <button id="startFreshBtn" class="secondary">Start Fresh</button>
+            </div>
+        </div>
+
+        <!-- Final Result -->
+        <div id="finalSection" class="section hidden">
+            <div class="final-result">
+                <div id="finalPromptDisplay" class="current-prompt-display"></div>
+                <h2>Final Regex</h2>
+                <div class="regex-display" id="finalRegex"></div>
+                <div class="examples">
+                    <div class="example-box in">
+                        <h3>✅ Words IN</h3>
+                        <div id="wordsIn"></div>
+                    </div>
+                    <div class="example-box out">
+                        <h3>❌ Words OUT</h3>
+                        <div id="wordsOut"></div>
+                    </div>
+                </div>
+                <button id="refineResultBtn" class="secondary">Refine Prompt</button>
+                <button id="resetBtn">Start Fresh</button>
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="errorSection" class="error hidden"></div>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+
+        // UI Elements
+        const promptSection = document.getElementById('promptSection');
+        const votingSection = document.getElementById('votingSection');
+        const finalSection = document.getElementById('finalSection');
+        const statusBar = document.getElementById('statusBar');
+        const cancelSection = document.getElementById('cancelSection');
+        const errorSection = document.getElementById('errorSection');
+        const literalToggle = document.getElementById('literalToggle');
+        const currentPromptDisplay = document.getElementById('currentPromptDisplay');
+        const finalPromptDisplay = document.getElementById('finalPromptDisplay');
+
+        // Additional UI Elements
+        const promptInput = document.getElementById('promptInput');
+        const generateBtn = document.getElementById('generateBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const refineBtn = document.getElementById('refineBtn');
+        const startFreshBtn = document.getElementById('startFreshBtn');
+        const refineResultBtn = document.getElementById('refineResultBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const wordPair = document.getElementById('wordPair');
+        const candidatesList = document.getElementById('candidatesList');
+        const wordHistory = document.getElementById('wordHistory');
+        const historyItems = document.getElementById('historyItems');
+        const finalRegex = document.getElementById('finalRegex');
+        const wordsIn = document.getElementById('wordsIn');
+        const wordsOut = document.getElementById('wordsOut');
+
+        // Track literal mode state
+        let literalMode = true; // Start in literal mode for regex development
+
+        // Track classified words
+        const classifiedWords = new Set();
+
+        // Initialize body data attribute
+        document.body.setAttribute('data-literal-mode', literalMode.toString());
+
+        // Helper function to update prompt display
+        function updatePromptDisplay(prompt) {
+            const html = `
+        <div class="prompt-label">Your Prompt</div>
+        <div class="prompt-text">${prompt}</div>
+      `;
+            if (currentPromptDisplay) {
+                currentPromptDisplay.innerHTML = html;
+            }
+            if (finalPromptDisplay) {
+                finalPromptDisplay.innerHTML = html;
+            }
+        }
+
+        function copyRegex(pattern) {
+            try {
+                vscode.postMessage({ type: 'copy', regex: pattern });
+            } catch (e) {
+                showError('Unable to copy.');
+            }
+        }
+
+        // Function to display strings in literal mode (showing whitespace and special chars)
+        function toLiteralString(str) {
+            return str
+                .replace(/\n/g, '¶')  // Line ending: ¶ (U+00B6 PILCROW)
+                .replace(/\r/g, '¶')  // Carriage return also shows as line ending
+                .replace(/\t/g, '→')  // Tab: → (U+2192 RIGHTWARDS ARROW)
+                .replace(/ /g, '␣')   // Space: ␣ (U+2423 OPEN BOX)
+                .replace(/\u00A0/g, '⍽')  // Non-breaking space: ⍽ (U+237D)
+                .replace(/\f/g, '↡')  // Form feed: ↡ (U+21A1)
+                .replace(/\v/g, '↓')  // Vertical tab: ↓ (U+2193)
+                .replace(/\0/g, '␀')  // Null: ␀ (U+2400)
+                .replace(/\\/g, '⧹')  // Backslash: ⧹ (U+29F9)
+                .replace(/"/g, '"')   // Keep quotes as-is for now
+                .replace(/'/g, "'");  // Keep single quotes as-is for now
+        }
+
+        // Function to highlight regex syntax
+        function highlightRegex(pattern) {
+            if (!pattern) return '';
+
+            // Escape HTML entities first
+            pattern = pattern.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            // Split pattern into tokens and highlight them
+            let result = '';
+            let i = 0;
+
+            while (i < pattern.length) {
+                const char = pattern[i];
+
+                // Meta characters
+                if ('^$*+?|{}[]()\\'.includes(char)) {
+                    if (char === '\\' && i + 1 < pattern.length) {
+                        // Escape sequence
+                        const nextChar = pattern[i + 1];
+                        result += `<span class="regex-escape">\\${nextChar}</span>`;
+                        i += 2;
+                    } else if (char === '[' && pattern.substr(i).match(/^\[.*?\]/)) {
+                        // Character class
+                        const match = pattern.substr(i).match(/^\[.*?\]/)[0];
+                        result += `<span class="regex-class">${match}</span>`;
+                        i += match.length;
+                    } else if (char === '(' && pattern.substr(i).match(/^\([^)]*\)/)) {
+                        // Group
+                        const match = pattern.substr(i).match(/^\([^)]*\)/)[0];
+                        result += `<span class="regex-group">${match}</span>`;
+                        i += match.length;
+                    } else if ('*+?{'.includes(char)) {
+                        // Quantifier
+                        result += `<span class="regex-quantifier">${char}</span>`;
+                        i++;
+                    } else {
+                        // Other meta characters
+                        result += `<span class="regex-meta">${char}</span>`;
+                        i++;
+                    }
+                } else {
+                    // Literal character
+                    result += `<span class="regex-literal">${char}</span>`;
+                    i++;
+                }
+            }
+
+            return `<span class="regex-syntax">${result}</span>`;
+        }
+
+        // Event Listeners
+        generateBtn.addEventListener('click', () => {
+            const prompt = promptInput.value.trim();
+            if (prompt) {
+                updatePromptDisplay(prompt);
+                vscode.postMessage({ type: 'generateCandidates', prompt });
+                showSection('loading');
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'reset', preserveClassifications: false });
+        });
+
+        refineBtn.addEventListener('click', () => {
+            showRefinePromptDialog();
+        });
+
+        startFreshBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'reset', preserveClassifications: false });
+        });
+
+        refineResultBtn.addEventListener('click', () => {
+            showRefinePromptDialog();
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'cancel' });
+        });
+
+        literalToggle.addEventListener('change', () => {
+            literalMode = literalToggle.checked;
+            document.body.setAttribute('data-literal-mode', literalMode.toString());
+            literalToggle.parentElement.title = literalMode ? 'LITERAL MODE ON' : 'LITERAL MODE OFF';
+        });
+
+        // Handle messages from extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+
+            switch (message.type) {
+                case 'status':
+                    showStatus(message.message);
+                    break;
+                case 'error':
+                    showError(message.message);
+                    break;
+                case 'warning':
+                    showWarning(message.message);
+                    break;
+                case 'candidatesGenerated':
+                    updateCandidates(message.candidates, 2);
+                    break;
+                case 'candidatesRefined':
+                    showStatus(`Refined with ${message.preservedClassifications} preserved classification(s)`);
+                    updateCandidates(message.candidates, 2);
+                    break;
+                case 'newPair':
+                    classifiedWords.clear();
+                    showWordPair(message.pair, message.status);
+                    break;
+                case 'wordClassified':
+                    updateStatus(message.status);
+                    if (message.bothClassified) {
+                        classifiedWords.clear();
+                    }
+                    break;
+                case 'classificationUpdated':
+                    updateStatus(message.status);
+                    break;
+                case 'voteProcessed':
+                    updateStatus(message.status);
+                    break;
+                case 'finalResult':
+                    showFinalResult(message.regex, message.wordsIn, message.wordsOut);
+                    break;
+                case 'copied':
+                    showStatus('Copied to clipboard');
+                    break;
+                case 'noRegexFound':
+                    showNoRegexFound(message.message, message.candidateDetails);
+                    break;
+                case 'insufficientWords':
+                    showInsufficientWords(message.candidates, message.status);
+                    break;
+                case 'reset':
+                    resetUI(message.preserveClassifications);
+                    break;
+                case 'cancelled':
+                    handleCancelled(message.message);
+                    break;
+            }
+        });
+
+        function showSection(section) {
+            promptSection.classList.add('hidden');
+            votingSection.classList.add('hidden');
+            finalSection.classList.add('hidden');
+            errorSection.classList.add('hidden');
+            cancelSection.classList.add('hidden');
+
+            if (section === 'prompt') {
+                promptSection.classList.remove('hidden');
+            } else if (section === 'voting') {
+                votingSection.classList.remove('hidden');
+                statusBar.classList.remove('hidden');
+            } else if (section === 'final') {
+                finalSection.classList.remove('hidden');
+            } else if (section === 'loading') {
+                statusBar.classList.remove('hidden');
+                cancelSection.classList.remove('hidden');
+            }
+        }
+
+        function showStatus(message) {
+            statusBar.textContent = message;
+            statusBar.classList.remove('hidden');
+            cancelSection.classList.remove('hidden');
+        }
+
+        function showError(message) {
+            errorSection.textContent = message;
+            errorSection.classList.remove('hidden');
+        }
+
+        function showWarning(message) {
+            statusBar.textContent = '⚠️ ' + message;
+            statusBar.classList.remove('hidden');
+        }
+
+        function showInsufficientWords(candidates, status) {
+            showSection('voting');
+            updateCandidates(candidates, status.threshold);
+            updateWordHistory(status.wordHistory);
+
+            // Show a message in the word pair area
+            wordPair.innerHTML = `
+        <div style="text-align: center; padding: 20px; background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); border-radius: 4px;">
+          <h3>⚠️ Unable to Generate More Words</h3>
+          <p>The system ran out of distinguishing words to generate.</p>
+          <p>Here are the remaining candidates - you may need to choose manually or start over with a different prompt.</p>
+          <button onclick="location.reload()" style="margin-top: 10px;">Start Over</button>
+        </div>
+      `;
+        }
+
+        function updateCandidates(candidates, threshold) {
+            candidatesList.innerHTML = '<h3>Candidate Regexes:</h3>';
+            if (threshold !== undefined) {
+                const thresholdDiv = document.createElement('div');
+                thresholdDiv.className = 'threshold-info';
+                thresholdDiv.textContent = `Rejection threshold: ${threshold} negative votes`;
+                candidatesList.appendChild(thresholdDiv);
+            }
+
+            candidates.forEach(c => {
+                const div = document.createElement('div');
+                div.className = `candidate-item ${c.eliminated ? 'eliminated' : 'active'}`;
+                div.innerHTML = `
+                    <span class="candidate-pattern">${highlightRegex(c.pattern)}</span>
+                    <div class="candidate-votes" style="display:flex; gap:8px; align-items:center;">
+                        <button class="btn copy" data-pattern="${encodeURIComponent(c.pattern)}" onclick="copyRegex(decodeURIComponent(this.getAttribute('data-pattern')))" title="Copy regex">
+                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                                <rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>
+                            </svg>
+                        </button>
+                        <span class="badge" style="background: #4caf50;">✓ ${c.positiveVotes}</span>
+                        <span class="badge" style="background: #f44336;">✗ ${c.negativeVotes}</span>
+                    </div>
+                `;
+                candidatesList.appendChild(div);
+            });
+        }
+
+        function updateStatus(status) {
+            updateCandidates(status.candidateDetails, status.threshold);
+            updateWordHistory(status.wordHistory);
+            showStatus(`Active: ${status.activeCandidates}/${status.totalCandidates} | Words classified: ${status.wordHistory.length}`);
+        }
+
+        function classifyWord(word, classification) {
+            classifiedWords.add(word);
+            vscode.postMessage({
+                type: 'classifyWord',
+                word: word,
+                classification: classification
+            });
+
+            // Update UI to show word is classified
+            const wordCards = document.querySelectorAll('.word-card');
+            wordCards.forEach(card => {
+                const cardWord = card.getAttribute('data-word');
+                if (cardWord === word) {
+                    card.classList.add('classified', `classified-${classification}`);
+                    const buttons = card.querySelectorAll('button');
+                    buttons.forEach(btn => btn.disabled = true);
+                }
+            });
+        }
+
+        function showWordPair(pair, status) {
+            showSection('voting');
+            updateCandidates(status.candidateDetails, status.threshold);
+            updateWordHistory(status.wordHistory);
+            showStatus(`Active: ${status.activeCandidates}/${status.totalCandidates} | Words classified: ${status.wordHistory.length}`);
+
+            wordPair.innerHTML = `
+        <div class="word-card" id="card-${pair.word1}" data-word="${pair.word1.replace(/"/g, '&quot;')}">
+          <div class="word-display">
+            <span class="word-readable">${pair.word1}</span>
+            <span class="word-literal">${toLiteralString(pair.word1)}</span>
+          </div>
+          <div class="word-actions">
+            <button class="btn accept" onclick="classifyWord('${pair.word1.replace(/'/g, "\\'")}', 'accept')" title="Accept">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="btn reject" onclick="classifyWord('${pair.word1.replace(/'/g, "\\'")}', 'reject')" title="Reject">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="btn unsure" onclick="classifyWord('${pair.word1.replace(/'/g, "\\'")}', 'unsure')" title="Unsure">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 14v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M11.5 9a1.5 1.5 0 1 1 1.5 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="word-card" id="card-${pair.word2}" data-word="${pair.word2.replace(/"/g, '&quot;')}">
+          <div class="word-display">
+            <span class="word-readable">${pair.word2}</span>
+            <span class="word-literal">${toLiteralString(pair.word2)}</span>
+          </div>
+          <div class="word-actions">
+            <button class="btn accept" onclick="classifyWord('${pair.word2.replace(/'/g, "\\'")}', 'accept')" title="Accept">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="btn reject" onclick="classifyWord('${pair.word2.replace(/'/g, "\\'")}', 'reject')" title="Reject">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="btn unsure" onclick="classifyWord('${pair.word2.replace(/'/g, "\\'")}', 'unsure')" title="Unsure">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 14v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M11.5 9a1.5 1.5 0 1 1 1.5 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `;
+        }
+
+        function updateWordHistory(history) {
+            if (!history || history.length === 0) {
+                historyItems.innerHTML = '<p style="color: var(--vscode-descriptionForeground); font-style: italic;">No words classified yet.</p>';
+                return;
+            }
+
+            historyItems.innerHTML = '';
+            history.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+          <div>
+            <div class="word-display">
+              <span class="word-readable history-word" data-word="${item.word.replace(/"/g, '&quot;')}">${item.word}</span>
+              <span class="word-literal history-word" data-word="${item.word.replace(/"/g, '&quot;')}">${toLiteralString(item.word)}</span>
+            </div>
+            <div class="history-matches">${item.matchingRegexes.length} regex(es) match this word</div>
+          </div>
+          <div class="history-classification">
+            <select onchange="updateClassification(${index}, this.value)">
+              <option value="accept" ${item.classification === 'accept' ? 'selected' : ''}>✓ Accept</option>
+              <option value="reject" ${item.classification === 'reject' ? 'selected' : ''}>✗ Reject</option>
+              <option value="unsure" ${item.classification === 'unsure' ? 'selected' : ''}>? Unsure</option>
+            </select>
+          </div>
+        `;
+                historyItems.appendChild(div);
+            });
+        }
+
+        function updateClassification(index, newClassification) {
+            vscode.postMessage({
+                type: 'updateClassification',
+                index: index,
+                classification: newClassification
+            });
+        }
+
+        function vote(word) {
+            vscode.postMessage({ type: 'vote', acceptedWord: word });
+        }
+
+        function showFinalResult(regex, inWords, outWords) {
+            showSection('final');
+            finalRegex.innerHTML = `
+                                <span class="final-regex-text">${highlightRegex(regex)}</span>
+                                <button class="btn copy" data-pattern="${encodeURIComponent(regex)}" onclick="copyRegex(decodeURIComponent(this.getAttribute('data-pattern')))" title="Copy final regex">
+                                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>
+                                    </svg>
+                                </button>
+                        `;
+
+            wordsIn.innerHTML = inWords.map(w =>
+                `<div class="word-display">
+                  <span class="word-readable example-item" data-word="${w.replace(/"/g, '&quot;')}">${w}</span>
+                  <span class="word-literal example-item" data-word="${w.replace(/"/g, '&quot;')}">${toLiteralString(w)}</span>
+                </div>`
+            ).join('');
+
+            wordsOut.innerHTML = outWords.map(w =>
+                `<div class="word-display">
+                  <span class="word-readable example-item" data-word="${w.replace(/"/g, '&quot;')}">${w}</span>
+                  <span class="word-literal example-item" data-word="${w.replace(/"/g, '&quot;')}">${toLiteralString(w)}</span>
+                </div>`
+            ).join('');
+        }
+
+        function showNoRegexFound(message, candidateDetails) {
+            showSection('final');
+            finalRegex.textContent = 'No regex found';
+            finalRegex.style.color = '#f48771';
+
+            const detailsHtml = candidateDetails.map(c =>
+                `<div class="example-item" style="opacity: 0.7;">
+          <strong>${highlightRegex(c.pattern)}</strong> - Eliminated with ${c.negativeVotes} negative votes
+        </div>`
+            ).join('');
+
+            wordsIn.innerHTML = `
+        <div style="padding: 10px; background: var(--vscode-editorWarning-background); color: var(--vscode-editorWarning-foreground); border-radius: 4px; margin-bottom: 10px;">
+          ${message}
+        </div>
+        <div style="margin-top: 10px; font-size: 12px; opacity: 0.8;">
+          <strong>All candidates were eliminated:</strong>
+        </div>
+        ${detailsHtml}
+      `;
+            wordsOut.innerHTML = '';
+        }
+
+        function resetUI(preserveClassifications = false) {
+            if (!preserveClassifications) {
+                promptInput.value = '';
+                if (currentPromptDisplay) {
+                    currentPromptDisplay.innerHTML = '';
+                }
+                if (finalPromptDisplay) {
+                    finalPromptDisplay.innerHTML = '';
+                }
+            }
+            classifiedWords.clear();
+            showSection('prompt');
+            statusBar.classList.add('hidden');
+            cancelSection.classList.add('hidden');
+        }
+
+        function handleCancelled(message) {
+            showStatus(message || 'Operation cancelled');
+            setTimeout(() => {
+                resetUI(false);
+            }, 2000);
+        }
+
+        function showRefinePromptDialog() {
+            // Create a simple inline prompt form in the voting section
+            const currentPrompt = promptInput.value;
+            const dialogHtml = `
+        <div style="padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--vscode-focusBorder); border-radius: 4px; margin: 20px 0;">
+          <h3 style="margin-top: 0;">Refine Your Prompt</h3>
+          <p style="color: var(--vscode-descriptionForeground);">
+            Update your prompt to generate new candidates while preserving your existing classifications.
+          </p>
+          <input type="text" id="refinePromptInput" value="${currentPrompt}" 
+                 style="width: 100%; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px; margin-bottom: 10px;" 
+                 placeholder="Enter a refined description..." />
+          <div>
+            <button onclick="submitRefinedPrompt()" style="background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 2px; padding: 8px 16px; cursor: pointer; margin-right: 8px;">
+              Generate New Candidates
+            </button>
+            <button onclick="cancelRefine()" style="background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; border-radius: 2px; padding: 8px 16px; cursor: pointer;">
+              Cancel
+            </button>
+          </div>
+        </div>
+      `;
+
+            // Show dialog in the word pair area or at the top of voting section
+            const dialogContainer = document.createElement('div');
+            dialogContainer.id = 'refineDialog';
+            dialogContainer.innerHTML = dialogHtml;
+
+            // Insert at the beginning of voting section
+            const votingSectionElement = document.getElementById('votingSection');
+            votingSectionElement.insertBefore(dialogContainer, votingSectionElement.firstChild);
+        }
+
+        function submitRefinedPrompt() {
+            const refineInput = document.getElementById('refinePromptInput');
+            const newPrompt = refineInput.value.trim();
+            if (newPrompt) {
+                promptInput.value = newPrompt;
+                updatePromptDisplay(newPrompt);
+                vscode.postMessage({ type: 'refineCandidates', prompt: newPrompt });
+                // Remove dialog
+                const dialog = document.getElementById('refineDialog');
+                if (dialog) {
+                    dialog.remove();
+                }
+                showSection('loading');
+            }
+        }
+
+        function cancelRefine() {
+            const dialog = document.getElementById('refineDialog');
+            if (dialog) {
+                dialog.remove();
+            }
+        }
+
+        // Make functions available globally for inline onclick handlers
+        window.classifyWord = classifyWord;
+        window.updateClassification = updateClassification;
+        window.vote = vote;
+        window.submitRefinedPrompt = submitRefinedPrompt;
+        window.cancelRefine = cancelRefine;
+        window.copyRegex = copyRegex;
+        window.toLiteralString = toLiteralString;
+        window.highlightRegex = highlightRegex;
+    </script>
+</body>
+
+</html>
