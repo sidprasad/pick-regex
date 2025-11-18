@@ -806,6 +806,30 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       gap: 8px;
       align-items: center;
     }
+
+    .current-prompt-display {
+      padding: 12px 15px;
+      background: var(--vscode-textBlockQuote-background);
+      border-left: 4px solid var(--vscode-focusBorder);
+      border-radius: 4px;
+      margin-bottom: 15px;
+      font-family: var(--vscode-font-family);
+    }
+
+    .current-prompt-display .prompt-label {
+      font-size: 0.85em;
+      color: var(--vscode-descriptionForeground);
+      font-weight: 600;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .current-prompt-display .prompt-text {
+      font-size: 1em;
+      color: var(--vscode-foreground);
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -823,6 +847,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
     <!-- Voting Section -->
     <div id="votingSection" class="section hidden">
+      <div id="currentPromptDisplay" class="current-prompt-display"></div>
       <h2>Classify each word - Accept, Reject, or Unsure:</h2>
       <div class="word-pair" id="wordPair"></div>
       <div class="candidates-list" id="candidatesList"></div>
@@ -839,6 +864,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     <!-- Final Result -->
     <div id="finalSection" class="section hidden">
       <div class="final-result">
+        <div id="finalPromptDisplay" class="current-prompt-display"></div>
         <h2>Final Regex</h2>
         <div class="regex-display" id="finalRegex"></div>
         <div class="examples">
@@ -881,14 +907,31 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     const refineBtn = document.getElementById('refineBtn');
     const startFreshBtn = document.getElementById('startFreshBtn');
     const refineResultBtn = document.getElementById('refineResultBtn');
+    const currentPromptDisplay = document.getElementById('currentPromptDisplay');
+    const finalPromptDisplay = document.getElementById('finalPromptDisplay');
 
     // Track classified words in current pair
     let classifiedWords = new Set();
+
+    // Helper function to update prompt display
+    function updatePromptDisplay(prompt) {
+      const html = \`
+        <div class="prompt-label">Your Prompt</div>
+        <div class="prompt-text">\${prompt}</div>
+      \`;
+      if (currentPromptDisplay) {
+        currentPromptDisplay.innerHTML = html;
+      }
+      if (finalPromptDisplay) {
+        finalPromptDisplay.innerHTML = html;
+      }
+    }
 
     // Event Listeners
     generateBtn.addEventListener('click', () => {
       const prompt = promptInput.value.trim();
       if (prompt) {
+        updatePromptDisplay(prompt);
         vscode.postMessage({ type: 'generateCandidates', prompt });
         showSection('loading');
       }
@@ -1190,6 +1233,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     function resetUI(preserveClassifications = false) {
       if (!preserveClassifications) {
         promptInput.value = '';
+        if (currentPromptDisplay) {
+          currentPromptDisplay.innerHTML = '';
+        }
+        if (finalPromptDisplay) {
+          finalPromptDisplay.innerHTML = '';
+        }
       }
       classifiedWords.clear();
       showSection('prompt');
@@ -1234,6 +1283,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       const newPrompt = refineInput.value.trim();
       if (newPrompt) {
         promptInput.value = newPrompt;
+        updatePromptDisplay(newPrompt);
         vscode.postMessage({ type: 'refineCandidates', prompt: newPrompt });
         // Remove dialog
         const dialog = document.getElementById('refineDialog');
