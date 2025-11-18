@@ -3,10 +3,11 @@
   "displayName": "pick",
   "description": "Generate a REGEX from LLMs and human classifications.",
   "publisher": "SiddharthaPrasad",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": "https://github.com/sidprasad/pick-regex",
   "engines": {
-    "vscode": "^1.95.0"
+    "vscode": "^1.95.0",
+    "node": ">=20.18.1"
   },
   "categories": [
     "Other"
@@ -17,7 +18,7 @@
       "activitybar": [
         {
           "id": "pick-explorer",
-          "title": "PICK Regex Learner",
+          "title": "PICK Regex Builder",
           "icon": "$(regex)"
         }
       ]
@@ -27,14 +28,14 @@
         {
           "type": "webview",
           "id": "pick.pickView",
-          "name": "Regex Learner",
+          "name": "Regex Builder",
           "icon": "$(regex)"
         }
       ]
     },
     "commands": [],
     "configuration": {
-      "title": "PICK Regex Learner",
+      "title": "PICK Regex Builder",
       "properties": {
         "pick.eliminationThreshold": {
           "type": "number",

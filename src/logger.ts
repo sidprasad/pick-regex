@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 class Logger {
         private channel: vscode.OutputChannel | undefined;
 
-        initialize(context: vscode.ExtensionContext, name = 'PICK Regex Learner'): void {
+        initialize(context: vscode.ExtensionContext, name = 'PICK Regex Builder'): void {
                 if (this.channel) {
                         return;
                 }

@@ -16,7 +16,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          # Use Node 20 to satisfy dependencies that require >=20.x
+          node-version: '20.18.1'
 
       - name: Install dependencies
         run: npm ci

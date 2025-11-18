@@ -1,4 +1,4 @@
-# PICK — Regex Learner for VS Code
+# PICK — Regex Builder for VS Code
 
 PICK is a productivity extension that helps you turn a natural-language description into a precise regular expression through a short interactive workflow.
 
@@ -12,12 +12,30 @@ Key ideas:
 
 Quick start
 -----------
-1. In VS Code, press F1 and select: "PICK: Start Regex Learner".
+1. In VS Code, press F1 and select: "PICK: Start Regex Builder".
 2. Enter a short description of the regex you want (e.g., "IPv4 octet, from 0–255").
 3. Classify example strings until PICK converges to a final regex, or the candidates are exhausted.
 
 Developer workflow / Try it locally
 ------------------
+Requirements
+------------
+- Node.js: v20.18.1 or newer (the extension uses `vsce`/`undici` which require Node 20+)
+
+Check your Node version with:
+
+```bash
+node -v
+```
+
+If Node is older than v20.x, use `nvm` or your OS package manager to install Node 20:
+
+```bash
+# Using nvm
+nvm install 20
+nvm use 20
+```
+
 - Build (TypeScript):
 	- npm run compile
 - Lint:
@@ -31,6 +49,18 @@ Try locally using the CLI:
 npm ci
 npm run compile
 npm run package:vsix
+If you edit `package.json` and it adds/removes dependencies, make sure to update the lock file with:
+
+```bash
+# Ensure you're on Node v20 (see above)
+npm install
+git add package-lock.json
+git commit -m "chore: update lockfile"
+git push
+```
+
+If `npm ci` fails with a message like "package.json and package-lock.json are not in sync" or missing modules, run `npm install` to regenerate the lockfile and commit it. CI uses `npm ci` to install from lockfile for deterministic builds.
+
 # Use "Extensions: Install from VSIX..." in VS Code to install the generated .vsix
 ```
 
