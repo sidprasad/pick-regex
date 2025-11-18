@@ -12,7 +12,8 @@ export interface RegexGenerationResult {
 
 export async function generateRegexFromDescription(
   description: string,
-  token: vscode.CancellationToken
+  token: vscode.CancellationToken,
+  targetLanguage: 'javascript' | 'sql' = 'javascript'
 ): Promise<RegexGenerationResult> {
   // Read configuration
   const config = vscode.workspace.getConfiguration('pick');
@@ -30,30 +31,56 @@ export async function generateRegexFromDescription(
 
   const model = models[0];
 
-  // Build prompt: ask for multiple candidate regexes with explanations and confidence scores
+  // Build prompt based on target language
+  let promptLines: string[];
+  
+  if (targetLanguage === 'sql') {
+    promptLines = [
+      'You are a SQL pattern generator.',
+      'Given a natural-language description, generate 3-5 candidate SQL patterns.',
+      'Return JSON in this format:',
+      '{',
+      '  "candidates": [',
+      '    {"regex": "<PATTERN>", "explanation": "<WHY THIS PATTERN>", "confidence": 0.9},',
+      '    {"regex": "<PATTERN>", "explanation": "<WHY THIS PATTERN>", "confidence": 0.7}',
+      '  ]',
+      '}',
+      '',
+      'Requirements:',
+      '- Generate 3-5 diverse SQL LIKE patterns (use % for any characters, _ for single character).',
+      '- Patterns should work with SQL LIKE operator (e.g., "abc%", "%xyz", "a_c").',
+      '- Confidence score between 0 and 1 (how well it matches the description).',
+      '- No backticks, comments, or extra text outside the JSON.',
+      '- Each candidate should have a clear explanation of what it matches and why.',
+      '- Do NOT include quotes around patterns in the regex field.',
+      '',
+      `Description: ${description}`
+    ];
+  } else {
+    promptLines = [
+      'You are a regex generator.',
+      'Given a natural-language description, generate 3-5 candidate regular expressions.',
+      'Return JSON in this format:',
+      '{',
+      '  "candidates": [',
+      '    {"regex": "<REGEX>", "explanation": "<WHY THIS PATTERN>", "confidence": 0.9},',
+      '    {"regex": "<REGEX>", "explanation": "<WHY THIS PATTERN>", "confidence": 0.7}',
+      '  ]',
+      '}',
+      '',
+      'Requirements:',
+      '- Generate 3-5 diverse candidates (from most specific to more general, or different interpretations).',
+      '- Confidence score between 0 and 1 (how well it matches the description).',
+      '- No backticks, comments, or extra text outside the JSON.',
+      '- Regexes should be compatible with JavaScript/PCRE engines.',
+      '- Each candidate should have a clear explanation of what it matches and why.',
+      '',
+      `Description: ${description}`
+    ];
+  }
+  
   const messages: vscode.LanguageModelChatMessage[] = [
-    vscode.LanguageModelChatMessage.User(
-      [
-        'You are a regex generator.',
-        'Given a natural-language description, generate 3-5 candidate regular expressions.',
-        'Return JSON in this format:',
-        '{',
-        '  "candidates": [',
-        '    {"regex": "<REGEX>", "explanation": "<WHY THIS PATTERN>", "confidence": 0.9},',
-        '    {"regex": "<REGEX>", "explanation": "<WHY THIS PATTERN>", "confidence": 0.7}',
-        '  ]',
-        '}',
-        '',
-        'Requirements:',
-        '- Generate 3-5 diverse candidates (from most specific to more general, or different interpretations).',
-        '- Confidence score between 0 and 1 (how well it matches the description).',
-        '- No backticks, comments, or extra text outside the JSON.',
-        '- Regexes should be compatible with JavaScript/PCRE engines.',
-        '- Each candidate should have a clear explanation of what it matches and why.',
-        '',
-        `Description: ${description}`
-      ].join('\n')
-    )
+    vscode.LanguageModelChatMessage.User(promptLines.join('\n'))
   ];
 
   const response = await model.sendRequest(messages, {}, token);

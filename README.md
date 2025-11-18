@@ -1,20 +1,36 @@
-# PICK — Regex Builder for VS Code
+# PICK — Pattern Builder for VS Code
 
-PICK is a productivity extension that helps you turn a natural-language description into a precise regular expression through a short interactive workflow.
+PICK is a productivity extension that helps you turn a natural-language description into a precise pattern (regular expression or SQL pattern) through a short interactive workflow.
 
-Instead of guessing a single regex, PICK generates multiple candidate patterns and asks you to classify example strings to quickly narrow down the correct regex. It uses automata-based analysis (via @gruhn/regex-utils) for formally correct set operations and `randexp` for example generation.
+Instead of guessing a single pattern, PICK generates multiple candidates and asks you to classify example strings to quickly narrow down the correct pattern. It uses automata-based analysis (via @gruhn/regex-utils) for JavaScript regex and custom pattern matching for SQL.
+
+## Supported Languages
+
+- **JavaScript/PCRE Regular Expressions**: Full regex support with formal analysis
+- **SQL LIKE Patterns**: Pattern matching with `%` (any characters) and `_` (single character)
 
 Key ideas:
-- Generate a set of candidate regexes from an LLM (3–5 candidates).
+- Generate a set of candidate patterns from an LLM (3–5 candidates).
 - Iterate: show two example strings and ask which one is "IN" (matches) or "OUT" (doesn't match). The controller uses these judgments to eliminate candidates.
-- Continue until you accept an example for one regex (we select it), or all candidates are eliminated (then we tell you none matched).
+- Continue until you accept an example for one pattern (we select it), or all candidates are eliminated (then we tell you none matched).
 - The extension ensures examples are unique and tries to maximize information gained from each judgment.
 
 Quick start
 -----------
 1. In VS Code, press F1 and select: "PICK: Start Regex Builder".
-2. Enter a short description of the regex you want (e.g., "IPv4 octet, from 0–255").
-3. Classify example strings until PICK converges to a final regex, or the candidates are exhausted.
+2. Configure your target language in settings: `pick.targetLanguage` (javascript or sql).
+3. Enter a short description of the pattern you want:
+   - For JavaScript regex: "IPv4 octet, from 0–255"
+   - For SQL patterns: "email addresses starting with admin"
+4. Classify example strings until PICK converges to a final pattern, or the candidates are exhausted.
+
+### SQL Pattern Examples
+
+When using SQL mode, PICK generates SQL LIKE patterns:
+- `%@gmail.com` - matches any email ending with @gmail.com
+- `admin%` - matches any string starting with "admin"
+- `test_user` - matches "test1user", "testauser", etc. (underscore matches single character)
+- `%test%` - matches any string containing "test"
 
 Developer workflow / Try it locally
 ------------------
@@ -68,8 +84,22 @@ Configuration
 -------------
 Settings are under `pick`:
 - `pick.eliminationThreshold` — number of negative votes required to eliminate a candidate (default: 2)
+- `pick.targetLanguage` — target language for pattern generation: `javascript` (default) or `sql`
 - `pick.llm.vendor` — LLM vendor to use for candidate generation (default: `copilot`)
 - `pick.llm.family` — LLM model family to prefer (default: `gpt-4o`)
+
+### Language-Specific Behavior
+
+**JavaScript Mode** (`pick.targetLanguage: "javascript"`):
+- Generates JavaScript/PCRE regular expressions
+- Uses formal automata analysis for pattern equivalence
+- Supports full regex syntax (character classes, quantifiers, groups, etc.)
+
+**SQL Mode** (`pick.targetLanguage: "sql"`):
+- Generates SQL LIKE patterns
+- Uses `%` for matching any sequence of characters
+- Uses `_` for matching a single character
+- Suitable for SQL WHERE clauses with LIKE operator
 
 Publishing (release process)
  We use GitHub Actions to build (CI) and publish the extension.

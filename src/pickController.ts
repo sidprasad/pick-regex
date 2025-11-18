@@ -1,4 +1,5 @@
 import { createRegexAnalyzer, RegexAnalyzer } from './regexAnalyzer';
+import { createSqlPatternAnalyzer, SqlPatternAnalyzer } from './sqlPatternAnalyzer';
 import * as vscode from 'vscode';
 import { logger } from './logger';
 
@@ -34,11 +35,14 @@ export enum PickState {
   FINAL_RESULT = 'final_result'
 }
 
+export type TargetLanguage = 'javascript' | 'sql';
+
 /**
  * Controller for the PICK interactive regex learning process
  */
 export class PickController {
   private analyzer: RegexAnalyzer;
+  private sqlAnalyzer: SqlPatternAnalyzer;
   private candidates: CandidateRegex[] = [];
   private usedWords = new Set<string>();
   private state: PickState = PickState.INITIAL;
@@ -46,13 +50,31 @@ export class PickController {
   private currentPair: WordPair | null = null;
   private finalRegex: string | null = null;
   private wordHistory: WordClassificationRecord[] = [];
+  private targetLanguage: TargetLanguage = 'javascript';
 
   constructor() {
     this.analyzer = createRegexAnalyzer();
+    this.sqlAnalyzer = createSqlPatternAnalyzer();
     // Read threshold from configuration
     const config = vscode.workspace.getConfiguration('pick');
     this.thresholdVotes = config.get<number>('eliminationThreshold', 2);
-    logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}`);
+    this.targetLanguage = config.get<TargetLanguage>('targetLanguage', 'javascript');
+    logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes} and language ${this.targetLanguage}`);
+  }
+
+  /**
+   * Set target language
+   */
+  setTargetLanguage(language: TargetLanguage): void {
+    this.targetLanguage = language;
+    logger.info(`Set target language to ${language}`);
+  }
+
+  /**
+   * Get target language
+   */
+  getTargetLanguage(): TargetLanguage {
+    return this.targetLanguage;
   }
 
   /**
@@ -111,10 +133,20 @@ export class PickController {
     }
 
     try {
-      const result = await this.analyzer.generateTwoDistinguishingWords(
-        activeCandidates,
-        Array.from(this.usedWords)
-      );
+      let result: { words: [string, string]; explanation: string; properties?: string[] };
+      
+      if (this.targetLanguage === 'sql') {
+        result = await this.sqlAnalyzer.generateTwoDistinguishingWords(
+          activeCandidates,
+          'like',
+          Array.from(this.usedWords)
+        );
+      } else {
+        result = await this.analyzer.generateTwoDistinguishingWords(
+          activeCandidates,
+          Array.from(this.usedWords)
+        );
+      }
 
       this.currentPair = {
         word1: result.words[0],
@@ -153,7 +185,7 @@ export class PickController {
 
     // Get matching regexes for this word
     const matchingRegexes = this.candidates
-      .filter(c => !c.eliminated && this.analyzer.verifyMatch(word, c.pattern))
+      .filter(c => !c.eliminated && this.verifyMatchInternal(word, c.pattern))
       .map(c => c.pattern);
 
     // Record classification
@@ -174,7 +206,7 @@ export class PickController {
         if (candidate.eliminated) {
           continue;
         }
-        if (this.analyzer.verifyMatch(word, candidate.pattern)) {
+        if (this.verifyMatchInternal(word, candidate.pattern)) {
           candidate.positiveVotes++;
         }
       }
@@ -187,7 +219,7 @@ export class PickController {
         if (candidate.eliminated) {
           continue;
         }
-        if (this.analyzer.verifyMatch(word, candidate.pattern)) {
+        if (this.verifyMatchInternal(word, candidate.pattern)) {
           candidate.negativeVotes++;
 
           // Eliminate if threshold reached
@@ -299,13 +331,13 @@ export class PickController {
     for (const record of this.wordHistory) {
       if (record.classification === WordClassification.ACCEPT) {
         for (const candidate of this.candidates) {
-          if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
+          if (this.verifyMatchInternal(record.word, candidate.pattern)) {
             candidate.positiveVotes++;
           }
         }
       } else if (record.classification === WordClassification.REJECT) {
         for (const candidate of this.candidates) {
-          if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
+          if (this.verifyMatchInternal(record.word, candidate.pattern)) {
             candidate.negativeVotes++;
             if (candidate.negativeVotes >= this.thresholdVotes) {
               candidate.eliminated = true;
@@ -363,30 +395,57 @@ export class PickController {
     }
 
     try {
-      logger.info(`Generating final examples for regex ${this.finalRegex}`);
+      logger.info(`Generating final examples for ${this.targetLanguage} pattern ${this.finalRegex}`);
       const wordsIn: string[] = [];
       const wordsOut: string[] = [];
       
-      // Generate words IN the regex
-      const inWords = this.analyzer.generateMultipleWords(
-        this.finalRegex,
-        count
-      ).filter(w => !this.usedWords.has(w));
-      wordsIn.push(...inWords);
-      
-      // Generate words OUT of the regex
-      for (let i = 0; i < count; i++) {
-        try {
-          const pair = await this.analyzer.generateWordPair(
-            this.finalRegex,
-            Array.from(this.usedWords)
-          );
-          if (!this.usedWords.has(pair.wordNotIn)) {
-            wordsOut.push(pair.wordNotIn);
-            this.usedWords.add(pair.wordNotIn);
+      if (this.targetLanguage === 'sql') {
+        // Generate words IN the pattern
+        const inWords = this.sqlAnalyzer.generateMultipleWords(
+          this.finalRegex,
+          'like',
+          count
+        ).filter(w => !this.usedWords.has(w));
+        wordsIn.push(...inWords);
+        
+        // Generate words OUT of the pattern
+        for (let i = 0; i < count; i++) {
+          try {
+            const pair = this.sqlAnalyzer.generateWordPair(
+              this.finalRegex,
+              'like',
+              Array.from(this.usedWords)
+            );
+            if (!this.usedWords.has(pair.wordNotIn)) {
+              wordsOut.push(pair.wordNotIn);
+              this.usedWords.add(pair.wordNotIn);
+            }
+          } catch {
+            break;
           }
-        } catch {
-          break;
+        }
+      } else {
+        // Generate words IN the regex
+        const inWords = this.analyzer.generateMultipleWords(
+          this.finalRegex,
+          count
+        ).filter(w => !this.usedWords.has(w));
+        wordsIn.push(...inWords);
+        
+        // Generate words OUT of the regex
+        for (let i = 0; i < count; i++) {
+          try {
+            const pair = await this.analyzer.generateWordPair(
+              this.finalRegex,
+              Array.from(this.usedWords)
+            );
+            if (!this.usedWords.has(pair.wordNotIn)) {
+              wordsOut.push(pair.wordNotIn);
+              this.usedWords.add(pair.wordNotIn);
+            }
+          } catch {
+            break;
+          }
         }
       }
 
@@ -489,5 +548,16 @@ export class PickController {
    */
   getThreshold(): number {
     return this.thresholdVotes;
+  }
+
+  /**
+   * Internal method to verify if a word matches a pattern based on target language
+   */
+  private verifyMatchInternal(word: string, pattern: string): boolean {
+    if (this.targetLanguage === 'sql') {
+      return this.sqlAnalyzer.verifyMatch(word, pattern, 'like');
+    } else {
+      return this.analyzer.verifyMatch(word, pattern);
+    }
   }
 }

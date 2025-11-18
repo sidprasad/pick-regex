@@ -68,6 +68,16 @@
           "type": "string",
           "default": "gpt-4o",
           "description": "LLM model family to use (e.g., gpt-4o, claude-3-5-sonnet, o1-preview)"
+        },
+        "pick.targetLanguage": {
+          "type": "string",
+          "default": "javascript",
+          "enum": ["javascript", "sql"],
+          "enumDescriptions": [
+            "JavaScript/PCRE regular expressions",
+            "SQL patterns (LIKE and SIMILAR TO)"
+          ],
+          "description": "Target language for pattern generation"
         }
       }
     }

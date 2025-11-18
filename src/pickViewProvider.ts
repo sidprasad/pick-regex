@@ -55,26 +55,34 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleGenerateCandidates(prompt: string) {
     try {
-      this.sendMessage({ type: 'status', message: 'Generating candidate regexes...' });
+      // Read target language from configuration
+      const config = vscode.workspace.getConfiguration('pick');
+      const targetLanguage = config.get<'javascript' | 'sql'>('targetLanguage', 'javascript');
+      
+      // Update controller language
+      this.controller.setTargetLanguage(targetLanguage);
+      
+      const languageLabel = targetLanguage === 'sql' ? 'SQL patterns' : 'regexes';
+      this.sendMessage({ type: 'status', message: `Generating candidate ${languageLabel}...` });
 
       // Generate candidate regexes using LLM
       const tokenSource = new vscode.CancellationTokenSource();
       
       let candidates: string[] = [];
       try {
-        const result = await generateRegexFromDescription(prompt, tokenSource.token);
+        const result = await generateRegexFromDescription(prompt, tokenSource.token, targetLanguage);
         candidates = result.candidates.map(c => c.regex);
-        logger.info(`Generated ${candidates.length} candidates from LLM`);
+        logger.info(`Generated ${candidates.length} ${languageLabel} from LLM`);
         
         // Log each candidate with explanation
         result.candidates.forEach((c, i) => {
           logger.info(`Candidate ${i + 1}: ${c.regex} (confidence: ${c.confidence ?? 'N/A'}) - ${c.explanation}`);
         });
       } catch (error) {
-        logger.error(error, 'Failed to generate candidate regexes');
+        logger.error(error, `Failed to generate candidate ${languageLabel}`);
         this.sendMessage({ 
           type: 'error', 
-          message: 'Could not generate any candidate regexes. Please try again.' 
+          message: `Could not generate any candidate ${languageLabel}. Please try again.` 
         });
         return;
       }
@@ -82,21 +90,27 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       if (candidates.length === 0) {
         this.sendMessage({ 
           type: 'error', 
-          message: 'Could not generate any candidate regexes. Please try again.' 
+          message: `Could not generate any candidate ${languageLabel}. Please try again.` 
         });
         return;
       }
 
-      // Filter out equivalent/duplicate regexes
-      this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
-      const uniqueCandidates = await this.filterEquivalentRegexes(candidates);
-      
-      // Inform user if duplicates were removed
-      if (uniqueCandidates.length < candidates.length) {
-        this.sendMessage({ 
-          type: 'status', 
-          message: `Removed ${candidates.length - uniqueCandidates.length} duplicate regex(es). Proceeding with ${uniqueCandidates.length} unique candidate(s).` 
-        });
+      // For SQL, skip the equivalence filtering (simpler patterns)
+      let uniqueCandidates: string[];
+      if (targetLanguage === 'sql') {
+        uniqueCandidates = candidates;
+      } else {
+        // Filter out equivalent/duplicate regexes
+        this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
+        uniqueCandidates = await this.filterEquivalentRegexes(candidates);
+        
+        // Inform user if duplicates were removed
+        if (uniqueCandidates.length < candidates.length) {
+          this.sendMessage({ 
+            type: 'status', 
+            message: `Removed ${candidates.length - uniqueCandidates.length} duplicate regex(es). Proceeding with ${uniqueCandidates.length} unique candidate(s).` 
+          });
+        }
       }
 
       if (uniqueCandidates.length === 0) {
