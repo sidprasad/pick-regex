@@ -13,6 +13,8 @@ Key ideas:
 
 Quick start
 -----------
+**Note**: When you first use PICK, VS Code will show a permission popup asking to allow the extension to use "Language Models" (or "Chat Models"). You need to grant this permission for the extension to generate regex candidates.
+
 1. In VS Code, open the PICK Regex Builder view in the Activity Bar (left sidebar).
 2. Enter a short description of the regex you want (e.g., "IPv4 octet, from 0–255").
 3. Classify example strings until PICK converges to a final regex, or the candidates are exhausted.
