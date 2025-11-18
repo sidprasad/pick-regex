@@ -1,6 +1,6 @@
 # PICK — Regex Builder for VS Code
 
-PICK is a productivity extension that helps you turn a natural-language description into a precise regular expression through a short interactive workflow.
+PICK is a VS Code extension that helps you turn a natural-language description into a precise regular expression through a short interactive workflow.
 
 Instead of guessing a single regex, PICK generates multiple candidate patterns and asks you to classify example strings to quickly narrow down the correct regex. It uses automata-based analysis (via @gruhn/regex-utils) for formally correct set operations and `randexp` for example generation.
 
