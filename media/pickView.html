@@ -629,6 +629,12 @@
             </div>
         </div>
 
+        <!-- Status Bar (global - shown during LLM operations) -->
+        <div id="statusBar" class="status-bar hidden"></div>
+        <div id="cancelSection" class="hidden" style="margin-bottom: 15px;">
+            <button id="cancelBtn" class="secondary" style="background: #f44336; color: white; border-color: #d32f2f;">⏹️ Cancel Operation</button>
+        </div>
+
         <!-- Voting Section -->
         <div id="votingSection" class="section hidden">
             <div id="currentPromptDisplay" class="current-prompt-display"></div>
@@ -640,12 +646,6 @@
                 </label>
             </div>
             <div class="word-pair" id="wordPair"></div>
-            
-            <!-- Status Bar (shown during operations) -->
-            <div id="statusBar" class="status-bar hidden"></div>
-            <div id="cancelSection" class="hidden" style="margin-bottom: 15px;">
-                <button id="cancelBtn" class="secondary" style="background: #f44336; color: white; border-color: #d32f2f;">⏹️ Cancel Operation</button>
-            </div>
             
             <div class="candidates-list" id="candidatesList"></div>
             <div class="word-history" id="wordHistory">
@@ -864,6 +864,14 @@
             }
         });
 
+        // Allow Enter key to trigger generation
+        promptInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                generateBtn.click();
+            }
+        });
+
         resetBtn.addEventListener('click', () => {
             vscode.postMessage({ type: 'reset', preserveClassifications: false });
         });
@@ -960,10 +968,10 @@
                 promptSection.classList.remove('hidden');
             } else if (section === 'voting') {
                 votingSection.classList.remove('hidden');
-                statusBar.classList.remove('hidden');
             } else if (section === 'final') {
                 finalSection.classList.remove('hidden');
             } else if (section === 'loading') {
+                // Show loading state - status bar and cancel will be shown by showStatus()
                 statusBar.classList.remove('hidden');
                 cancelSection.classList.remove('hidden');
             }
