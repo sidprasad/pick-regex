@@ -879,6 +879,7 @@
             finalSection.classList.add('hidden');
             errorSection.classList.add('hidden');
             cancelSection.classList.add('hidden');
+            statusBar.classList.add('hidden');
 
             if (section === 'prompt') {
                 promptSection.classList.remove('hidden');
@@ -1082,6 +1083,9 @@
 
         function showFinalResult(regex, inWords, outWords) {
             showSection('final');
+            statusBar.classList.add('hidden');
+            cancelSection.classList.add('hidden');
+            
             finalRegex.innerHTML = `
                                 <span class="final-regex-text">${highlightRegex(regex)}</span>
                                 <button class="btn copy" data-pattern="${encodeURIComponent(regex)}" onclick="copyRegex(decodeURIComponent(this.getAttribute('data-pattern')))" title="Copy final regex">
@@ -1109,6 +1113,9 @@
 
         function showNoRegexFound(message, candidateDetails) {
             showSection('final');
+            statusBar.classList.add('hidden');
+            cancelSection.classList.add('hidden');
+            
             finalRegex.textContent = 'No regex found';
             finalRegex.style.color = '#f48771';
 
