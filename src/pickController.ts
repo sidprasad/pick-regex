@@ -46,6 +46,7 @@ export class PickController {
   private currentPair: WordPair | null = null;
   private finalRegex: string | null = null;
   private wordHistory: WordClassificationRecord[] = [];
+  private currentPrompt: string = '';
 
   constructor() {
     this.analyzer = createRegexAnalyzer();
@@ -68,6 +69,7 @@ export class PickController {
   async generateCandidates(prompt: string, candidatePatterns: string[]): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Generating candidates for prompt: ${prompt}`);
+    this.currentPrompt = prompt;
 
     // Initialize candidates
     this.candidates = candidatePatterns.map(pattern => ({
@@ -82,6 +84,32 @@ export class PickController {
     this.wordHistory = [];
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state.');
+  }
+
+  /**
+   * Refine the current prompt with new candidates while preserving existing classifications
+   * This allows users to iterate on their prompt without losing their work
+   */
+  async refineCandidates(newPrompt: string, newCandidatePatterns: string[]): Promise<void> {
+    this.state = PickState.GENERATING_CANDIDATES;
+    logger.info(`Refining candidates with new prompt: ${newPrompt}`);
+    logger.info(`Preserving ${this.wordHistory.length} existing classifications`);
+    this.currentPrompt = newPrompt;
+
+    // Initialize new candidates
+    this.candidates = newCandidatePatterns.map(pattern => ({
+      pattern,
+      negativeVotes: 0,
+      positiveVotes: 0,
+      eliminated: false
+    }));
+    logger.info(`Initialized ${this.candidates.length} new candidate regexes.`);
+
+    // Re-apply existing classifications to new candidates
+    this.recalculateVotes();
+
+    this.state = PickState.VOTING;
+    logger.info('Transitioned to VOTING state after refinement.');
   }
 
   /**
@@ -399,15 +427,47 @@ export class PickController {
 
   /**
    * Reset the controller for a new session
+   * @param preserveClassifications If true, keep word history for refining prompts
    */
-  reset(): void {
+  reset(preserveClassifications = false): void {
     this.candidates = [];
-    this.usedWords.clear();
     this.state = PickState.INITIAL;
     this.currentPair = null;
     this.finalRegex = null;
-    this.wordHistory = [];
-    logger.info('Reset PickController state to INITIAL.');
+    
+    if (!preserveClassifications) {
+      this.usedWords.clear();
+      this.wordHistory = [];
+      this.currentPrompt = '';
+      logger.info('Reset PickController state to INITIAL (full reset).');
+    } else {
+      // Keep usedWords and wordHistory for prompt refinement
+      logger.info(`Reset PickController state to INITIAL (preserving ${this.wordHistory.length} classifications).`);
+    }
+  }
+
+  /**
+   * Get the current prompt
+   */
+  getCurrentPrompt(): string {
+    return this.currentPrompt;
+  }
+
+  /**
+   * Get session data for preserving state
+   */
+  getSessionData(): {
+    wordHistory: WordClassificationRecord[];
+    usedWords: string[];
+    currentPrompt: string;
+    threshold: number;
+  } {
+    return {
+      wordHistory: [...this.wordHistory],
+      usedWords: Array.from(this.usedWords),
+      currentPrompt: this.currentPrompt,
+      threshold: this.thresholdVotes
+    };
   }
 
   /**
