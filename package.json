@@ -1,10 +1,10 @@
 {
   "name": "pick-regex",
   "displayName": "PICK: Regex Builder",
-  "description": "Generate a REGEX from LLMs and human classifications.",
+  "description": "Generate a REGEX from an LLM, then refine it by human classification.",
   "publisher": "SiddharthaPrasad",
   "license": "MIT",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/sidprasad/pick-regex"
