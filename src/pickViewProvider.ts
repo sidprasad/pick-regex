@@ -119,10 +119,30 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Check cancellation before filtering
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before filtering duplicates');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Filter out equivalent/duplicate regexes
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
       const uniqueCandidates = await this.filterEquivalentRegexes(candidates);
       
+      // Check cancellation after filtering
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled after filtering duplicates');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Inform user if duplicates were removed
       if (uniqueCandidates.length < candidates.length) {
         this.sendMessage({ 
@@ -139,13 +159,43 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Check cancellation before initializing candidates
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before initializing candidates');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Initialize controller with unique candidates
       await this.controller.generateCandidates(prompt, uniqueCandidates);
       
+      // Check cancellation before sending results
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before sending candidates to UI');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       this.sendMessage({
         type: 'candidatesGenerated',
         candidates: this.controller.getStatus().candidateDetails
       });
+
+      // Check cancellation before generating first pair
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before generating first word pair');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
 
       // Generate first word pair (or proceed to final result if only 1 candidate)
       this.handleRequestNextPair();
@@ -161,6 +211,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleRequestNextPair() {
     try {
+      // Check cancellation at the start
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled in handleRequestNextPair');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       const activeCount = this.controller.getActiveCandidateCount();
       
       if (activeCount === 0) {
@@ -175,6 +235,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       const pair = await this.controller.generateNextPair();
       const status = this.controller.getStatus();
       
+      // Check cancellation before sending pair to UI
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled after generating pair, before sending to UI');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       this.sendMessage({
         type: 'newPair',
         pair,
@@ -392,10 +462,30 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Check cancellation before filtering
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before filtering duplicates (refinement)');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Filter out equivalent/duplicate regexes
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
       const uniqueCandidates = await this.filterEquivalentRegexes(candidates);
       
+      // Check cancellation after filtering
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled after filtering duplicates (refinement)');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Inform user if duplicates were removed
       if (uniqueCandidates.length < candidates.length) {
         this.sendMessage({ 
@@ -412,14 +502,44 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Check cancellation before refining candidates
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before refining candidates');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Refine candidates with preserved classifications
       await this.controller.refineCandidates(prompt, uniqueCandidates);
       
+      // Check cancellation before sending results
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before sending refined candidates to UI');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       this.sendMessage({
         type: 'candidatesRefined',
         candidates: this.controller.getStatus().candidateDetails,
         preservedClassifications: sessionData.wordHistory.length
       });
+
+      // Check cancellation before generating first pair
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before generating first word pair (refinement)');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
 
       // Generate first word pair (or proceed to final result if only 1 candidate)
       this.handleRequestNextPair();
@@ -445,8 +565,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     // Cancel any ongoing LLM request
     if (this.cancellationTokenSource) {
       this.cancellationTokenSource.cancel();
-      this.cancellationTokenSource.dispose();
-      this.cancellationTokenSource = undefined;
+      // Don't dispose or set to undefined yet - ongoing operations still need to check isCancellationRequested
+      // The token will be disposed and replaced when a new operation starts
     }
     
     // Reset controller state
