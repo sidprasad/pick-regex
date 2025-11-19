@@ -1557,7 +1557,7 @@
 
             const detailsHtml = candidateDetails.map(c =>
                 `<div class="example-item" style="opacity: 0.7; margin: 4px 0;">
-          <strong>${highlightRegex(c.pattern)}</strong> - Eliminated with ${c.negativeVotes} negative votes
+          <strong>${highlightRegex(c.pattern)}</strong> — Got ${c.positiveVotes} upvote${c.positiveVotes !== 1 ? 's' : ''}, ${c.negativeVotes} downvote${c.negativeVotes !== 1 ? 's' : ''}
         </div>`
             ).join('');
 
