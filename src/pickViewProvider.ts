@@ -123,6 +123,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
       const uniqueCandidates = await this.filterEquivalentRegexes(candidates);
       
+      // Check cancellation after filtering
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled after filtering duplicates');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Inform user if duplicates were removed
       if (uniqueCandidates.length < candidates.length) {
         this.sendMessage({ 
@@ -139,9 +149,29 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Check cancellation before initializing candidates
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before initializing candidates');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Initialize controller with unique candidates
       await this.controller.generateCandidates(prompt, uniqueCandidates);
       
+      // Check cancellation before sending results
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before sending candidates to UI');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       this.sendMessage({
         type: 'candidatesGenerated',
         candidates: this.controller.getStatus().candidateDetails
@@ -396,6 +426,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
       const uniqueCandidates = await this.filterEquivalentRegexes(candidates);
       
+      // Check cancellation after filtering
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled after filtering duplicates (refinement)');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Inform user if duplicates were removed
       if (uniqueCandidates.length < candidates.length) {
         this.sendMessage({ 
@@ -412,9 +452,29 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Check cancellation before refining candidates
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before refining candidates');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Refine candidates with preserved classifications
       await this.controller.refineCandidates(prompt, uniqueCandidates);
       
+      // Check cancellation before sending results
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before sending refined candidates to UI');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       this.sendMessage({
         type: 'candidatesRefined',
         candidates: this.controller.getStatus().candidateDetails,
