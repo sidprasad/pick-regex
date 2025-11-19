@@ -322,6 +322,11 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Status bar: hide when empty to avoid a thin visible border when no message is set */
+        .status-bar:empty {
+            display: none !important;
+        }
+
         .status-bar {
             display: flex;
             align-items: center;
