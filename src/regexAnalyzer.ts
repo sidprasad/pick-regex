@@ -218,9 +218,9 @@ export class RegexAnalyzer {
   /**
    * Generate multiple unique words
    */
-  generateMultipleWords(regex: string, count: number): string[] {
+  generateMultipleWords(regex: string, count: number, excludedWords: string[] = []): string[] {
     const words: string[] = [];
-    const seen = new Set<string>();
+    const seen = new Set<string>([...excludedWords]);
 
     for (let i = 0; i < count && i < this.maxAttempts; i++) {
       try {
@@ -352,7 +352,7 @@ export class RegexAnalyzer {
       const allWords: string[] = [];
       for (const regex of candidateRegexes) {
         try {
-          const words = this.generateMultipleWords(regex, 5);
+          const words = this.generateMultipleWords(regex, 5, excludedWords);
           allWords.push(...words);
         } catch {
           continue;
