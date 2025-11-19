@@ -1249,7 +1249,8 @@
                     updateStatus(message.status);
                     break;
                 case 'finalResult':
-                    showFinalResult(message.regex, message.wordsIn, message.wordsOut);
+                    // Pass status to show all candidates with winner highlighted
+                    showFinalResultWithContext(message.regex, message.wordsIn, message.wordsOut, message.status);
                     break;
                 case 'copied':
                     showStatusWithoutCancel('Copied to clipboard');
@@ -1370,6 +1371,65 @@
                     <span class="candidate-pattern">${highlightRegex(c.pattern)}</span>
                     <div class="candidate-votes" style="display:flex; gap:8px; align-items:center;">
                         <button class="btn copy" data-pattern="${encodeURIComponent(c.pattern)}" onclick="copyRegex(decodeURIComponent(this.getAttribute('data-pattern')))" title="Copy regex">
+                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                                <rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>
+                            </svg>
+                        </button>
+                        <span class="badge" style="background: #4caf50;">✓ ${c.positiveVotes}</span>
+                        <span class="badge" style="background: #f44336;">✗ ${c.negativeVotes}</span>
+                    </div>
+                `;
+                candidatesList.appendChild(div);
+            });
+        }
+
+        function updateCandidatesWithWinner(candidates, threshold, winnerRegex) {
+            candidatesList.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                    <h4 style="margin:0">Regex Candidates</h4>
+                    <button id="candidatesHelpBtn" class="icon-btn" title="Where do these candidates come from?" aria-haspopup="dialog" aria-controls="candidatesHelpModal">?</button>
+                </div>
+            `;
+            // Wire help button
+            const helpBtn = document.getElementById('candidatesHelpBtn');
+            if (helpBtn) {
+                helpBtn.onclick = () => {
+                    const modal = document.getElementById('candidatesHelpModal');
+                    const overlay = document.getElementById('candidatesHelpOverlay');
+                    const closeBtn = document.getElementById('candidatesHelpClose');
+                    if (modal) modal.classList.remove('hidden');
+                    if (closeBtn) closeBtn.focus();
+                    // Close handlers
+                    if (overlay) overlay.onclick = () => { modal.classList.add('hidden'); };
+                    if (closeBtn) closeBtn.onclick = () => { modal.classList.add('hidden'); };
+                };
+            }
+
+            if (threshold !== undefined) {
+                const thresholdDiv = document.createElement('div');
+                thresholdDiv.className = 'threshold-info';
+                thresholdDiv.textContent = `Rejection threshold: ${threshold} negative votes`;
+                candidatesList.appendChild(thresholdDiv);
+            }
+
+            candidates.forEach(c => {
+                const isWinner = c.pattern === winnerRegex;
+                const div = document.createElement('div');
+                div.className = `candidate-item ${c.eliminated ? 'eliminated' : 'active'}`;
+                
+                if (isWinner) {
+                    // Winner gets special styling
+                    div.style.cssText = 'border: 2px solid var(--pick-accept-color); background: var(--vscode-list-activeSelectionBackground); box-shadow: 0 2px 8px rgba(0,0,0,0.15);';
+                }
+                
+                div.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
+                        ${isWinner ? '<span class="badge" style="background: var(--pick-accept-color); font-weight: bold;">🏆 WINNER</span>' : ''}
+                        <span class="candidate-pattern" style="flex: 1;">${highlightRegex(c.pattern)}</span>
+                    </div>
+                    <div class="candidate-votes" style="display:flex; gap:8px; align-items:center;">
+                        <button class="btn copy" data-pattern="${encodeURIComponent(c.pattern)}" onclick="copyRegex(decodeURIComponent(this.getAttribute('data-pattern')))" title="Copy regex" style="${isWinner ? 'border: 1px solid var(--pick-accept-color);' : ''}">
                             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                                 <path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
                                 <rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>
@@ -1514,33 +1574,50 @@
         }
 
         function showFinalResult(regex, inWords, outWords) {
-            showSection('final');
+            // Keep the voting section visible to maintain interface stability
+            showSection('voting');
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
 
-            finalRegex.innerHTML = `
-                                <span class="final-regex-text">${highlightRegex(regex)}</span>
-                                <button class="btn copy" data-pattern="${encodeURIComponent(regex)}" onclick="copyRegex(decodeURIComponent(this.getAttribute('data-pattern')))" title="Copy final regex">
-                                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                        <path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>
-                                    </svg>
-                                </button>
-                        `;
+            // Hide the word pair since we're done classifying
+            wordPair.innerHTML = `
+                <div style="text-align: center; padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--pick-accept-color); border-radius: 8px;">
+                    <h2 style="margin: 0 0 10px 0; color: var(--pick-accept-color);">🎉 Final Regex Selected!</h2>
+                    <p style="margin: 0; color: var(--vscode-descriptionForeground);">
+                        The winning regex is highlighted below. You can copy any candidate you prefer.
+                    </p>
+                </div>
+            `;
 
-            wordsIn.innerHTML = inWords.map(w =>
-                `<div class="word-display">
-                  <span class="word-readable example-item" data-word="${w.replace(/"/g, '&quot;')}">${w}</span>
-                  <span class="word-literal example-item" data-word="${w.replace(/"/g, '&quot;')}">${toLiteralString(w)}</span>
-                </div>`
-            ).join('');
+            // The candidates list will be updated by the message handler with the winner highlighted
+            // Show status message
+            showStatusWithoutCancel('Classification complete! Winner highlighted below.');
+        }
 
-            wordsOut.innerHTML = outWords.map(w =>
-                `<div class="word-display">
-                  <span class="word-readable example-item" data-word="${w.replace(/"/g, '&quot;')}">${w}</span>
-                  <span class="word-literal example-item" data-word="${w.replace(/"/g, '&quot;')}">${toLiteralString(w)}</span>
-                </div>`
-            ).join('');
+        function showFinalResultWithContext(regex, inWords, outWords, status) {
+            // Keep the voting section visible to maintain interface stability
+            showSection('voting');
+            statusBar.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
+
+            // Show a success message in the word pair area
+            wordPair.innerHTML = `
+                <div style="text-align: center; padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--pick-accept-color); border-radius: 8px;">
+                    <h2 style="margin: 0 0 10px 0; color: var(--pick-accept-color);">🎉 Final Regex Selected!</h2>
+                    <p style="margin: 0; color: var(--vscode-descriptionForeground);">
+                        The winning regex is highlighted below. You can copy any candidate you prefer.
+                    </p>
+                </div>
+            `;
+
+            // Update candidates list with winner highlighted
+            if (status) {
+                updateCandidatesWithWinner(status.candidateDetails, status.threshold, regex);
+                updateWordHistory(status.wordHistory);
+            }
+
+            // Show status message
+            showStatusWithoutCancel('Classification complete! Winner highlighted below.');
         }
 
         function showNoRegexFound(message, candidateDetails, inWords, outWords) {

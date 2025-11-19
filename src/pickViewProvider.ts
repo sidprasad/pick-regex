@@ -399,11 +399,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
       
+      // Get status to send along with the final result
+      const status = this.controller.getStatus();
+      
       this.sendMessage({
         type: 'finalResult',
         regex: finalRegex,
         wordsIn,
-        wordsOut
+        wordsOut,
+        status
       });
     } catch (error) {
       logger.error(error, 'Error showing final results');
