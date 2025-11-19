@@ -119,6 +119,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Check cancellation before filtering
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before filtering duplicates');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Filter out equivalent/duplicate regexes
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
       const uniqueCandidates = await this.filterEquivalentRegexes(candidates);
@@ -418,6 +428,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         this.sendMessage({ 
           type: 'error', 
           message: 'Could not generate any candidate regexes. Please try again.' 
+        });
+        return;
+      }
+
+      // Check cancellation before filtering
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before filtering duplicates (refinement)');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
         });
         return;
       }
