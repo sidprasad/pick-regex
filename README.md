@@ -20,8 +20,8 @@ PICK (Pairwise Iterative-Choice Knockout) helps you turn a short natural-languag
 
 Tips:
 - Short, precise descriptions produce better LLM results.
-- Use Refine Prompt to adjust wording while preserving prior classifications.
-- Use Start Fresh to begin a new session.
+- Edit the existing description to refine or adjust the set of candidate regexes while preserving prior classifications.
+
 
 ---
 

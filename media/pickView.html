@@ -109,6 +109,45 @@
             height: 14px;
         }
 
+        /* Stop button: use a compact, monochrome stop icon with subtle hover state
+           Avoid loud red backgrounds; icon color follows currentColor for theme consistency */
+        .stop-btn {
+            background: transparent;
+            color: var(--vscode-foreground);
+            border: 1px solid transparent;
+            padding: 6px;
+            height: 32px;
+            border-radius: 6px;
+        }
+
+        .stop-btn svg {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+        }
+
+        /* Hover should be subtle: no loud background, just a gentle monochrome border */
+        .stop-btn:hover {
+            background: transparent;
+            border-color: var(--vscode-panel-border);
+        }
+
+        /* Accessible focus state */
+        .stop-btn:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+            outline-offset: 2px;
+        }
+
+        /* Utility: full-width buttons used for prominent bottom actions */
+        .full-width {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+            padding-left: 12px;
+            padding-right: 12px;
+        }
+
         .btn-label {
             font-size: 12px;
         }
@@ -735,13 +774,10 @@
         <!-- Status Bar (global - shown during LLM operations) -->
         <div id="statusBar" class="status-bar hidden">
             <div id="statusMessage" style="flex:1"></div>
-            <button id="statusCancelBtn" class="icon-btn small hidden"
-                style="margin-left:8px; background: #f44336; color: white; border-color: #d32f2f;" title="Stop"
-                aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+            <button id="statusCancelBtn" class="icon-btn small stop-btn hidden" title="Cancel generation" aria-label="Cancel generation">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M7 7 L17 17 M17 7 L7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
                 </svg>
-                <span class="btn-label">Stop</span>
             </button>
         </div>
         <!-- Initial Prompt -->
@@ -751,10 +787,10 @@
 
         <div id="promptSection" class="section">
   <p style="margin: 0 0 6px 0; font-size: 1.05rem; font-weight: 500;">
-    Describe what your regex should match
+    Describe what your regex should match.
   </p>
 
-  <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
     <input
       type="text"
       id="promptInput"
@@ -776,18 +812,11 @@
       </svg>
     </button>
 
-    <button
-      id="inlineCancelBtn"
-      class="icon-btn small hidden"
-      style="background: #f44336; color: white; border-color: #d32f2f;"
-      title="Stop generation"
-      aria-label="Stop generation"
-    >
-      <svg id="stopIcon" viewBox="0 0 24 24" fill="none"
-           xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
-      </svg>
-    </button>
+        <button id="inlineCancelBtn" class="icon-btn small stop-btn hidden" title="Cancel generation" aria-label="Cancel generation">
+                <svg id="stopIcon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M7 7 L17 17 M17 7 L7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                </svg>
+            </button>
   </div>
 </div>
 
@@ -824,7 +853,7 @@
                 <div id="historyItems"></div>
             </div>
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--vscode-panel-border);">
-                <button id="startFreshBtn" class="secondary">Start Fresh</button>
+                <button id="startFreshBtn" class="secondary full-width">Build a New Regex</button>
             </div>
         </div>
 
@@ -844,7 +873,7 @@
                         <div id="wordsOut"></div>
                     </div>
                 </div>
-                <button id="resetBtn">Start Fresh</button>
+                <button id="resetBtn" class="full-width">Build a New Regex</button>
             </div>
         </div>
 
