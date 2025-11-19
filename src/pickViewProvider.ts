@@ -565,8 +565,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     // Cancel any ongoing LLM request
     if (this.cancellationTokenSource) {
       this.cancellationTokenSource.cancel();
-      this.cancellationTokenSource.dispose();
-      this.cancellationTokenSource = undefined;
+      // Don't dispose or set to undefined yet - ongoing operations still need to check isCancellationRequested
+      // The token will be disposed and replaced when a new operation starts
     }
     
     // Reset controller state
