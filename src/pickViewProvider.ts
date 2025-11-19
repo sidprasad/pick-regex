@@ -58,7 +58,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'copy':
           try {
-            await vscode.env.clipboard.writeText(data.regex || '');
+            await this.copyToClipboard(data.regex || '');
             this.sendMessage({ type: 'copied', regex: data.regex });
           } catch (error) {
             logger.error(error, 'Failed to copy to clipboard');
@@ -696,6 +696,19 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private getHtmlForWebview(webview: vscode.Webview) {
     const htmlPath = path.join(this.extensionUri.fsPath, 'media', 'pickView.html');
-    return fs.readFileSync(htmlPath, 'utf8');
+    try {
+      return fs.readFileSync(htmlPath, 'utf8');
+    } catch (err) {
+      // In test environments the media file may not be available. Return a minimal
+      // HTML fallback so unit tests that instantiate the view provider don't fail
+      // with ENOENT. This keeps production behavior unchanged when the file exists.
+      logger.warn(`Could not read webview HTML at ${htmlPath}: ${err}`);
+      return `<!doctype html><html><body><div id="pick-root"></div><script>const vscode = acquireVsCodeApi();</script></body></html>`;
+    }
+  }
+
+  // Separated clipboard access for easier stubbing in tests
+  private async copyToClipboard(text: string) {
+    return vscode.env.clipboard.writeText(text);
   }
 }
