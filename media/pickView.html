@@ -1258,7 +1258,7 @@
                     }, 2000);
                     break;
                 case 'noRegexFound':
-                    showNoRegexFound(message.message, message.candidateDetails);
+                    showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut);
                     break;
                 case 'insufficientWords':
                     showInsufficientWords(message.candidates, message.status);
@@ -1543,30 +1543,59 @@
             ).join('');
         }
 
-        function showNoRegexFound(message, candidateDetails) {
+        function showNoRegexFound(message, candidateDetails, inWords, outWords) {
             showSection('final');
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
 
-            finalRegex.textContent = 'No regex found';
-            finalRegex.style.color = '#f48771';
+            finalRegex.innerHTML = `
+                <div style="padding: 10px; background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-errorForeground); border-radius: 4px; margin-bottom: 10px;">
+                    <strong>No regex found</strong>
+                    <p style="margin: 8px 0 0 0; font-size: 0.9em;">${message}</p>
+                </div>
+            `;
 
             const detailsHtml = candidateDetails.map(c =>
-                `<div class="example-item" style="opacity: 0.7;">
+                `<div class="example-item" style="opacity: 0.7; margin: 4px 0;">
           <strong>${highlightRegex(c.pattern)}</strong> - Eliminated with ${c.negativeVotes} negative votes
         </div>`
             ).join('');
 
-            wordsIn.innerHTML = `
-        <div style="padding: 10px; background: var(--vscode-editorWarning-background); color: var(--vscode-editorWarning-foreground); border-radius: 4px; margin-bottom: 10px;">
-          ${message}
-        </div>
-        <div style="margin-top: 10px; font-size: 12px; opacity: 0.8;">
-          <strong>All candidates were eliminated:</strong>
-        </div>
-        ${detailsHtml}
-      `;
-            wordsOut.innerHTML = '';
+            // Show word classifications
+            wordsIn.innerHTML = (inWords && inWords.length > 0) 
+                ? inWords.map(w =>
+                    `<div class="word-display">
+                      <span class="word-readable example-item" data-word="${w.replace(/"/g, '&quot;')}">${w}</span>
+                      <span class="word-literal example-item" data-word="${w.replace(/"/g, '&quot;')}">${toLiteralString(w)}</span>
+                    </div>`
+                  ).join('')
+                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as IN</div>';
+
+            wordsOut.innerHTML = (outWords && outWords.length > 0)
+                ? outWords.map(w =>
+                    `<div class="word-display">
+                      <span class="word-readable example-item" data-word="${w.replace(/"/g, '&quot;')}">${w}</span>
+                      <span class="word-literal example-item" data-word="${w.replace(/"/g, '&quot;')}">${toLiteralString(w)}</span>
+                    </div>`
+                  ).join('')
+                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as OUT</div>';
+
+            // Optionally show eliminated candidates below the word lists
+            if (candidateDetails && candidateDetails.length > 0) {
+                const candidatesNote = document.createElement('div');
+                candidatesNote.style.cssText = 'margin-top: 20px; padding: 10px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px;';
+                candidatesNote.innerHTML = `
+                    <div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">
+                        <strong>All candidates were eliminated:</strong>
+                    </div>
+                    ${detailsHtml}
+                `;
+                // Append to the final section after the examples grid
+                const examplesGrid = document.querySelector('.examples');
+                if (examplesGrid && examplesGrid.parentNode) {
+                    examplesGrid.parentNode.insertBefore(candidatesNote, examplesGrid.nextSibling);
+                }
+            }
         }
 
         function resetUI(preserveClassifications = false) {
