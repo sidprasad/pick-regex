@@ -1,47 +1,94 @@
-# PICK — Regex Builder for VS Code
+# PICK — Regex builder for VS Code
 
-PICK is a VS Code extension that helps you turn a natural-language description into a precise regular expression through a short interactive workflow.
+PICK (Pairwise Iterative-Choice Knockout) helps you turn a short natural-language description into an accurate regular expression. Instead of guessing one pattern, PICK generates several viable candidates using your chosen LLM and guides you through a fast, pairwise human-in-the-loop elimination process. You classify example strings as IN, OUT, or Unsure; each judgment knocks out incompatible candidates until one final, intention-aligned regex remains.
 
-Instead of guessing a single regex, PICK generates multiple candidate patterns and asks you to classify example strings to quickly narrow down the correct regex. It uses automata-based analysis (via @gruhn/regex-utils) for formally correct set operations and `randexp` for example generation.
+---
 
-Key ideas:
-- Generate a set of candidate regexes from an LLM (3–5 candidates).
-- Iterate: show two example strings and ask which one is "IN" (matches) or "OUT" (doesn't match). The controller uses these judgments to eliminate candidates.
-- Continue until you accept an example for one regex (we select it), or all candidates are eliminated (then we tell you none matched).
-- The extension ensures examples are unique and tries to maximize information gained from each judgment.
-- **Session Management**: Refine your prompt while preserving your existing classifications, or start fresh with a new prompt.
+## Quick Start
 
-Quick start
------------
-| **Note**: When you first use PICK, VS Code will show a permission popup asking to allow the extension to use "Language Models" (or "Chat Models"). You need to grant this permission for the extension to generate regex candidates.
+**The first time you use PICK, VS Code will ask you to allow the extension to use Language Models. You must grant this permission for candidate generation.**
 
-1. In VS Code, open the PICK Regex Builder view in the Activity Bar (left sidebar).
-2. Enter a short description of the regex you want (e.g., "IPv4 octet, from 0–255").
-3. Classify example strings until PICK converges to a final regex, or the candidates are exhausted.
-4. **Refine Your Prompt**: If you want to iterate on your prompt without losing your work, click "Refine Prompt" to generate new candidates while preserving your existing classifications.
-5. **Start Fresh**: If you want to begin a completely new regex task, click "Start Fresh" to clear all state and begin anew.
+1. Install PICK Regex Builder and open its view from the Activity Bar.
+2. Enter a brief description of the pattern you want (e.g., "IPv4 octet 0–255", "email local-part").
+3. Click Start to generate candidate regexes.
+4. Classify the presented example strings:
+   - Accept (IN): the string should match the desired pattern
+   - Reject (OUT): the string should not match
+   - Unsure: skip
+5. Continue until a single regex remains or you accept one.
+6. Copy or insert the final regex.
 
+Tips:
+- Short, precise descriptions produce better LLM results.
+- Use Refine Prompt to adjust wording while preserving prior classifications.
+- Use Start Fresh to begin a new session.
 
+---
 
-## Configuration
+## How It Works
 
-Settings are under `pick`:
-- `pick.eliminationThreshold` — number of negative votes required to eliminate a candidate (default: 2)
-- `pick.llm.vendor` — LLM vendor to use for candidate generation (default: `copilot`)
-- `pick.llm.family` — LLM model family to prefer (default: `gpt-4o`)
+1. Your description is sent to the selected LLM provider.
+2. Multiple candidate regexes are generated.
+3. A structural and semantic deduplication pass removes equivalent expressions.
+4. PICK shows example strings; your IN/OUT judgments eliminate incompatible candidates.
+5. The process stops when one candidate remains or none do.
 
-## Troubleshooting
+PICK uses `@gruhn/regex-utils` for automata-based equivalence and `randexp` for example generation.
 
-If you encounter issues with the extension, check the logs for detailed information:
+---
 
-1. Open the Output panel in VS Code (View → Output, or Ctrl+Shift+U / Cmd+Shift+U)
-2. In the dropdown at the top right of the Output panel, select "PICK Regex Builder"
-3. The logs will show detailed information about extension operations, LLM requests, and any errors
+## Settings
 
-The logs include timestamps and are categorized by severity (INFO, WARN, ERROR) to help with debugging.
+All settings appear under the `pick` section in VS Code Settings.
 
+- `pick.eliminationThreshold` (number, default: 2)  
+  Number of negative votes required to eliminate a candidate.
 
-License
--------
-MIT
+- `pick.llm.vendor` (string, default: `copilot`)  
+  LLM provider to use. Options: `copilot`, `openai`, `anthropic`.
 
+- `pick.llm.family` (string, default: `gpt-4o`)  
+  Preferred model family for candidate generation.
+
+---
+
+## Troubleshooting and Logs
+
+1. Open View → Output (Ctrl/Cmd + Shift + U).
+2. Select "PICK Regex Builder" in the Output dropdown.
+3. The log stream includes timestamps and categorized messages (INFO, WARN, ERROR).
+
+Common issues:
+- Candidate generation fails: the LLM permission popup may not yet have been approved.
+- Timeouts: extremely complex regexes may exceed analysis limits; simplify the prompt.
+- Cancel does not stop a task: reload the PICK view or restart the Extension Development Host.
+
+Issue tracker: https://github.com/sidprasad/pick-regex/issues
+
+---
+
+## Privacy and Data
+
+PICK sends your prompt to the configured LLM provider solely for candidate generation.  
+The extension performs no storage of prompts or results.  
+LLM providers may log requests according to their own policies.  
+Avoid placing sensitive information in prompts if this is a concern.
+
+---
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome:  
+https://github.com/sidprasad/pick-regex
+
+Development workflow:
+
+1. `npm install && npm run compile`
+2. `npm run watch` for incremental builds
+3. Launch the Extension Development Host from VS Code
+
+---
+
+## License
+
+MIT. See the `LICENSE` file.
