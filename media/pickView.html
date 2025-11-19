@@ -1385,12 +1385,11 @@
         }
 
         function updateCandidatesWithWinner(candidates, threshold, winnerRegex) {
-            candidatesList.innerHTML = `
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                    <h4 style="margin:0">Regex Candidates</h4>
-                    <button id="candidatesHelpBtn" class="icon-btn" title="Where do these candidates come from?" aria-haspopup="dialog" aria-controls="candidatesHelpModal">?</button>
-                </div>
-            `;
+            candidatesList.innerHTML = '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">' +
+                '<h4 style="margin:0">Regex Candidates</h4>' +
+                '<button id="candidatesHelpBtn" class="icon-btn" title="Where do these candidates come from?" aria-haspopup="dialog" aria-controls="candidatesHelpModal">?</button>' +
+                '</div>';
+            
             // Wire help button
             const helpBtn = document.getElementById('candidatesHelpBtn');
             if (helpBtn) {
@@ -1409,36 +1408,57 @@
             if (threshold !== undefined) {
                 const thresholdDiv = document.createElement('div');
                 thresholdDiv.className = 'threshold-info';
-                thresholdDiv.textContent = `Rejection threshold: ${threshold} negative votes`;
+                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative votes';
                 candidatesList.appendChild(thresholdDiv);
             }
 
             candidates.forEach(c => {
                 const isWinner = c.pattern === winnerRegex;
                 const div = document.createElement('div');
-                div.className = `candidate-item ${c.eliminated ? 'eliminated' : 'active'}`;
+                div.className = 'candidate-item ' + (c.eliminated ? 'eliminated' : 'active');
                 
                 if (isWinner) {
-                    // Winner gets special styling
-                    div.style.cssText = 'border: 2px solid var(--pick-accept-color); background: var(--vscode-list-activeSelectionBackground); box-shadow: 0 2px 8px rgba(0,0,0,0.15);';
+                    // Winner gets subtle highlighting
+                    div.style.cssText = 'border: 2px solid var(--pick-accept-color); background: var(--vscode-list-activeSelectionBackground);';
                 }
                 
-                div.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
-                        ${isWinner ? '<span class="badge" style="background: var(--pick-accept-color); font-weight: bold;">🏆 WINNER</span>' : ''}
-                        <span class="candidate-pattern" style="flex: 1;">${highlightRegex(c.pattern)}</span>
-                    </div>
-                    <div class="candidate-votes" style="display:flex; gap:8px; align-items:center;">
-                        <button class="btn copy" data-pattern="${encodeURIComponent(c.pattern)}" onclick="copyRegex(decodeURIComponent(this.getAttribute('data-pattern')))" title="Copy regex" style="${isWinner ? 'border: 1px solid var(--pick-accept-color);' : ''}">
-                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                <path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                                <rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>
-                            </svg>
-                        </button>
-                        <span class="badge" style="background: #4caf50;">✓ ${c.positiveVotes}</span>
-                        <span class="badge" style="background: #f44336;">✗ ${c.negativeVotes}</span>
-                    </div>
-                `;
+                const patternSpan = document.createElement('span');
+                patternSpan.className = 'candidate-pattern';
+                patternSpan.innerHTML = highlightRegex(c.pattern);
+                
+                const votesDiv = document.createElement('div');
+                votesDiv.className = 'candidate-votes';
+                votesDiv.style.cssText = 'display:flex; gap:8px; align-items:center;';
+                
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'btn copy';
+                copyBtn.setAttribute('data-pattern', encodeURIComponent(c.pattern));
+                copyBtn.setAttribute('title', 'Copy regex');
+                copyBtn.onclick = function() { copyRegex(decodeURIComponent(this.getAttribute('data-pattern'))); };
+                if (isWinner) {
+                    copyBtn.style.border = '1px solid var(--pick-accept-color)';
+                }
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
+                    '</svg>';
+                
+                const posVoteBadge = document.createElement('span');
+                posVoteBadge.className = 'badge';
+                posVoteBadge.style.background = '#4caf50';
+                posVoteBadge.textContent = '✓ ' + c.positiveVotes;
+                
+                const negVoteBadge = document.createElement('span');
+                negVoteBadge.className = 'badge';
+                negVoteBadge.style.background = '#f44336';
+                negVoteBadge.textContent = '✗ ' + c.negativeVotes;
+                
+                votesDiv.appendChild(copyBtn);
+                votesDiv.appendChild(posVoteBadge);
+                votesDiv.appendChild(negVoteBadge);
+                
+                div.appendChild(patternSpan);
+                div.appendChild(votesDiv);
                 candidatesList.appendChild(div);
             });
         }
@@ -1601,14 +1621,12 @@
             inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
 
             // Show a success message in the word pair area
-            wordPair.innerHTML = `
-                <div style="text-align: center; padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--pick-accept-color); border-radius: 8px;">
-                    <h2 style="margin: 0 0 10px 0; color: var(--pick-accept-color);">🎉 Final Regex Selected!</h2>
-                    <p style="margin: 0; color: var(--vscode-descriptionForeground);">
-                        The winning regex is highlighted below. You can copy any candidate you prefer.
-                    </p>
-                </div>
-            `;
+            wordPair.innerHTML = '<div style="text-align: center; padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--pick-accept-color); border-radius: 8px;">' +
+                '<h2 style="margin: 0 0 10px 0; color: var(--pick-accept-color);">Final Regex Selected</h2>' +
+                '<p style="margin: 0; color: var(--vscode-descriptionForeground);">' +
+                'The selected regex is highlighted below. You can copy any candidate you prefer.' +
+                '</p>' +
+                '</div>';
 
             // Update candidates list with winner highlighted
             if (status) {
@@ -1617,7 +1635,7 @@
             }
 
             // Show status message
-            showStatusWithoutCancel('Classification complete! Winner highlighted below.');
+            showStatusWithoutCancel('Classification complete! Selected regex highlighted below.');
         }
 
         function showNoRegexFound(message, candidateDetails, inWords, outWords) {
