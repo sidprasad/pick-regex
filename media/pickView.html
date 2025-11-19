@@ -6,6 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PICK - Regex Builder</title>
     <style>
+        :root{
+            /* Use theme-aware fallbacks; these adapt automatically in VS Code webviews */
+            --pick-accept-color: var(--vscode-terminal-ansiGreen, #16a34a);
+            --pick-reject-color: var(--vscode-terminal-ansiRed, #ef4444);
+            --pick-muted-color: var(--vscode-descriptionForeground);
+            /* make classification icons larger by default so Up/Down are prominent */
+            --pick-icon-size: 18px;
+            --pick-icon-stroke: 2.4;
+        }
         body {
             padding: 10px;
             font-family: var(--vscode-font-family);
@@ -72,6 +81,38 @@
             background: var(--vscode-button-secondaryHoverBackground);
         }
 
+        /* Icon-only and small icon button helpers */
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 8px;
+            height: 32px;
+            border-radius: 6px;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--vscode-foreground);
+        }
+
+        .icon-btn.small { padding: 6px; height: 30px; border-radius: 6px; }
+
+        .icon-btn svg { width: 14px; height: 14px; }
+
+        .btn-label { font-size: 12px; }
+
+        /* Primary action styling (subtle, theme-aware) */
+        .primary {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-radius: 8px;
+            padding: 8px 12px;
+            height: 36px;
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            box-shadow: none;
+        }
+
         .word-pair {
             display: flex;
             gap: 10px;
@@ -125,21 +166,14 @@
         }
 
         .btn svg {
-            width: 14px;
-            height: 14px;
+            width: var(--pick-icon-size);
+            height: var(--pick-icon-size);
         }
 
-        .btn.accept {
-            color: var(--vscode-terminal-ansiGreen, #16a34a);
-        }
-
-        .btn.reject {
-            color: var(--vscode-terminal-ansiRed, #ef4444);
-        }
-
-        .btn.unsure {
-            color: var(--vscode-foreground);
-        }
+        /* classification buttons use subtle theme-aware colors; icons inherit currentColor */
+        .btn.accept { color: var(--pick-accept-color); }
+        .btn.reject { color: var(--pick-reject-color); }
+        .btn.unsure { color: var(--pick-muted-color); }
 
         .btn:hover {
             background: var(--vscode-list-hoverBackground);
@@ -151,7 +185,7 @@
         }
 
         .btn.accept:hover::after {
-            content: "Accept";
+            content: "Upvote";
             position: absolute;
             bottom: -25px;
             left: 50%;
@@ -167,7 +201,7 @@
         }
 
         .btn.reject:hover::after {
-            content: "Reject";
+            content: "Downvote";
             position: absolute;
             bottom: -25px;
             left: 50%;
@@ -183,7 +217,7 @@
         }
 
         .btn.unsure:hover::after {
-            content: "Unsure";
+            content: "Skip";
             position: absolute;
             bottom: -25px;
             left: 50%;
@@ -217,9 +251,10 @@
 
         .candidate-item {
             padding: 8px;
-            margin: 4px 0;
-            background: var(--vscode-list-inactiveSelectionBackground);
-            border-radius: 2px;
+            margin: 6px 0;
+            background: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
             font-family: monospace;
             display: flex;
             justify-content: space-between;
@@ -363,38 +398,17 @@
         }
 
         /* Compact classification button styling: subtle borders, small hover background */
-        button.accept {
+        /* compact classification button appearance: subtle borders and gentle hover */
+        button.accept, button.reject, button.unsure {
             background: transparent;
-            border: 1px solid rgba(34,197,94,0.18);
-            color: #16a34a;
+            border: 1px solid rgba(125,125,125,0.06);
+            color: inherit; /* color set via .btn.* classes */
+            transition: transform .12s ease, background .12s ease;
         }
 
-        button.accept:hover {
-            background: rgba(34,197,94,0.06);
-            transform: translateY(-1px);
-        }
-
-        button.reject {
-            background: transparent;
-            border: 1px solid rgba(239,68,68,0.14);
-            color: #ef4444;
-        }
-
-        button.reject:hover {
-            background: rgba(239,68,68,0.04);
-            transform: translateY(-1px);
-        }
-
-        button.unsure {
-            background: transparent;
-            border: 1px solid rgba(120,120,128,0.08);
-            color: var(--vscode-foreground);
-        }
-
-        button.unsure:hover {
-            background: rgba(120,120,128,0.03);
-            transform: translateY(-1px);
-        }
+        button.accept:hover { background: rgba(0,0,0,0.03); transform: translateY(-1px); }
+        button.reject:hover { background: rgba(0,0,0,0.03); transform: translateY(-1px); }
+        button.unsure:hover { background: rgba(0,0,0,0.02); transform: translateY(-1px); }
 
         .word-card.classified {
             opacity: 0.7;
@@ -472,20 +486,9 @@
             font-weight: bold;
         }
 
-        .classification-badge.accept {
-            background: var(--vscode-terminal-ansiGreen, #4caf50);
-            color: var(--vscode-foreground);
-        }
-
-        .classification-badge.reject {
-            background: var(--vscode-terminal-ansiRed, #ef4444);
-            color: var(--vscode-foreground);
-        }
-
-        .classification-badge.unsure {
-            background: var(--vscode-titleBar-activeBackground, #ff9800);
-            color: var(--vscode-foreground);
-        }
+        .classification-badge.accept { background: var(--pick-accept-color); color: var(--vscode-foreground); }
+        .classification-badge.reject { background: var(--pick-reject-color); color: var(--vscode-foreground); }
+        .classification-badge.unsure { background: var(--pick-muted-color); color: var(--vscode-foreground); }
 
         .history-matches {
             font-size: 0.85em;
@@ -636,14 +639,24 @@
             <p>Describe the regex you want to build:</p>
             <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="text" id="promptInput" placeholder="e.g., email addresses, phone numbers, dates..." style="flex: 1; margin-bottom: 0;" />
-                <button id="generateBtn" style="padding: 8px 12px; min-width: auto; margin-bottom: 0;" title="Start PICKing">▶</button>
+                <button id="generateBtn" class="primary" style="min-width: 40px; width:40px; margin-bottom: 0;" title="Start">
+                    <svg id="generateIcon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="16" height="16">
+                        <path d="M6 4l12 8-12 8V4z" fill="currentColor"/>
+                    </svg>
+                </button>
+                <button id="inlineCancelBtn" class="icon-btn small hidden" style="margin-left:6px; background: #f44336; color: white; border-color: #d32f2f;" title="Stop" aria-hidden="true">
+                    <svg id="stopIcon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+                </button>
             </div>
         </div>
 
         <!-- Status Bar (global - shown during LLM operations) -->
-        <div id="statusBar" class="status-bar hidden"></div>
-        <div id="cancelSection" class="hidden" style="margin-bottom: 15px;">
-            <button id="cancelBtn" class="secondary" style="background: #f44336; color: white; border-color: #d32f2f;">⏹️ Cancel Operation</button>
+        <div id="statusBar" class="status-bar hidden">
+            <div id="statusMessage" style="flex:1"></div>
+            <button id="statusCancelBtn" class="icon-btn small hidden" style="margin-left:8px; background: #f44336; color: white; border-color: #d32f2f;" title="Stop" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+                <span class="btn-label">Stop</span>
+            </button>
         </div>
 
         <!-- Voting Section -->
@@ -676,11 +689,11 @@
                 <div class="regex-display" id="finalRegex"></div>
                 <div class="examples">
                     <div class="example-box in">
-                        <h3>✅ Words IN</h3>
+                        <h3>Words IN</h3>
                         <div id="wordsIn"></div>
                     </div>
                     <div class="example-box out">
-                        <h3>❌ Words OUT</h3>
+                        <h3>Words OUT</h3>
                         <div id="wordsOut"></div>
                     </div>
                 </div>
@@ -700,7 +713,9 @@
         const votingSection = document.getElementById('votingSection');
         const finalSection = document.getElementById('finalSection');
         const statusBar = document.getElementById('statusBar');
-        const cancelSection = document.getElementById('cancelSection');
+        const statusMessage = document.getElementById('statusMessage');
+        const statusCancelBtn = document.getElementById('statusCancelBtn');
+        const inlineCancelBtn = document.getElementById('inlineCancelBtn');
         const errorSection = document.getElementById('errorSection');
         const literalToggle = document.getElementById('literalToggle');
         const currentPromptDisplay = document.getElementById('currentPromptDisplay');
@@ -711,7 +726,13 @@
         const generateBtn = document.getElementById('generateBtn');
         const resetBtn = document.getElementById('resetBtn');
         const startFreshBtn = document.getElementById('startFreshBtn');
-        const cancelBtn = document.getElementById('cancelBtn');
+        const cancelBtn = inlineCancelBtn; // alias for compatibility with existing handlers
+        // statusCancelBtn is an additional cancel control shown inside the status bar
+        if (statusCancelBtn) {
+            statusCancelBtn.addEventListener('click', () => {
+                vscode.postMessage({ type: 'cancel' });
+            });
+        }
         const wordPair = document.getElementById('wordPair');
         const candidatesList = document.getElementById('candidatesList');
         const wordHistory = document.getElementById('wordHistory');
@@ -735,7 +756,10 @@
         <div class="prompt-label">Your Prompt</div>
         <div class="prompt-text" style="display: flex; justify-content: space-between; align-items: center;">
             <span>${prompt}</span>
-            <button onclick="editPrompt()" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Edit and refine prompt">✏️ Edit</button>
+            <button onclick="editPrompt()" class="icon-btn" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Edit and refine prompt">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 21v-3l12-12 3 3L6 21H3zM19.5 7.5l-3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span class="btn-label">Edit</span>
+            </button>
         </div>
       `;
             if (currentPromptDisplay) {
@@ -754,8 +778,12 @@
             <input type="text" id="editPromptInput" value="${currentPrompt}" 
                    style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;" 
                    placeholder="Enter a refined description..." />
-            <button onclick="submitEditedPrompt()" style="padding: 6px 12px; min-width: auto;" title="Generate new candidates with edited prompt">▶</button>
-            <button onclick="cancelEditPrompt()" style="padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);" title="Cancel">✕</button>
+            <button onclick="submitEditedPrompt()" style="padding: 6px 12px; min-width: auto;" title="Generate new candidates with edited prompt">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="12" height="12">
+                    <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <button onclick="cancelEditPrompt()" style="padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);" title="Cancel">Cancel</button>
         </div>
       `;
             
@@ -916,14 +944,14 @@
                     showWarning(message.message);
                     break;
                 case 'candidatesGenerated':
-                    // Hide cancel button - candidates are ready
-                    cancelSection.classList.add('hidden');
+                    // Hide cancel buttons - candidates are ready
+                    inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden'); generateBtn.classList.remove('hidden');
                     statusBar.classList.add('hidden');
                     updateCandidates(message.candidates, 2);
                     break;
                 case 'candidatesRefined':
-                    // Hide cancel button - candidates are ready
-                    cancelSection.classList.add('hidden');
+                    // Hide cancel buttons - candidates are ready
+                    inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden'); generateBtn.classList.remove('hidden');
                     statusBar.classList.add('hidden');
                     updateCandidates(message.candidates, 2);
                     break;
@@ -972,7 +1000,7 @@
             votingSection.classList.add('hidden');
             finalSection.classList.add('hidden');
             errorSection.classList.add('hidden');
-            cancelSection.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden'); generateBtn.classList.remove('hidden');
             statusBar.classList.add('hidden');
 
             if (section === 'prompt') {
@@ -984,20 +1012,21 @@
             } else if (section === 'loading') {
                 // Show loading state - status bar and cancel will be shown by showStatus()
                 statusBar.classList.remove('hidden');
-                cancelSection.classList.remove('hidden');
+                inlineCancelBtn.classList.remove('hidden'); statusCancelBtn.classList.remove('hidden'); generateBtn.classList.add('hidden');
             }
         }
 
         function showStatus(message) {
-            statusBar.innerHTML = `<span class="loading-spinner"></span><span>${message}</span>`;
+            // Update only the message container so we don't destroy the status bar buttons
+            if (statusMessage) statusMessage.innerHTML = `<span class="loading-spinner"></span><span>${message}</span>`;
             statusBar.classList.remove('hidden');
-            cancelSection.classList.remove('hidden');
+            inlineCancelBtn.classList.remove('hidden'); statusCancelBtn.classList.remove('hidden'); generateBtn.classList.add('hidden');
         }
 
         function showStatusWithoutCancel(message) {
-            statusBar.innerHTML = `<span>${message}</span>`;
+            if (statusMessage) statusMessage.innerHTML = `<span>${message}</span>`;
             statusBar.classList.remove('hidden');
-            cancelSection.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
         }
 
         function showError(message) {
@@ -1006,7 +1035,7 @@
         }
 
         function showWarning(message) {
-            statusBar.textContent = '⚠️ ' + message;
+            statusBar.textContent = 'Warning: ' + message;
             statusBar.classList.remove('hidden');
         }
 
@@ -1016,14 +1045,14 @@
             updateWordHistory(status.wordHistory);
 
             // Show a message in the word pair area
-            wordPair.innerHTML = `
-        <div style="text-align: center; padding: 20px; background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); border-radius: 4px;">
-          <h3>⚠️ Unable to Generate More Words</h3>
-          <p>The system ran out of distinguishing words to generate.</p>
-          <p>Here are the remaining candidates - you may need to choose manually or start over with a different prompt.</p>
-          <button onclick="location.reload()" style="margin-top: 10px;">Start Over</button>
-        </div>
-      `;
+                        wordPair.innerHTML = `
+                <div style="text-align: center; padding: 20px; background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); border-radius: 4px;">
+                    <h3>Unable to generate more words</h3>
+                    <p>The system ran out of distinguishing words to generate.</p>
+                    <p>Here are the remaining candidates - you may need to choose manually or start over with a different prompt.</p>
+                    <button onclick="location.reload()" style="margin-top: 10px;">Start Over</button>
+                </div>
+            `;
         }
 
         function updateCandidates(candidates, threshold) {
@@ -1088,52 +1117,56 @@
             showStatusWithoutCancel(`Active: ${status.activeCandidates}/${status.totalCandidates} | Words classified: ${status.wordHistory.length}`);
 
             wordPair.innerHTML = `
-        <div class="word-card" id="card-${pair.word1}" data-word="${pair.word1.replace(/"/g, '&quot;')}">
+                        <div class="word-card" id="card-${pair.word1}" data-word="${pair.word1.replace(/"/g, '&quot;')}">
           <div class="word-display">
             <span class="word-readable">${pair.word1}</span>
             <span class="word-literal">${toLiteralString(pair.word1)}</span>
           </div>
           <div class="word-actions">
-            <button class="btn accept" onclick="classifyWord('${pair.word1.replace(/'/g, "\\'")}', 'accept')" title="Accept">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button class="btn reject" onclick="classifyWord('${pair.word1.replace(/'/g, "\\'")}', 'reject')" title="Reject">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button class="btn unsure" onclick="classifyWord('${pair.word1.replace(/'/g, "\\'")}', 'unsure')" title="Unsure">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 14v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M11.5 9a1.5 1.5 0 1 1 1.5 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
+                        <button class="btn accept" onclick="classifyWord('${pair.word1.replace(/'/g, "\\'")}', 'accept')" title="Upvote">
+                            <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button class="btn reject" onclick="classifyWord('${pair.word1.replace(/'/g, "\\'")}', 'reject')" title="Downvote">
+                            <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button class="btn unsure" onclick="classifyWord('${pair.word1.replace(/'/g, "\\'")}', 'unsure')" title="Skip">
+                            <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>
+                                <path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
           </div>
         </div>
-        <div class="word-card" id="card-${pair.word2}" data-word="${pair.word2.replace(/"/g, '&quot;')}">
+                <div class="word-card" id="card-${pair.word2}" data-word="${pair.word2.replace(/"/g, '&quot;')}">
           <div class="word-display">
             <span class="word-readable">${pair.word2}</span>
             <span class="word-literal">${toLiteralString(pair.word2)}</span>
           </div>
           <div class="word-actions">
-            <button class="btn accept" onclick="classifyWord('${pair.word2.replace(/'/g, "\\'")}', 'accept')" title="Accept">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button class="btn reject" onclick="classifyWord('${pair.word2.replace(/'/g, "\\'")}', 'reject')" title="Reject">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button class="btn unsure" onclick="classifyWord('${pair.word2.replace(/'/g, "\\'")}', 'unsure')" title="Unsure">
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 14v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M11.5 9a1.5 1.5 0 1 1 1.5 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
+                        <button class="btn accept" onclick="classifyWord('${pair.word2.replace(/'/g, "\\'")}', 'accept')" title="Upvote">
+                            <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button class="btn reject" onclick="classifyWord('${pair.word2.replace(/'/g, "\\'")}', 'reject')" title="Downvote">
+                            <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button class="btn unsure" onclick="classifyWord('${pair.word2.replace(/'/g, "\\'")}', 'unsure')" title="Skip">
+                            <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>
+                                <path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
           </div>
         </div>
       `;
@@ -1159,9 +1192,9 @@
           </div>
           <div class="history-classification">
             <select onchange="updateClassification(${index}, this.value)">
-              <option value="accept" ${item.classification === 'accept' ? 'selected' : ''}>✓ Accept</option>
-              <option value="reject" ${item.classification === 'reject' ? 'selected' : ''}>✗ Reject</option>
-              <option value="unsure" ${item.classification === 'unsure' ? 'selected' : ''}>? Unsure</option>
+                            <option value="accept" ${item.classification === 'accept' ? 'selected' : ''}>Accept</option>
+                            <option value="reject" ${item.classification === 'reject' ? 'selected' : ''}>Reject</option>
+                            <option value="unsure" ${item.classification === 'unsure' ? 'selected' : ''}>Unsure</option>
             </select>
           </div>
         `;
@@ -1184,7 +1217,7 @@
         function showFinalResult(regex, inWords, outWords) {
             showSection('final');
             statusBar.classList.add('hidden');
-            cancelSection.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
             
             finalRegex.innerHTML = `
                                 <span class="final-regex-text">${highlightRegex(regex)}</span>
@@ -1214,7 +1247,7 @@
         function showNoRegexFound(message, candidateDetails) {
             showSection('final');
             statusBar.classList.add('hidden');
-            cancelSection.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
             
             finalRegex.textContent = 'No regex found';
             finalRegex.style.color = '#f48771';
@@ -1249,15 +1282,15 @@
             }
             classifiedWords.clear();
             showSection('prompt');
-            statusBar.innerHTML = '';
+            if (statusMessage) statusMessage.innerHTML = '';
             statusBar.classList.add('hidden');
-            cancelSection.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
         }
 
         function handleCancelled(message) {
-            statusBar.innerHTML = `<span>${message || 'Operation cancelled'}</span>`;
+            if (statusMessage) statusMessage.innerHTML = `<span>${message || 'Operation cancelled'}</span>`;
             statusBar.classList.remove('hidden');
-            cancelSection.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
             setTimeout(() => {
                 resetUI(false);
             }, 2000);
