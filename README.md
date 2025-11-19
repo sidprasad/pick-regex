@@ -21,8 +21,7 @@ Quick start
 4. **Refine Your Prompt**: If you want to iterate on your prompt without losing your work, click "Refine Prompt" to generate new candidates while preserving your existing classifications.
 5. **Start Fresh**: If you want to begin a completely new regex task, click "Start Fresh" to clear all state and begin anew.
 
-Developer workflow / Try it locally
-------------------
+
 Requirements
 ------------
 - Node.js: v20.18.1 or newer (the extension uses `vsce`/`undici` which require Node 20+)
@@ -66,36 +65,17 @@ git push
 
 If `npm ci` fails with a message like "package.json and package-lock.json are not in sync" or missing modules, run `npm install` to regenerate the lockfile and commit it. CI uses `npm ci` to install from lockfile for deterministic builds.
 
-# Use "Extensions: Install from VSIX..." in VS Code to install the generated .vsix
-```
 
-Session Management
-------------------
-PICK now supports session management to help you iteratively refine your regex without losing your work:
 
-- **Refine Prompt**: Click "Refine Prompt" during the classification phase or after getting a final result. This allows you to:
-  - Update your natural language description
-  - Generate new candidate regexes based on the refined prompt
-  - **Preserve all your existing word classifications** (Accept/Reject/Unsure)
-  - Apply those classifications to the new candidates automatically
-  - Continue from where you left off with better candidates
+## Configuration
 
-- **Start Fresh**: Click "Start Fresh" to completely reset the session:
-  - Clears all candidates and classifications
-  - Returns to the initial prompt screen
-  - Use this when you want to work on a completely different regex task
-
-This two-level reset system allows you to iterate efficiently on your regex without repetitive work, while still providing a clean slate when needed.
-
-Configuration
--------------
 Settings are under `pick`:
 - `pick.eliminationThreshold` — number of negative votes required to eliminate a candidate (default: 2)
 - `pick.llm.vendor` — LLM vendor to use for candidate generation (default: `copilot`)
 - `pick.llm.family` — LLM model family to prefer (default: `gpt-4o`)
 
-Troubleshooting
----------------
+## Troubleshooting
+
 If you encounter issues with the extension, check the logs for detailed information:
 
 1. Open the Output panel in VS Code (View → Output, or Ctrl+Shift+U / Cmd+Shift+U)
@@ -107,21 +87,6 @@ The logs include timestamps and are categorized by severity (INFO, WARN, ERROR) 
 Publishing (release process)
  We use GitHub Actions to build (CI) and publish the extension.
 
-Local tag helper script
------------------------
-You can create and push the tag matching your package.json version using the included utility script:
-
-```bash
-# Create a tag based on the package version and push it
-npm run release:tag
-
-# For additional options
-# --dry-run: show commands without executing
-# --force: delete and recreate the tag if it already exists
-# --no-push: create tag locally but do not push
-# --message "Custom tag message": set a custom tag message
-```
-Notes
 
 License
 -------
