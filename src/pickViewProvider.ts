@@ -187,6 +187,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         candidates: this.controller.getStatus().candidateDetails
       });
 
+      // Check cancellation before generating first pair
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before generating first word pair');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       // Generate first word pair (or proceed to final result if only 1 candidate)
       this.handleRequestNextPair();
       
@@ -201,6 +211,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleRequestNextPair() {
     try {
+      // Check cancellation at the start
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled in handleRequestNextPair');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       const activeCount = this.controller.getActiveCandidateCount();
       
       if (activeCount === 0) {
@@ -215,6 +235,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       const pair = await this.controller.generateNextPair();
       const status = this.controller.getStatus();
       
+      // Check cancellation before sending pair to UI
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled after generating pair, before sending to UI');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
+
       this.sendMessage({
         type: 'newPair',
         pair,
@@ -500,6 +530,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         candidates: this.controller.getStatus().candidateDetails,
         preservedClassifications: sessionData.wordHistory.length
       });
+
+      // Check cancellation before generating first pair
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled before generating first word pair (refinement)');
+        this.sendMessage({ 
+          type: 'cancelled', 
+          message: 'Operation cancelled by user.' 
+        });
+        return;
+      }
 
       // Generate first word pair (or proceed to final result if only 1 candidate)
       this.handleRequestNextPair();
