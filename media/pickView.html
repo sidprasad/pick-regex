@@ -33,25 +33,30 @@
 
         input[type="text"] {
             width: 100%;
-            padding: 8px;
+            padding: 6px 8px;
             background: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
             border: 1px solid var(--vscode-input-border);
             border-radius: 2px;
             box-sizing: border-box;
-            margin-bottom: 10px;
+            margin-bottom: 0; /* align with generate button */
+            height: 36px; /* match generate button height */
         }
 
         button {
-            padding: 8px 16px;
+            padding: 6px 12px;
             background: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
             border: none;
-            border-radius: 2px;
+            border-radius: 4px;
             cursor: pointer;
             font-size: 13px;
             margin-right: 8px;
-            margin-bottom: 8px;
+            margin-bottom: 0; /* prefer explicit overrides per-control */
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 36px;
         }
 
         button:hover {
@@ -70,18 +75,18 @@
         .word-pair {
             display: flex;
             gap: 10px;
-            margin: 15px 0;
+            margin: 12px 0;
         }
 
         .word-card {
             flex: 1;
-            padding: 12px 10px;
+            padding: 8px;
             background: var(--vscode-editor-background);
-            border: 2px solid var(--vscode-input-border);
-            border-radius: 4px;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.12s ease-in-out;
         }
 
         .word-card:hover {
@@ -90,16 +95,17 @@
         }
 
         .word-card .word-display {
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             color: var(--vscode-editor-foreground);
             font-family: monospace;
             overflow-x: auto;
             white-space: nowrap;
+            font-size: 0.98em;
         }
 
         .word-actions {
             display: inline-flex;
-            gap: 8px;
+            gap: 6px;
             align-items: center;
             justify-content: center;
         }
@@ -107,11 +113,11 @@
         .btn {
             border: none;
             background: transparent;
-            padding: 6px;
+            padding: 4px;
             border-radius: 6px;
             cursor: pointer;
-            min-width: 36px;
-            height: 36px;
+            min-width: 30px;
+            height: 30px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -119,8 +125,8 @@
         }
 
         .btn svg {
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
         }
 
         .btn.accept {
@@ -356,37 +362,38 @@
             margin-top: 10px;
         }
 
+        /* Compact classification button styling: subtle borders, small hover background */
         button.accept {
-            background: rgba(34, 197, 94, 0.15);
-            border: 1px solid rgba(34, 197, 94, 0.3);
+            background: transparent;
+            border: 1px solid rgba(34,197,94,0.18);
             color: #16a34a;
         }
 
         button.accept:hover {
-            background: rgba(34, 197, 94, 0.25);
-            border-color: rgba(34, 197, 94, 0.5);
+            background: rgba(34,197,94,0.06);
+            transform: translateY(-1px);
         }
 
         button.reject {
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.3);
+            background: transparent;
+            border: 1px solid rgba(239,68,68,0.14);
             color: #ef4444;
         }
 
         button.reject:hover {
-            background: rgba(239, 68, 68, 0.25);
-            border-color: rgba(239, 68, 68, 0.5);
+            background: rgba(239,68,68,0.04);
+            transform: translateY(-1px);
         }
 
         button.unsure {
-            background: rgba(245, 158, 11, 0.1);
-            border: 1px solid rgba(245, 158, 11, 0.2);
-            color: #d97706;
+            background: transparent;
+            border: 1px solid rgba(120,120,128,0.08);
+            color: var(--vscode-foreground);
         }
 
         button.unsure:hover {
-            background: rgba(245, 158, 11, 0.15);
-            border-color: rgba(245, 158, 11, 0.3);
+            background: rgba(120,120,128,0.03);
+            transform: translateY(-1px);
         }
 
         .word-card.classified {
@@ -629,7 +636,7 @@
             <p>Describe the regex you want to build:</p>
             <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="text" id="promptInput" placeholder="e.g., email addresses, phone numbers, dates..." style="flex: 1; margin-bottom: 0;" />
-                <button id="generateBtn" style="padding: 8px 12px; min-width: auto;" title="Start PICKing">▶</button>
+                <button id="generateBtn" style="padding: 8px 12px; min-width: auto; margin-bottom: 0;" title="Start PICKing">▶</button>
             </div>
         </div>
 
