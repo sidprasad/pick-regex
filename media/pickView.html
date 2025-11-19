@@ -804,10 +804,14 @@
                         <span aria-hidden="true" style="font-size:16px; line-height:1;">⚙️</span>
                     </button>
                     <div id="displayOptionsMenu" class="display-menu hidden" role="menu" aria-label="Display options">
-                        <label class="menu-row" role="menuitemcheckbox" aria-checked="true">
+                        <label id="literalMenuRow" class="menu-row" role="menuitemcheckbox" aria-checked="true">
                             <input type="checkbox" id="literalToggle" checked
                                 aria-label="Literal mode — visualize whitespace and control characters">
                             <span>Literal mode — visualize whitespace &amp; control characters</span>
+                        </label>
+                        <label id="showCandidatesMenuRow" class="menu-row" role="menuitemcheckbox" aria-checked="true">
+                            <input type="checkbox" id="showCandidatesToggle" checked aria-label="Show candidates list">
+                            <span>Show candidates list</span>
                         </label>
                     </div>
                 </div>
@@ -889,7 +893,8 @@
         const statusCancelBtn = document.getElementById('statusCancelBtn');
         const inlineCancelBtn = document.getElementById('inlineCancelBtn');
         const errorSection = document.getElementById('errorSection');
-        const literalToggle = document.getElementById('literalToggle');
+    const literalToggle = document.getElementById('literalToggle');
+    const showCandidatesToggle = document.getElementById('showCandidatesToggle');
         const displayOptionsBtn = document.getElementById('displayOptionsBtn');
         const displayOptionsMenu = document.getElementById('displayOptionsMenu');
         const currentPromptDisplay = document.getElementById('currentPromptDisplay');
@@ -1098,17 +1103,37 @@
         });
 
         // Keep literal mode in sync and update aria/labels
-        literalToggle.addEventListener('change', () => {
-            literalMode = literalToggle.checked;
-            document.body.setAttribute('data-literal-mode', literalMode.toString());
-            // Update menu-row aria-checked
-            const menuRow = displayOptionsMenu ? displayOptionsMenu.querySelector('.menu-row') : null;
-            if (menuRow) menuRow.setAttribute('aria-checked', literalMode ? 'true' : 'false');
-        });
+        if (literalToggle) {
+            literalToggle.addEventListener('change', () => {
+                literalMode = literalToggle.checked;
+                document.body.setAttribute('data-literal-mode', literalMode.toString());
+                // Update the specific menu-row aria-checked for literal mode
+                const menuRow = document.getElementById('literalMenuRow');
+                if (menuRow) menuRow.setAttribute('aria-checked', literalMode ? 'true' : 'false');
+            });
+        }
+
+        // Show/hide the candidates list from the display menu (default: shown)
+        if (showCandidatesToggle) {
+            // Initialize state based on checkbox (checked -> show)
+            if (!showCandidatesToggle.checked) {
+                candidatesList.classList.add('hidden');
+            }
+            showCandidatesToggle.addEventListener('change', () => {
+                const show = showCandidatesToggle.checked;
+                if (show) {
+                    candidatesList.classList.remove('hidden');
+                } else {
+                    candidatesList.classList.add('hidden');
+                }
+                const menuRow = document.getElementById('showCandidatesMenuRow');
+                if (menuRow) menuRow.setAttribute('aria-checked', show ? 'true' : 'false');
+            });
+        }
 
         // Toggle the display options menu
         if (displayOptionsBtn && displayOptionsMenu) {
-            displayOptionsBtn.addEventListener('click', (e) => {
+                    displayOptionsBtn.addEventListener('click', (e) => {
                 const isOpen = !displayOptionsMenu.classList.contains('hidden');
                 if (isOpen) {
                     displayOptionsMenu.classList.add('hidden');
@@ -1116,8 +1141,8 @@
                 } else {
                     displayOptionsMenu.classList.remove('hidden');
                     displayOptionsBtn.setAttribute('aria-expanded', 'true');
-                    // focus the checkbox for keyboard users
-                    const cb = displayOptionsMenu.querySelector('#literalToggle');
+                    // focus the first checkbox for keyboard users
+                    const cb = displayOptionsMenu.querySelector('input[type="checkbox"]');
                     if (cb) cb.focus();
                 }
                 e.stopPropagation();
