@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PICK - Regex Builder</title>
     <style>
-        :root{
+        :root {
             /* Use theme-aware fallbacks; these adapt automatically in VS Code webviews */
             --pick-accept-color: var(--vscode-terminal-ansiGreen, #16a34a);
             --pick-reject-color: var(--vscode-terminal-ansiRed, #ef4444);
@@ -15,6 +15,7 @@
             --pick-icon-size: 18px;
             --pick-icon-stroke: 2.4;
         }
+
         body {
             padding: 10px;
             font-family: var(--vscode-font-family);
@@ -48,8 +49,10 @@
             border: 1px solid var(--vscode-input-border);
             border-radius: 2px;
             box-sizing: border-box;
-            margin-bottom: 0; /* align with generate button */
-            height: 36px; /* match generate button height */
+            margin-bottom: 0;
+            /* align with generate button */
+            height: 36px;
+            /* match generate button height */
         }
 
         button {
@@ -61,7 +64,8 @@
             cursor: pointer;
             font-size: 13px;
             margin-right: 8px;
-            margin-bottom: 0; /* prefer explicit overrides per-control */
+            margin-bottom: 0;
+            /* prefer explicit overrides per-control */
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -94,11 +98,59 @@
             color: var(--vscode-foreground);
         }
 
-        .icon-btn.small { padding: 6px; height: 30px; border-radius: 6px; }
+        .icon-btn.small {
+            padding: 6px;
+            height: 30px;
+            border-radius: 6px;
+        }
 
-        .icon-btn svg { width: 14px; height: 14px; }
+        .icon-btn svg {
+            width: 14px;
+            height: 14px;
+        }
 
-        .btn-label { font-size: 12px; }
+        /* Stop button: use a compact, monochrome stop icon with subtle hover state
+           Avoid loud red backgrounds; icon color follows currentColor for theme consistency */
+        .stop-btn {
+            background: transparent;
+            color: var(--vscode-foreground);
+            border: 1px solid transparent;
+            padding: 6px;
+            height: 32px;
+            border-radius: 6px;
+        }
+
+        .stop-btn svg {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+        }
+
+        /* Hover should be subtle: no loud background, just a gentle monochrome border */
+        .stop-btn:hover {
+            background: transparent;
+            border-color: var(--vscode-panel-border);
+        }
+
+        /* Accessible focus state */
+        .stop-btn:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+            outline-offset: 2px;
+        }
+
+        /* Utility: full-width buttons used for prominent bottom actions */
+        .full-width {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+            padding-left: 12px;
+            padding-right: 12px;
+        }
+
+        .btn-label {
+            font-size: 12px;
+        }
 
         /* Primary action styling (subtle, theme-aware) */
         .primary {
@@ -171,9 +223,17 @@
         }
 
         /* classification buttons use subtle theme-aware colors; icons inherit currentColor */
-        .btn.accept { color: var(--pick-accept-color); }
-        .btn.reject { color: var(--pick-reject-color); }
-        .btn.unsure { color: var(--pick-muted-color); }
+        .btn.accept {
+            color: var(--pick-accept-color);
+        }
+
+        .btn.reject {
+            color: var(--pick-reject-color);
+        }
+
+        .btn.unsure {
+            color: var(--pick-muted-color);
+        }
 
         .btn:hover {
             background: var(--vscode-list-hoverBackground);
@@ -247,7 +307,7 @@
             background: var(--vscode-panel-background, var(--vscode-editor-background));
             color: var(--vscode-foreground);
             border-radius: 6px;
-            box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
             margin-bottom: 12px;
             font-size: 0.95em;
         }
@@ -284,7 +344,7 @@
             background: var(--vscode-list-activeSelectionBackground);
             /* remove heavy left accent to avoid a sidebar effect */
             border-left: none;
-            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.02);
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
         }
 
         .badge {
@@ -369,7 +429,9 @@
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         /* status-bar visibility is controlled explicitly via the 'hidden' class and JS */
@@ -386,7 +448,7 @@
             color: var(--vscode-foreground);
             border-left: none;
             border-radius: 6px;
-            box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
             margin-bottom: 12px;
             font-size: 0.95em;
         }
@@ -410,16 +472,30 @@
 
         /* Compact classification button styling: subtle borders, small hover background */
         /* compact classification button appearance: subtle borders and gentle hover */
-        button.accept, button.reject, button.unsure {
+        button.accept,
+        button.reject,
+        button.unsure {
             background: transparent;
-            border: 1px solid rgba(125,125,125,0.06);
-            color: inherit; /* color set via .btn.* classes */
+            border: 1px solid rgba(125, 125, 125, 0.06);
+            color: inherit;
+            /* color set via .btn.* classes */
             transition: transform .12s ease, background .12s ease;
         }
 
-        button.accept:hover { background: rgba(0,0,0,0.03); transform: translateY(-1px); }
-        button.reject:hover { background: rgba(0,0,0,0.03); transform: translateY(-1px); }
-        button.unsure:hover { background: rgba(0,0,0,0.02); transform: translateY(-1px); }
+        button.accept:hover {
+            background: rgba(0, 0, 0, 0.03);
+            transform: translateY(-1px);
+        }
+
+        button.reject:hover {
+            background: rgba(0, 0, 0, 0.03);
+            transform: translateY(-1px);
+        }
+
+        button.unsure:hover {
+            background: rgba(0, 0, 0, 0.02);
+            transform: translateY(-1px);
+        }
 
         .word-card.classified {
             opacity: 0.7;
@@ -497,9 +573,20 @@
             font-weight: bold;
         }
 
-        .classification-badge.accept { background: var(--pick-accept-color); color: var(--vscode-foreground); }
-        .classification-badge.reject { background: var(--pick-reject-color); color: var(--vscode-foreground); }
-        .classification-badge.unsure { background: var(--pick-muted-color); color: var(--vscode-foreground); }
+        .classification-badge.accept {
+            background: var(--pick-accept-color);
+            color: var(--vscode-foreground);
+        }
+
+        .classification-badge.reject {
+            background: var(--pick-reject-color);
+            color: var(--vscode-foreground);
+        }
+
+        .classification-badge.unsure {
+            background: var(--pick-muted-color);
+            color: var(--vscode-foreground);
+        }
 
         .history-matches {
             font-size: 0.85em;
@@ -545,7 +632,8 @@
             white-space: nowrap;
         }
 
-        .word-readable, .word-literal {
+        .word-readable,
+        .word-literal {
             display: none;
         }
 
@@ -563,6 +651,43 @@
             width: 32px;
             height: 18px;
             cursor: pointer;
+        }
+
+        /* Display options dropdown (small anchored panel for secondary toggles) */
+        .display-controls {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .display-menu {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 8px);
+            background: var(--vscode-panel-background, var(--vscode-editor-background));
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            padding: 8px;
+            min-width: 220px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+            z-index: 200;
+        }
+
+        .display-menu.hidden {
+            display: none;
+        }
+
+        .menu-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px;
+            cursor: pointer;
+        }
+
+        .menu-row input {
+            margin: 0;
         }
 
         .toggle-switch input {
@@ -596,12 +721,12 @@
             opacity: 0.6;
         }
 
-        input:checked + .toggle-slider {
+        input:checked+.toggle-slider {
             background-color: var(--vscode-focusBorder);
             border-color: var(--vscode-focusBorder);
         }
 
-        input:checked + .toggle-slider:before {
+        input:checked+.toggle-slider:before {
             transform: translateX(14px);
             background-color: var(--vscode-foreground);
             opacity: 1;
@@ -649,46 +774,86 @@
         <!-- Status Bar (global - shown during LLM operations) -->
         <div id="statusBar" class="status-bar hidden">
             <div id="statusMessage" style="flex:1"></div>
-            <button id="statusCancelBtn" class="icon-btn small hidden" style="margin-left:8px; background: #f44336; color: white; border-color: #d32f2f;" title="Stop" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
-                <span class="btn-label">Stop</span>
+            <button id="statusCancelBtn" class="icon-btn small stop-btn hidden" title="Cancel generation" aria-label="Cancel generation">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M7 7 L17 17 M17 7 L7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                </svg>
             </button>
         </div>
         <!-- Initial Prompt -->
+
+
+
+
         <div id="promptSection" class="section">
-            <p>Describe the regex you want to build:</p>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="text" id="promptInput" placeholder="e.g., email addresses, phone numbers, dates..." style="flex: 1; margin-bottom: 0;" />
-                <button id="generateBtn" class="primary" style="min-width: 40px; width:40px; margin-bottom: 0;" title="Start">
-                    <svg id="generateIcon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="16" height="16">
-                        <path d="M6 4l12 8-12 8V4z" fill="currentColor"/>
-                    </svg>
-                </button>
-                <button id="inlineCancelBtn" class="icon-btn small hidden" style="margin-left:6px; background: #f44336; color: white; border-color: #d32f2f;" title="Stop" aria-hidden="true">
-                    <svg id="stopIcon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
-                </button>
-            </div>
-        </div>
+  <p style="margin: 0 0 6px 0; font-size: 1.05rem; font-weight: 500;">
+    Describe what your regex should match.
+  </p>
+
+    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+    <input
+      type="text"
+      id="promptInput"
+      placeholder="e.g., IPv4 addresses, MM-DD-YYYY dates, US phone numbers"
+      style="flex: 1; margin-bottom: 0;"
+    />
+
+    <button
+      id="generateBtn"
+      class="primary"
+      style="min-width: 40px; width: 40px; margin-bottom: 0;"
+      title="Generate candidate regexes"
+      aria-label="Generate candidate regexes"
+    >
+      <svg id="generateIcon" viewBox="0 0 24 24" fill="none"
+           xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
+           width="16" height="16">
+        <path d="M6 4l12 8-12 8V4z" fill="currentColor" />
+      </svg>
+    </button>
+
+        <button id="inlineCancelBtn" class="icon-btn small stop-btn hidden" title="Cancel generation" aria-label="Cancel generation">
+                <svg id="stopIcon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M7 7 L17 17 M17 7 L7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                </svg>
+            </button>
+  </div>
+</div>
+
 
         <!-- Voting Section -->
         <div id="votingSection" class="section hidden">
             <div id="currentPromptDisplay" class="current-prompt-display"></div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h2>Classify each word - Accept, Reject, or Unsure:</h2>
-                <label class="toggle-switch" title="LITERAL MODE ON">
-                    <input type="checkbox" id="literalToggle" checked>
-                    <span class="toggle-slider"></span>
-                </label>
+                <h4 style="margin:0;">Should the generated regex match these words?</h4>
+                <div class="display-controls" aria-hidden="false">
+                    <button id="displayOptionsBtn" class="icon-btn" title="Display options" aria-haspopup="true"
+                        aria-expanded="false" aria-controls="displayOptionsMenu">
+                        <!-- simpler gear: use emoji for consistent rendering across themes -->
+                        <span aria-hidden="true" style="font-size:16px; line-height:1;">⚙️</span>
+                    </button>
+                    <div id="displayOptionsMenu" class="display-menu hidden" role="menu" aria-label="Display options">
+                        <label id="literalMenuRow" class="menu-row" role="menuitemcheckbox" aria-checked="true">
+                            <input type="checkbox" id="literalToggle" checked
+                                aria-label="Literal mode — visualize whitespace and control characters">
+                            <span>Literal mode — visualize whitespace &amp; control characters</span>
+                        </label>
+                        <label id="showCandidatesMenuRow" class="menu-row" role="menuitemcheckbox" aria-checked="true">
+                            <input type="checkbox" id="showCandidatesToggle" checked aria-label="Show candidates list">
+                            <span>Show candidates list</span>
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="word-pair" id="wordPair"></div>
-            
+
             <div class="candidates-list" id="candidatesList"></div>
             <div class="word-history" id="wordHistory">
                 <h3>Word Classification History</h3>
                 <div id="historyItems"></div>
             </div>
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--vscode-panel-border);">
-                <button id="startFreshBtn" class="secondary">Start Fresh</button>
+                <button id="startFreshBtn" class="secondary full-width">Build a New Regex</button>
             </div>
         </div>
 
@@ -708,13 +873,42 @@
                         <div id="wordsOut"></div>
                     </div>
                 </div>
-                <button id="resetBtn">Start Fresh</button>
+                <button id="resetBtn" class="full-width">Build a New Regex</button>
             </div>
         </div>
 
         <!-- Error Display -->
         <div id="errorSection" class="error hidden"></div>
+        
+        <!-- Candidates help modal (hidden by default) -->
+        <div id="candidatesHelpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="candidatesHelpTitle">
+  <div class="modal-overlay" id="candidatesHelpOverlay"></div>
+  <div class="modal-content" role="document">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h3 id="candidatesHelpTitle" style="margin:0;">Where do these candidates come from?</h3>
+      <button id="candidatesHelpClose" class="icon-btn" title="Close">✕</button>
     </div>
+
+    <p>These regex candidates are generated by the language model you’ve enabled in VS Code.</p>
+
+    <p>PICK sends your description to that model and asks it to suggest several possible regex patterns.</p>
+
+    <p>PICK then helps you choose between them by having you vote on which example strings should or should not match. As you classify examples, incompatible candidates are eliminated.</p>
+
+    <p>If none of the candidates seem correct, we recommend refining the description above and generating a new set of options.</p>
+  </div>
+</div>
+
+    </div>
+
+    <style>
+        /* Modal styles */
+        .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 500; }
+        .modal.hidden { display: none; }
+        .modal-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.45); }
+        .modal-content { position: relative; background: var(--vscode-panel-background, var(--vscode-editor-background)); color: var(--vscode-foreground); border-radius: 8px; padding: 16px; width: 480px; max-width: calc(100% - 32px); box-shadow: 0 12px 40px rgba(0,0,0,0.25); border: 1px solid var(--vscode-panel-border); }
+        .modal-content p { margin-top: 8px; margin-bottom: 8px; color: var(--vscode-descriptionForeground); }
+    </style>
 
     <script>
         const vscode = acquireVsCodeApi();
@@ -728,7 +922,10 @@
         const statusCancelBtn = document.getElementById('statusCancelBtn');
         const inlineCancelBtn = document.getElementById('inlineCancelBtn');
         const errorSection = document.getElementById('errorSection');
-        const literalToggle = document.getElementById('literalToggle');
+    const literalToggle = document.getElementById('literalToggle');
+    const showCandidatesToggle = document.getElementById('showCandidatesToggle');
+        const displayOptionsBtn = document.getElementById('displayOptionsBtn');
+        const displayOptionsMenu = document.getElementById('displayOptionsMenu');
         const currentPromptDisplay = document.getElementById('currentPromptDisplay');
         const finalPromptDisplay = document.getElementById('finalPromptDisplay');
 
@@ -764,7 +961,7 @@
         // Helper function to update prompt display
         function updatePromptDisplay(prompt) {
             const html = `
-        <div class="prompt-label">Your Prompt</div>
+        <div class="prompt-label">Your Description</div>
         <div class="prompt-text" style="display: flex; justify-content: space-between; align-items: center;">
             <span>${prompt}</span>
             <button onclick="editPrompt()" class="icon-btn" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Edit and refine prompt">
@@ -784,7 +981,7 @@
         function editPrompt() {
             const currentPrompt = promptInput.value;
             const editHtml = `
-        <div class="prompt-label">Edit Your Prompt</div>
+        <div class="prompt-label">Edit Your Description</div>
         <div style="display: flex; gap: 8px; align-items: center;">
             <input type="text" id="editPromptInput" value="${currentPrompt}" 
                    style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;" 
@@ -797,7 +994,7 @@
             <button onclick="cancelEditPrompt()" style="padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);" title="Cancel">Cancel</button>
         </div>
       `;
-            
+
             if (currentPromptDisplay) {
                 currentPromptDisplay.innerHTML = editHtml;
                 // Focus the input
@@ -934,11 +1131,80 @@
             vscode.postMessage({ type: 'cancel' });
         });
 
-        literalToggle.addEventListener('change', () => {
-            literalMode = literalToggle.checked;
-            document.body.setAttribute('data-literal-mode', literalMode.toString());
-            literalToggle.parentElement.title = literalMode ? 'LITERAL MODE ON' : 'LITERAL MODE OFF';
-        });
+        // Keep literal mode in sync and update aria/labels
+        if (literalToggle) {
+            literalToggle.addEventListener('change', () => {
+                literalMode = literalToggle.checked;
+                document.body.setAttribute('data-literal-mode', literalMode.toString());
+                // Update the specific menu-row aria-checked for literal mode
+                const menuRow = document.getElementById('literalMenuRow');
+                if (menuRow) menuRow.setAttribute('aria-checked', literalMode ? 'true' : 'false');
+            });
+        }
+
+        // Show/hide the candidates list from the display menu (default: shown)
+        if (showCandidatesToggle) {
+            // Initialize state based on checkbox (checked -> show)
+            if (!showCandidatesToggle.checked) {
+                candidatesList.classList.add('hidden');
+            }
+            showCandidatesToggle.addEventListener('change', () => {
+                const show = showCandidatesToggle.checked;
+                if (show) {
+                    candidatesList.classList.remove('hidden');
+                } else {
+                    candidatesList.classList.add('hidden');
+                }
+                const menuRow = document.getElementById('showCandidatesMenuRow');
+                if (menuRow) menuRow.setAttribute('aria-checked', show ? 'true' : 'false');
+            });
+        }
+
+        // Toggle the display options menu
+        if (displayOptionsBtn && displayOptionsMenu) {
+                    displayOptionsBtn.addEventListener('click', (e) => {
+                const isOpen = !displayOptionsMenu.classList.contains('hidden');
+                if (isOpen) {
+                    displayOptionsMenu.classList.add('hidden');
+                    displayOptionsBtn.setAttribute('aria-expanded', 'false');
+                } else {
+                    displayOptionsMenu.classList.remove('hidden');
+                    displayOptionsBtn.setAttribute('aria-expanded', 'true');
+                    // focus the first checkbox for keyboard users
+                    const cb = displayOptionsMenu.querySelector('input[type="checkbox"]');
+                    if (cb) cb.focus();
+                }
+                e.stopPropagation();
+            });
+
+            // Close on outside click
+            window.addEventListener('click', (ev) => {
+                if (!displayOptionsMenu.classList.contains('hidden')) {
+                    const target = ev.target;
+                    if (!displayOptionsMenu.contains(target) && target !== displayOptionsBtn) {
+                        displayOptionsMenu.classList.add('hidden');
+                        displayOptionsBtn.setAttribute('aria-expanded', 'false');
+                    }
+                }
+            });
+
+            // Close on Escape (also close the candidates help modal if open)
+            window.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Escape') {
+                    if (!displayOptionsMenu.classList.contains('hidden')) {
+                        displayOptionsMenu.classList.add('hidden');
+                        displayOptionsBtn.setAttribute('aria-expanded', 'false');
+                        displayOptionsBtn.focus();
+                        return;
+                    }
+                    const candidatesModal = document.getElementById('candidatesHelpModal');
+                    if (candidatesModal && !candidatesModal.classList.contains('hidden')) {
+                        candidatesModal.classList.add('hidden');
+                        displayOptionsBtn.focus();
+                    }
+                }
+            });
+        }
 
         // Handle messages from extension
         window.addEventListener('message', event => {
@@ -992,7 +1258,7 @@
                     }, 2000);
                     break;
                 case 'noRegexFound':
-                    showNoRegexFound(message.message, message.candidateDetails);
+                    showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut);
                     break;
                 case 'insufficientWords':
                     showInsufficientWords(message.candidates, message.status);
@@ -1058,7 +1324,7 @@
             updateWordHistory(status.wordHistory);
 
             // Show a message in the word pair area
-                        wordPair.innerHTML = `
+            wordPair.innerHTML = `
                 <div style="text-align: center; padding: 20px; background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); border-radius: 4px;">
                     <h3>Unable to generate more words</h3>
                     <p>The system ran out of distinguishing words to generate.</p>
@@ -1069,7 +1335,27 @@
         }
 
         function updateCandidates(candidates, threshold) {
-            candidatesList.innerHTML = '<h3>Candidate Regexes Produced by the LLM:</h3>';
+            candidatesList.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                    <h4 style="margin:0">Regex Candidates</h4>
+                    <button id="candidatesHelpBtn" class="icon-btn" title="Where do these candidates come from?" aria-haspopup="dialog" aria-controls="candidatesHelpModal">?</button>
+                </div>
+            `;
+            // Wire help button (created as part of the header) to open explanatory modal
+            const helpBtn = document.getElementById('candidatesHelpBtn');
+            if (helpBtn) {
+                helpBtn.onclick = () => {
+                    const modal = document.getElementById('candidatesHelpModal');
+                    const overlay = document.getElementById('candidatesHelpOverlay');
+                    const closeBtn = document.getElementById('candidatesHelpClose');
+                    if (modal) modal.classList.remove('hidden');
+                    if (closeBtn) closeBtn.focus();
+                    // Close handlers
+                    if (overlay) overlay.onclick = () => { modal.classList.add('hidden'); };
+                    if (closeBtn) closeBtn.onclick = () => { modal.classList.add('hidden'); };
+                };
+            }
+
             if (threshold !== undefined) {
                 const thresholdDiv = document.createElement('div');
                 thresholdDiv.className = 'threshold-info';
@@ -1231,7 +1517,7 @@
             showSection('final');
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
-            
+
             finalRegex.innerHTML = `
                                 <span class="final-regex-text">${highlightRegex(regex)}</span>
                                 <button class="btn copy" data-pattern="${encodeURIComponent(regex)}" onclick="copyRegex(decodeURIComponent(this.getAttribute('data-pattern')))" title="Copy final regex">
@@ -1257,30 +1543,59 @@
             ).join('');
         }
 
-        function showNoRegexFound(message, candidateDetails) {
+        function showNoRegexFound(message, candidateDetails, inWords, outWords) {
             showSection('final');
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
-            
-            finalRegex.textContent = 'No regex found';
-            finalRegex.style.color = '#f48771';
+
+            finalRegex.innerHTML = `
+                <div style="padding: 10px; background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-errorForeground); border-radius: 4px; margin-bottom: 10px;">
+                    <strong>No regex found</strong>
+                    <p style="margin: 8px 0 0 0; font-size: 0.9em;">${message}</p>
+                </div>
+            `;
 
             const detailsHtml = candidateDetails.map(c =>
-                `<div class="example-item" style="opacity: 0.7;">
-          <strong>${highlightRegex(c.pattern)}</strong> - Eliminated with ${c.negativeVotes} negative votes
+                `<div class="example-item" style="opacity: 0.7; margin: 4px 0;">
+          <strong>${highlightRegex(c.pattern)}</strong> — Got ${c.positiveVotes} upvote${c.positiveVotes !== 1 ? 's' : ''}, ${c.negativeVotes} downvote${c.negativeVotes !== 1 ? 's' : ''}
         </div>`
             ).join('');
 
-            wordsIn.innerHTML = `
-        <div style="padding: 10px; background: var(--vscode-editorWarning-background); color: var(--vscode-editorWarning-foreground); border-radius: 4px; margin-bottom: 10px;">
-          ${message}
-        </div>
-        <div style="margin-top: 10px; font-size: 12px; opacity: 0.8;">
-          <strong>All candidates were eliminated:</strong>
-        </div>
-        ${detailsHtml}
-      `;
-            wordsOut.innerHTML = '';
+            // Show word classifications
+            wordsIn.innerHTML = (inWords && inWords.length > 0) 
+                ? inWords.map(w =>
+                    `<div class="word-display">
+                      <span class="word-readable example-item" data-word="${w.replace(/"/g, '&quot;')}">${w}</span>
+                      <span class="word-literal example-item" data-word="${w.replace(/"/g, '&quot;')}">${toLiteralString(w)}</span>
+                    </div>`
+                  ).join('')
+                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as IN</div>';
+
+            wordsOut.innerHTML = (outWords && outWords.length > 0)
+                ? outWords.map(w =>
+                    `<div class="word-display">
+                      <span class="word-readable example-item" data-word="${w.replace(/"/g, '&quot;')}">${w}</span>
+                      <span class="word-literal example-item" data-word="${w.replace(/"/g, '&quot;')}">${toLiteralString(w)}</span>
+                    </div>`
+                  ).join('')
+                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as OUT</div>';
+
+            // Optionally show eliminated candidates below the word lists
+            if (candidateDetails && candidateDetails.length > 0) {
+                const candidatesNote = document.createElement('div');
+                candidatesNote.style.cssText = 'margin-top: 20px; padding: 10px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px;';
+                candidatesNote.innerHTML = `
+                    <div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">
+                        <strong>All candidates were eliminated:</strong>
+                    </div>
+                    ${detailsHtml}
+                `;
+                // Append to the final section after the examples grid
+                const examplesGrid = document.querySelector('.examples');
+                if (examplesGrid && examplesGrid.parentNode) {
+                    examplesGrid.parentNode.insertBefore(candidatesNote, examplesGrid.nextSibling);
+                }
+            }
         }
 
         function resetUI(preserveClassifications = false) {

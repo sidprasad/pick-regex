@@ -378,16 +378,6 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     try {
       const finalRegex = this.controller.getFinalRegex();
       
-      if (finalRegex === null) {
-        // All candidates were eliminated - none are correct
-        this.sendMessage({
-          type: 'noRegexFound',
-          message: 'All candidate regexes were eliminated. None of them match your requirements.',
-          candidateDetails: this.controller.getStatus().candidateDetails
-        });
-        return;
-      }
-
       // Get the actual words the user classified
       const wordHistory = this.controller.getWordHistory();
       const wordsIn = wordHistory
@@ -396,6 +386,18 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       const wordsOut = wordHistory
         .filter(record => record.classification === 'reject')
         .map(record => record.word);
+      
+      if (finalRegex === null) {
+        // All candidates were eliminated - none are correct
+        this.sendMessage({
+          type: 'noRegexFound',
+          message: 'All candidate regexes were eliminated. None of them match your requirements.',
+          candidateDetails: this.controller.getStatus().candidateDetails,
+          wordsIn,
+          wordsOut
+        });
+        return;
+      }
       
       this.sendMessage({
         type: 'finalResult',
