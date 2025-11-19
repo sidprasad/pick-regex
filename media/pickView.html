@@ -237,12 +237,19 @@
         }
 
         .status-bar {
-            padding: 10px;
-            background: var(--vscode-badge-background);
-            color: var(--vscode-badge-foreground);
-            border-radius: 4px;
-            margin-bottom: 15px;
-            font-size: 0.9em;
+            position: sticky;
+            top: 8px;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: var(--vscode-panel-background, var(--vscode-editor-background));
+            color: var(--vscode-foreground);
+            border-radius: 6px;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+            margin-bottom: 12px;
+            font-size: 0.95em;
         }
 
         .candidates-list {
@@ -275,7 +282,9 @@
 
         .candidate-item.active {
             background: var(--vscode-list-activeSelectionBackground);
-            border-left: 3px solid var(--vscode-focusBorder);
+            /* remove heavy left accent to avoid a sidebar effect */
+            border-left: none;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.02);
         }
 
         .badge {
@@ -363,21 +372,23 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Status bar: hide when empty to avoid a thin visible border when no message is set */
-        .status-bar:empty {
-            display: none !important;
-        }
+        /* status-bar visibility is controlled explicitly via the 'hidden' class and JS */
 
         .status-bar {
+            position: sticky;
+            top: 8px;
+            z-index: 30;
             display: flex;
             align-items: center;
-            justify-content: center;
-            padding: 12px;
-            background: var(--vscode-textBlockQuote-background);
-            border-left: 4px solid var(--vscode-focusBorder);
-            border-radius: 4px;
-            margin: 10px 0;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: var(--vscode-panel-background, var(--vscode-editor-background));
             color: var(--vscode-foreground);
+            border-left: none;
+            border-radius: 6px;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+            margin-bottom: 12px;
+            font-size: 0.95em;
         }
 
         .error {
@@ -511,7 +522,8 @@
         .current-prompt-display {
             padding: 12px 15px;
             background: var(--vscode-textBlockQuote-background);
-            border-left: 4px solid var(--vscode-focusBorder);
+            /* keep layout clean across themes; avoid a heavy left accent */
+            border-left: none;
             border-radius: 4px;
             margin-bottom: 15px;
             font-family: var(--vscode-font-family);
@@ -634,6 +646,14 @@
 
 <body>
     <div class="container">
+        <!-- Status Bar (global - shown during LLM operations) -->
+        <div id="statusBar" class="status-bar hidden">
+            <div id="statusMessage" style="flex:1"></div>
+            <button id="statusCancelBtn" class="icon-btn small hidden" style="margin-left:8px; background: #f44336; color: white; border-color: #d32f2f;" title="Stop" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+                <span class="btn-label">Stop</span>
+            </button>
+        </div>
         <!-- Initial Prompt -->
         <div id="promptSection" class="section">
             <p>Describe the regex you want to build:</p>
@@ -648,15 +668,6 @@
                     <svg id="stopIcon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
                 </button>
             </div>
-        </div>
-
-        <!-- Status Bar (global - shown during LLM operations) -->
-        <div id="statusBar" class="status-bar hidden">
-            <div id="statusMessage" style="flex:1"></div>
-            <button id="statusCancelBtn" class="icon-btn small hidden" style="margin-left:8px; background: #f44336; color: white; border-color: #d32f2f;" title="Stop" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
-                <span class="btn-label">Stop</span>
-            </button>
         </div>
 
         <!-- Voting Section -->
@@ -1035,8 +1046,10 @@
         }
 
         function showWarning(message) {
-            statusBar.textContent = 'Warning: ' + message;
+            if (statusMessage) statusMessage.innerHTML = `<strong>Warning:</strong> ${message}`;
             statusBar.classList.remove('hidden');
+            // Warnings don't need cancel controls by default
+            inlineCancelBtn.classList.add('hidden'); statusCancelBtn.classList.add('hidden');
         }
 
         function showInsufficientWords(candidates, status) {
@@ -1300,7 +1313,7 @@
             // Create a simple inline prompt form
             const currentPrompt = promptInput.value;
             const dialogHtml = `
-        <div style="padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--vscode-focusBorder); border-radius: 4px; margin: 20px 0;">
+    <div style="padding: 20px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px; margin: 20px 0;">
           <h3 style="margin-top: 0;">Refine Your Prompt</h3>
           <p style="color: var(--vscode-descriptionForeground);">
             Update your prompt to generate new candidates while preserving your existing classifications.
