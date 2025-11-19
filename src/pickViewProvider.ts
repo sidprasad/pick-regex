@@ -12,6 +12,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private controller: PickController;
   private analyzer = createRegexAnalyzer();
   private cancellationTokenSource?: vscode.CancellationTokenSource;
+  private analysisCache = new Map<string, Promise<any> | any>();
 
   constructor(private readonly extensionUri: vscode.Uri) {
     this.controller = new PickController();
@@ -459,33 +460,151 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * Lightweight heuristic check: sample strings and compare
+   * Returns true if regexes MIGHT be equivalent (need full analysis)
+   * Returns false if definitely different (skip expensive analysis)
+   */
+  private quickSampleCheck(regexA: string, regexB: string, sampleCount = 20): boolean {
+    try {
+      const reA = new RegExp(`^${regexA}$`);
+      const reB = new RegExp(`^${regexB}$`);
+      
+      // Generate samples from A and check if B accepts them all
+      const samplesA = this.analyzer.generateMultipleWords(regexA, sampleCount);
+      for (const word of samplesA) {
+        if (!reB.test(word)) {
+          return false; // Found a word in A but not B - definitely not equivalent
+        }
+      }
+      
+      // Generate samples from B and check if A accepts them all
+      const samplesB = this.analyzer.generateMultipleWords(regexB, sampleCount);
+      for (const word of samplesB) {
+        if (!reA.test(word)) {
+          return false; // Found a word in B but not A - definitely not equivalent
+        }
+      }
+      
+      // All samples matched both ways - might be equivalent (need full check)
+      return true;
+    } catch (error) {
+      // On error, assume might be equivalent (do full analysis)
+      return true;
+    }
+  }
+
+  /**
+   * Timeout wrapper with cancellation and caching
+   */
+  private async analyzeWithTimeout(a: string, b: string, timeoutMs = 5000): Promise<any> {
+    // Symmetric cache key
+    const key = a < b ? `${a}::${b}` : `${b}::${a}`;
+    
+    if (this.analysisCache.has(key)) {
+      const cached = this.analysisCache.get(key);
+      return cached instanceof Promise ? await cached : cached;
+    }
+
+    const analysisPromise = (async () => {
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        throw new Error('Analysis cancelled by user');
+      }
+      return await this.analyzer.analyzeRelationship(a, b);
+    })();
+
+    // Store promise immediately for concurrent requests
+    this.analysisCache.set(key, analysisPromise);
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Analysis timeout - regex too complex')), timeoutMs)
+    );
+
+    try {
+      const result = await Promise.race([analysisPromise, timeoutPromise]);
+      // Cache the resolved value
+      this.analysisCache.set(key, result);
+      return result;
+    } catch (err) {
+      // Remove from cache on error so future attempts can retry
+      this.analysisCache.delete(key);
+      throw err;
+    }
+  }
+
+  /**
    * Filter out equivalent/duplicate regexes
    */
   private async filterEquivalentRegexes(regexes: string[]): Promise<string[]> {
+    // PASS 1: Fast exact string deduplication (preserving order)
+    const seen = new Set<string>();
+    const exactUnique: string[] = [];
+    for (const regex of regexes) {
+      if (!seen.has(regex)) {
+        seen.add(regex);
+        exactUnique.push(regex);
+      }
+    }
+    
+    logger.info(`After exact deduplication: ${exactUnique.length}/${regexes.length} unique regexes`);
+    
+    if (exactUnique.length <= 1) {
+      return exactUnique;
+    }
+
+    // PASS 2: Semantic equivalence using sampling + automata analysis
     const unique: string[] = [];
     
-    for (const regex of regexes) {
+    for (let i = 0; i < exactUnique.length; i++) {
+      const regex = exactUnique[i];
+      
+      // Check cancellation
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        throw new Error('Filtering cancelled by user');
+      }
+      
       let isEquivalent = false;
       
-      // Check against all already added unique regexes
       for (const uniqueRegex of unique) {
+        // Check cancellation before each heavy operation
+        if (this.cancellationTokenSource?.token.isCancellationRequested) {
+          throw new Error('Filtering cancelled by user');
+        }
+        
+        // Quick sample-based check first (cheap)
+        const mightBeEquivalent = this.quickSampleCheck(regex, uniqueRegex, 15);
+        if (!mightBeEquivalent) {
+          // Samples proved they're different - skip expensive analysis
+          logger.info(`Quick check: "${regex}" and "${uniqueRegex}" are different`);
+          continue;
+        }
+        
+        // Samples suggest equivalence - do full automata analysis
         try {
-          const result = await this.analyzer.analyzeRelationship(regex, uniqueRegex);
-          if (result.relationship === RegexRelationship.EQUIVALENT) {
+          logger.info(`Full analysis: comparing "${regex}" vs "${uniqueRegex}"...`);
+          const result = await this.analyzeWithTimeout(regex, uniqueRegex, 8000);
+          
+          if (result && result.relationship === RegexRelationship.EQUIVALENT) {
+            logger.info(`Found equivalent: "${regex}" === "${uniqueRegex}"`);
             isEquivalent = true;
             break;
           }
         } catch (error) {
-          // If analysis fails, be conservative and keep both
-          console.warn(`Failed to analyze relationship between regexes: ${error}`);
+          const errMsg = String(error);
+          if (errMsg.includes('cancelled')) {
+            throw error; // Re-throw cancellation
+          }
+          // Timeout or analysis failure - log and conservatively keep both
+          logger.warn(`Analysis failed for "${regex}" vs "${uniqueRegex}": ${error}`);
         }
       }
       
       if (!isEquivalent) {
         unique.push(regex);
+        logger.info(`Keeping unique regex: "${regex}" (${unique.length} total)`);
       }
     }
     
+    logger.info(`Final: ${unique.length}/${regexes.length} semantically unique regexes`);
     return unique;
   }
 
