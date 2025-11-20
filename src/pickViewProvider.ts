@@ -743,10 +743,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private getHtmlForWebview(webview: vscode.Webview) {
     const htmlPath = path.join(this.extensionUri.fsPath, 'media', 'pickView.html');
     const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'pickView.js'));
+    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'pickView.css'));
     
     try {
       let html = fs.readFileSync(htmlPath, 'utf8');
-      // Inject the JS file URI into the HTML
+      // Inject the CSS and JS file URIs into the HTML
+      html = html.replace('<!--CSS_URI_PLACEHOLDER-->', cssUri.toString());
       html = html.replace('<!--JS_URI_PLACEHOLDER-->', jsUri.toString());
       return html;
     } catch (err) {
