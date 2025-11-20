@@ -98,13 +98,17 @@
                 currentPromptDisplay.innerHTML = editHtml;
                 setTimeout(function() {
                     const input = document.getElementById('editPromptInput');
-                    if (input) input.focus();
+                    if (input) {
+                        input.focus();
+                    }
                 }, 10);
             } else if (finalPromptDisplay) {
                 finalPromptDisplay.innerHTML = editHtml;
                 setTimeout(function() {
                     const input = document.getElementById('editPromptInput');
-                    if (input) input.focus();
+                    if (input) {
+                        input.focus();
+                    }
                 }, 10);
             }
         }
@@ -149,7 +153,9 @@
         }
 
         function highlightRegex(pattern) {
-            if (!pattern) return '';
+            if (!pattern) {
+                return '';
+            }
 
             pattern = pattern.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -222,7 +228,9 @@
                 literalMode = literalToggle.checked;
                 document.body.setAttribute('data-literal-mode', literalMode.toString());
                 const menuRow = document.getElementById('literalMenuRow');
-                if (menuRow) menuRow.setAttribute('aria-checked', literalMode ? 'true' : 'false');
+                if (menuRow) {
+                    menuRow.setAttribute('aria-checked', literalMode ? 'true' : 'false');
+                }
             });
         }
 
@@ -238,7 +246,9 @@
                     candidatesList.classList.add('hidden');
                 }
                 const menuRow = document.getElementById('showCandidatesMenuRow');
-                if (menuRow) menuRow.setAttribute('aria-checked', show ? 'true' : 'false');
+                if (menuRow) {
+                    menuRow.setAttribute('aria-checked', show ? 'true' : 'false');
+                }
             });
         }
 
@@ -252,7 +262,9 @@
                     displayOptionsMenu.classList.remove('hidden');
                     displayOptionsBtn.setAttribute('aria-expanded', 'true');
                     const cb = displayOptionsMenu.querySelector('input[type="checkbox"]');
-                    if (cb) cb.focus();
+                    if (cb) {
+                        cb.focus();
+                    }
                 }
                 e.stopPropagation();
             });
@@ -376,7 +388,9 @@
         }
 
         function showStatus(message) {
-            if (statusMessage) statusMessage.innerHTML = '<span class="loading-spinner"></span><span>' + message + '</span>';
+            if (statusMessage) {
+                statusMessage.innerHTML = '<span class="loading-spinner"></span><span>' + message + '</span>';
+            }
             statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.remove('hidden');
             statusCancelBtn.classList.remove('hidden');
@@ -384,7 +398,9 @@
         }
 
         function showStatusWithoutCancel(message) {
-            if (statusMessage) statusMessage.innerHTML = '<span>' + message + '</span>';
+            if (statusMessage) {
+                statusMessage.innerHTML = '<span>' + message + '</span>';
+            }
             statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
@@ -396,7 +412,9 @@
         }
 
         function showWarning(message) {
-            if (statusMessage) statusMessage.innerHTML = '<strong>Warning:</strong> ' + message;
+            if (statusMessage) {
+                statusMessage.innerHTML = '<strong>Warning:</strong> ' + message;
+            }
             statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
@@ -427,10 +445,18 @@
                     const modal = document.getElementById('candidatesHelpModal');
                     const overlay = document.getElementById('candidatesHelpOverlay');
                     const closeBtn = document.getElementById('candidatesHelpClose');
-                    if (modal) modal.classList.remove('hidden');
-                    if (closeBtn) closeBtn.focus();
-                    if (overlay) overlay.onclick = function() { modal.classList.add('hidden'); };
-                    if (closeBtn) closeBtn.onclick = function() { modal.classList.add('hidden'); };
+                    if (modal) {
+                        modal.classList.remove('hidden');
+                    }
+                    if (closeBtn) {
+                        closeBtn.focus();
+                    }
+                    if (overlay) {
+                        overlay.onclick = function() { modal.classList.add('hidden'); };
+                    }
+                    if (closeBtn) {
+                        closeBtn.onclick = function() { modal.classList.add('hidden'); };
+                    }
                 };
             }
 
@@ -471,10 +497,18 @@
                     const modal = document.getElementById('candidatesHelpModal');
                     const overlay = document.getElementById('candidatesHelpOverlay');
                     const closeBtn = document.getElementById('candidatesHelpClose');
-                    if (modal) modal.classList.remove('hidden');
-                    if (closeBtn) closeBtn.focus();
-                    if (overlay) overlay.onclick = function() { modal.classList.add('hidden'); };
-                    if (closeBtn) closeBtn.onclick = function() { modal.classList.add('hidden'); };
+                    if (modal) {
+                        modal.classList.remove('hidden');
+                    }
+                    if (closeBtn) {
+                        closeBtn.focus();
+                    }
+                    if (overlay) {
+                        overlay.onclick = function() { modal.classList.add('hidden'); };
+                    }
+                    if (closeBtn) {
+                        closeBtn.onclick = function() { modal.classList.add('hidden'); };
+                    }
                 };
             }
 
@@ -693,8 +727,18 @@
                 '</div>';
 
             const detailsHtml = candidateDetails.map(function(c) {
-                return '<div class="example-item" style="opacity: 0.7; margin: 4px 0;">' +
-                    '<strong>' + highlightRegex(c.pattern) + '</strong> — Got ' + c.positiveVotes + ' upvote' + (c.positiveVotes !== 1 ? 's' : '') + ', ' + c.negativeVotes + ' downvote' + (c.negativeVotes !== 1 ? 's' : '') +
+                return '<div class="candidate-item eliminated" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 6px 0; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px;">' +
+                    '<span class="candidate-pattern" style="flex: 1; overflow-x: auto; white-space: nowrap; margin-right: 10px; font-family: monospace;">' + highlightRegex(c.pattern) + '</span>' +
+                    '<div class="candidate-votes" style="display:flex; gap:8px; align-items:center;">' +
+                    '<button class="btn copy" data-pattern="' + encodeURIComponent(c.pattern) + '" onclick="copyRegex(decodeURIComponent(this.getAttribute(\'data-pattern\')))" title="Copy regex">' +
+                    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
+                    '</svg>' +
+                    '</button>' +
+                    '<span class="badge" style="background: #4caf50;">✓ ' + c.positiveVotes + '</span>' +
+                    '<span class="badge" style="background: #f44336;">✗ ' + c.negativeVotes + '</span>' +
+                    '</div>' +
                     '</div>';
             }).join('');
 
@@ -742,14 +786,18 @@
             }
             classifiedWords.clear();
             showSection('prompt');
-            if (statusMessage) statusMessage.innerHTML = '';
+            if (statusMessage) {
+                statusMessage.innerHTML = '';
+            }
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
         }
 
         function handleCancelled(message) {
-            if (statusMessage) statusMessage.innerHTML = '<span>' + (message || 'Operation cancelled') + '</span>';
+            if (statusMessage) {
+                statusMessage.innerHTML = '<span>' + (message || 'Operation cancelled') + '</span>';
+            }
             statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
