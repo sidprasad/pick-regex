@@ -470,7 +470,7 @@ export class RegexAnalyzer {
       // Find the pair of words that provides maximum information gain
       // Best pair is one where the words split candidates as differently as possible
       let best1 = scored[0];
-      let best2 = scored[1] || scored[0];
+      let best2 = scored.length > 1 ? scored[1] : null;
       let maxInfoGain = 0;
       
       for (let i = 0; i < scored.length; i++) {
@@ -489,6 +489,43 @@ export class RegexAnalyzer {
             best2 = scored[j];
           }
         }
+      }
+      
+      // If we only had one scored word, try to generate a second distinct word
+      if (!best2) {
+        // Try to generate an additional word from candidates that's different from best1
+        const allExcluded = [...excludedWords, best1.word];
+        
+        // Try each candidate to find a word that's different from best1
+        for (const regex of candidateRegexes) {
+          try {
+            const additionalWords = this.generateMultipleWords(regex, 10, allExcluded);
+            if (additionalWords.length > 0) {
+              // Score the new words and pick the one most different from best1
+              for (const word of additionalWords) {
+                const matches = regexObjects.map(re => re.test(word));
+                const count = matches.filter(m => m).length;
+                const diff = matches.filter((m, k) => m !== best1.matches[k]).length;
+                
+                if (diff > 0) {
+                  // Found a word with different match pattern
+                  best2 = { word, matches, count };
+                  break;
+                }
+              }
+              if (best2) {
+                break;
+              }
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+      
+      // If we still don't have a second word, throw an error rather than returning duplicates
+      if (!best2) {
+        throw new Error('Could not generate two distinct distinguishing words');
       }
       
       return {
