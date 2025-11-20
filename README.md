@@ -35,6 +35,8 @@ Tips:
 
 PICK uses `@gruhn/regex-utils` for automata-based equivalence and `randexp` for example generation.
 
+**Note**: Some regex patterns (like `\b` word boundaries and lookbehind assertions) cannot be analyzed by automata. When detected, PICK automatically falls back to sampling-based equivalence checking. See [REGEX_SUPPORT.md](REGEX_SUPPORT.md) for details on supported patterns.
+
 ---
 
 ## Settings
