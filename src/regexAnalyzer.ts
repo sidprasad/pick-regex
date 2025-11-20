@@ -11,14 +11,18 @@ async function getRB() {
 /**
  * Check if a regex pattern contains features unsupported by @gruhn/regex-utils
  * These patterns include: word boundaries (\b), lookbehind assertions
+ * 
+ * Note: The regex parameter is a string representation where backslashes are already
+ * escaped once (e.g., "\\b" represents a word boundary in the regex pattern)
  */
 function hasUnsupportedFeatures(regex: string): boolean {
-  // Check for word boundaries
+  // Check for word boundaries (\b in the regex pattern string)
   if (/\\b/.test(regex)) {
     return true;
   }
   
-  // Check for lookbehind assertions (positive (?<=...) or negative (?<!...))
+  // Check for lookbehind assertions: (?<=...) for positive or (?<!...) for negative
+  // The pattern matches the literal characters: ( ? < followed by = or !
   if (/\(\?<[!=]/.test(regex)) {
     return true;
   }
@@ -29,6 +33,10 @@ function hasUnsupportedFeatures(regex: string): boolean {
 /**
  * Sampling-based relationship analysis for patterns with unsupported features
  * Uses statistical sampling to estimate relationships between regexes
+ * 
+ * @param regexA First regex pattern
+ * @param regexB Second regex pattern  
+ * @param sampleSize Target number of samples to generate per regex (max 100)
  */
 async function analyzeRelationshipBySampling(
   regexA: string,
@@ -38,6 +46,9 @@ async function analyzeRelationshipBySampling(
   const reA = new RegExp(`^${regexA}$`);
   const reB = new RegExp(`^${regexB}$`);
   
+  // Limit sample size to avoid excessive generation time
+  const maxSamples = Math.min(sampleSize, 100);
+  
   // Generate samples from both regexes
   const samplesA: string[] = [];
   const samplesB: string[] = [];
@@ -45,7 +56,7 @@ async function analyzeRelationshipBySampling(
   try {
     const randexpA = new RandExp(regexA);
     randexpA.max = 10;
-    for (let i = 0; i < sampleSize && i < 100; i++) {
+    for (let i = 0; i < maxSamples; i++) {
       try {
         samplesA.push(randexpA.gen());
       } catch {
@@ -59,7 +70,7 @@ async function analyzeRelationshipBySampling(
   try {
     const randexpB = new RandExp(regexB);
     randexpB.max = 10;
-    for (let i = 0; i < sampleSize && i < 100; i++) {
+    for (let i = 0; i < maxSamples; i++) {
       try {
         samplesB.push(randexpB.gen());
       } catch {

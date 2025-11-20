@@ -743,7 +743,9 @@ suite('RegexAnalyzer Test Suite', () => {
       const result = analyzer.generateWord(regex);
       
       assert.ok(result.word);
-      // Note: randexp generates the lookahead match, but doesn't include the lookahead itself
+      // Lookahead is a zero-width assertion - randexp generates matching words
+      // The word itself should match the \w+ part
+      assert.ok(/^\w+$/.test(result.word));
     });
 
     test('Should handle negative lookahead in generateWord', () => {
