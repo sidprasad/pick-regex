@@ -33,7 +33,7 @@ Tips:
 4. PICK shows example strings; your IN/OUT judgments eliminate incompatible candidates.
 5. The process stops when one candidate remains or none do.
 
-PICK uses `@gruhn/regex-utils` for automata-based equivalence and `randexp` for example generation.
+PICK uses a hybrid approach combining `@gruhn/regex-utils` for automata-based equivalence (when supported) and `randexp` for example generation. For regex patterns with word boundaries (`\b`) or lookbehind assertions, PICK automatically falls back to sampling-based analysis to ensure broad pattern support.
 
 ---
 
