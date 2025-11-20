@@ -1,4 +1,5 @@
 import RandExp from 'randexp';
+import { logger } from './logger';
 
 /**
  * Lazy load the ES module
@@ -289,6 +290,19 @@ export class RegexAnalyzer {
   }
 
   /**
+   * Check if a regex pattern is valid JavaScript regex syntax
+   */
+  isValidRegex(pattern: string): boolean {
+    try {
+      new RegExp(`^${pattern}$`);
+      return true;
+    } catch (e) {
+      logger.warn(`Invalid regex pattern: ${pattern} because ${e}`);
+      return false;
+    }
+  }
+
+  /**
    * Verify match
    */
   verifyMatch(word: string, regex: string): boolean {
@@ -296,6 +310,105 @@ export class RegexAnalyzer {
       return new RegExp(`^${regex}$`).test(word);
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Deep sampling-based equivalence test for when automata analysis fails
+   * Returns true if regexes appear equivalent based on extensive sampling
+   */
+  deepSamplingEquivalenceCheck(regexA: string, regexB: string): boolean {
+    try {
+      // First check if both regexes are valid
+      if (!this.isValidRegex(regexA) || !this.isValidRegex(regexB)) {
+        return false; // Invalid regexes are never equivalent
+      }
+
+      const reA = new RegExp(`^${regexA}$`);
+      const reB = new RegExp(`^${regexB}$`);
+      
+      // Generate more samples from both regexes
+      const samplesA = this.generateMultipleWords(regexA, 50);
+      const samplesB = this.generateMultipleWords(regexB, 50);
+      
+      // Check if A ⊆ B (all samples from A match B)
+      for (const word of samplesA) {
+        if (!reB.test(word)) {
+          return false;
+        }
+      }
+      
+      // Check if B ⊆ A (all samples from B match A)
+      for (const word of samplesB) {
+        if (!reA.test(word)) {
+          return false;
+        }
+      }
+      
+      // Also test common test cases that might reveal differences
+      const testWords = [
+        '', ' ', '  ', '\n', '\t',
+        'a', 'A', 'aa', 'aaa',
+        'b', 'ab', 'ba', 'aba',
+        '1', '12', '123',
+        'test', 'TEST', 'Test',
+        '!', '@', '#', '$',
+        'a1', '1a', 'a1b',
+        ...samplesA, ...samplesB
+      ];
+      
+      for (const word of testWords) {
+        const matchA = reA.test(word);
+        const matchB = reB.test(word);
+        if (matchA !== matchB) {
+          return false;
+        }
+      }
+      
+      // Passed all tests - likely equivalent
+      return true;
+    } catch (error) {
+      // On error, assume not equivalent (conservative)
+      return false;
+    }
+  }
+
+  /**
+   * Lightweight heuristic check: sample strings and compare
+   * Returns true if regexes MIGHT be equivalent (need full analysis)
+   * Returns false if definitely different (skip expensive analysis)
+   */
+  quickSampleCheck(regexA: string, regexB: string, sampleCount = 20): boolean {
+    try {
+      // Check if both regexes are valid
+      if (!this.isValidRegex(regexA) || !this.isValidRegex(regexB)) {
+        return false; // Invalid regexes are not equivalent
+      }
+
+      const reA = new RegExp(`^${regexA}$`);
+      const reB = new RegExp(`^${regexB}$`);
+      
+      // Generate samples from A and check if B accepts them all
+      const samplesA = this.generateMultipleWords(regexA, sampleCount);
+      for (const word of samplesA) {
+        if (!reB.test(word)) {
+          return false; // Found a word in A but not B - definitely not equivalent
+        }
+      }
+      
+      // Generate samples from B and check if A accepts them all
+      const samplesB = this.generateMultipleWords(regexB, sampleCount);
+      for (const word of samplesB) {
+        if (!reA.test(word)) {
+          return false; // Found a word in B but not A - definitely not equivalent
+        }
+      }
+      
+      // All samples matched both ways - might be equivalent (need full check)
+      return true;
+    } catch (error) {
+      // On error, assume might be equivalent (do full analysis)
+      return true;
     }
   }
 

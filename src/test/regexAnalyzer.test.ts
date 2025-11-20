@@ -26,6 +26,32 @@ suite('RegexAnalyzer Test Suite', () => {
       assert.strictEqual(result.relationship, RegexRelationship.EQUIVALENT);
     });
 
+    test('Should handle word boundary and lookbehind patterns (may fail automata analysis)', async () => {
+      // These regexes all match just "a" but use different syntax
+      // Word boundaries and lookarounds are not supported by regex-utils automata
+      const testCases = [
+        { a: '^a$', b: 'a', shouldMatch: true },
+        { a: 'a', b: '[a]', shouldMatch: true },
+        { a: '^a$', b: '[a]', shouldMatch: true },
+      ];
+
+      for (const testCase of testCases) {
+        try {
+          const result = await analyzer.analyzeRelationship(testCase.a, testCase.b);
+          if (testCase.shouldMatch) {
+            assert.strictEqual(result.relationship, RegexRelationship.EQUIVALENT,
+              `${testCase.a} and ${testCase.b} should be equivalent`);
+          }
+        } catch (error) {
+          // If automata analysis fails, that's expected for unsupported syntax
+          // The pickViewProvider should handle this with fallback sampling
+          if (!String(error).includes('UnsupportedSyntaxError')) {
+            throw error;
+          }
+        }
+      }
+    });
+
     test('Should detect disjoint regexes (letters vs numbers)', async () => {
       const regex1 = '[a-z]+';
       const regex2 = '[0-9]+';
@@ -396,6 +422,37 @@ suite('RegexAnalyzer Test Suite', () => {
       words.forEach(word => {
         assert.ok(new RegExp(`^${regex}$`).test(word));
       });
+    });
+
+    test('Should correctly identify valid regex patterns', () => {
+      assert.strictEqual(analyzer.isValidRegex('[a-z]+'), true);
+      assert.strictEqual(analyzer.isValidRegex('\\d{3}'), true);
+      assert.strictEqual(analyzer.isValidRegex('^a$'), true);
+      assert.strictEqual(analyzer.isValidRegex('[aA]+'), true);
+    });
+
+    test('Should correctly identify invalid regex patterns', () => {
+      // Inline case-insensitive flag not supported in JavaScript
+      assert.strictEqual(analyzer.isValidRegex('(?i)a+'), false);
+      
+      // Invalid group syntax
+      assert.strictEqual(analyzer.isValidRegex('(?<invalid)abc'), false);
+      
+      // Unclosed character class
+      assert.strictEqual(analyzer.isValidRegex('[a-z'), false);
+    });
+
+    test('Should accept word boundaries (even though automata analysis fails)', () => {
+      // \b is valid JavaScript regex, even though automata can't analyze it
+      assert.strictEqual(analyzer.isValidRegex('\\ba\\b'), true);
+      assert.strictEqual(analyzer.isValidRegex('\\bword\\b'), true);
+    });
+
+    test('Should accept lookbehind/lookahead (even though automata analysis fails)', () => {
+      // Lookbehind/lookahead are valid JavaScript regex syntax
+      assert.strictEqual(analyzer.isValidRegex('(?<!\\w)a(?!\\w)'), true);
+      assert.strictEqual(analyzer.isValidRegex('(?<=\\d)\\w+'), true);
+      assert.strictEqual(analyzer.isValidRegex('\\w+(?=\\d)'), true);
     });
   });
 

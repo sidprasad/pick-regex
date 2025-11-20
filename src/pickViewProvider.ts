@@ -129,9 +129,30 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Filter out invalid regexes first
+      const validCandidates = candidates.filter(regex => {
+        const isValid = this.analyzer.isValidRegex(regex);
+        if (!isValid) {
+          logger.warn(`Filtered out invalid regex: "${regex}"`);
+        }
+        return isValid;
+      });
+
+      if (validCandidates.length === 0) {
+        this.sendMessage({ 
+          type: 'error', 
+          message: 'All generated regexes contain invalid JavaScript syntax. Please try again.' 
+        });
+        return;
+      }
+
+      if (validCandidates.length < candidates.length) {
+        logger.info(`Filtered out ${candidates.length - validCandidates.length} invalid regex(es)`);
+      }
+
       // Filter out equivalent/duplicate regexes
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
-      const uniqueCandidates = await this.filterEquivalentRegexes(candidates);
+      const uniqueCandidates = await this.filterEquivalentRegexes(validCandidates);
       
       // Check cancellation after filtering
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -478,9 +499,30 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Filter out invalid regexes first
+      const validCandidates = candidates.filter(regex => {
+        const isValid = this.analyzer.isValidRegex(regex);
+        if (!isValid) {
+          logger.warn(`Filtered out invalid regex: "${regex}"`);
+        }
+        return isValid;
+      });
+
+      if (validCandidates.length === 0) {
+        this.sendMessage({ 
+          type: 'error', 
+          message: 'All generated regexes contain invalid JavaScript syntax. Please try again.' 
+        });
+        return;
+      }
+
+      if (validCandidates.length < candidates.length) {
+        logger.info(`Filtered out ${candidates.length - validCandidates.length} invalid regex(es)`);
+      }
+
       // Filter out equivalent/duplicate regexes
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
-      const uniqueCandidates = await this.filterEquivalentRegexes(candidates);
+      const uniqueCandidates = await this.filterEquivalentRegexes(validCandidates);
       
       // Check cancellation after filtering
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -586,40 +628,6 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Lightweight heuristic check: sample strings and compare
-   * Returns true if regexes MIGHT be equivalent (need full analysis)
-   * Returns false if definitely different (skip expensive analysis)
-   */
-  private quickSampleCheck(regexA: string, regexB: string, sampleCount = 20): boolean {
-    try {
-      const reA = new RegExp(`^${regexA}$`);
-      const reB = new RegExp(`^${regexB}$`);
-      
-      // Generate samples from A and check if B accepts them all
-      const samplesA = this.analyzer.generateMultipleWords(regexA, sampleCount);
-      for (const word of samplesA) {
-        if (!reB.test(word)) {
-          return false; // Found a word in A but not B - definitely not equivalent
-        }
-      }
-      
-      // Generate samples from B and check if A accepts them all
-      const samplesB = this.analyzer.generateMultipleWords(regexB, sampleCount);
-      for (const word of samplesB) {
-        if (!reA.test(word)) {
-          return false; // Found a word in B but not A - definitely not equivalent
-        }
-      }
-      
-      // All samples matched both ways - might be equivalent (need full check)
-      return true;
-    } catch (error) {
-      // On error, assume might be equivalent (do full analysis)
-      return true;
-    }
-  }
-
-  /**
    * Timeout wrapper with cancellation and caching
    */
   private async analyzeWithTimeout(a: string, b: string, timeoutMs = 5000): Promise<any> {
@@ -679,6 +687,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
     // PASS 2: Semantic equivalence using sampling + automata analysis
     const unique: string[] = [];
+    let automataAnalysisFailures = 0;
     
     for (let i = 0; i < exactUnique.length; i++) {
       const regex = exactUnique[i];
@@ -697,7 +706,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         }
         
         // Quick sample-based check first (cheap)
-        const mightBeEquivalent = this.quickSampleCheck(regex, uniqueRegex, 15);
+        const mightBeEquivalent = this.analyzer.quickSampleCheck(regex, uniqueRegex, 15);
         if (!mightBeEquivalent) {
           // Samples proved they're different - skip expensive analysis
           logger.info(`Quick check: "${regex}" and "${uniqueRegex}" are different`);
@@ -719,8 +728,22 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           if (errMsg.includes('cancelled')) {
             throw error; // Re-throw cancellation
           }
-          // Timeout or analysis failure - log and conservatively keep both
+          
+          // Automata analysis failed (unsupported syntax like \b or lookbehind)
+          // Fall back to deep sampling-based equivalence test
           logger.warn(`Analysis failed for "${regex}" vs "${uniqueRegex}": ${error}`);
+          logger.info(`Attempting deep sampling equivalence check...`);
+          
+          automataAnalysisFailures++;
+          
+          const samplingResult = this.analyzer.deepSamplingEquivalenceCheck(regex, uniqueRegex);
+          if (samplingResult) {
+            logger.info(`Deep sampling suggests equivalent: "${regex}" === "${uniqueRegex}"`);
+            isEquivalent = true;
+            break;
+          } else {
+            logger.info(`Deep sampling suggests different: "${regex}" vs "${uniqueRegex}"`);
+          }
         }
       }
       
@@ -728,6 +751,13 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         unique.push(regex);
         logger.info(`Keeping unique regex: "${regex}" (${unique.length} total)`);
       }
+    }
+    
+    // Show warning if automata analysis failed for some regexes
+    if (automataAnalysisFailures > 0) {
+      const message = `Some regex patterns (${automataAnalysisFailures}) contain unsupported syntax (e.g., word boundaries \\b or lookbehind assertions). Used sampling-based equivalence checking as fallback.`;
+      logger.warn(message);
+      void vscode.window.showWarningMessage(`PICK: ${message}`);
     }
     
     logger.info(`Final: ${unique.length}/${regexes.length} semantically unique regexes`);
@@ -755,7 +785,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       // In test environments the media file may not be available. Return a minimal
       // HTML fallback so unit tests that instantiate the view provider don't fail
       // with ENOENT. This keeps production behavior unchanged when the file exists.
-      logger.warn(`Could not read webview HTML at ${htmlPath}: ${err}`);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      logger.warn(`Could not read webview HTML at ${htmlPath}: ${errorMessage}`);
       return `<!doctype html><html><body><div id="pick-root"></div><script>const vscode = acquireVsCodeApi();</script></body></html>`;
     }
   }
