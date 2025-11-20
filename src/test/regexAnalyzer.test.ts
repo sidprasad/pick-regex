@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { createRegexAnalyzer, RegexRelationship } from '../regexAnalyzer';
+import { createRegexAnalyzer, RegexRelationship, checkAutomataSupport } from '../regexAnalyzer';
 
 suite('RegexAnalyzer Test Suite', () => {
   let analyzer: ReturnType<typeof createRegexAnalyzer>;
@@ -739,6 +739,59 @@ suite('RegexAnalyzer Test Suite', () => {
         const hasDifference = matches1.some((m, i) => m !== matches2[i]);
         assert.ok(hasDifference, 'Words should have different match patterns');
       });
+    });
+  });
+
+  suite('checkAutomataSupport', () => {
+    test('Should detect word boundary as unsupported', () => {
+      const result = checkAutomataSupport('\\ba\\b');
+      assert.strictEqual(result.isSupported, false);
+      assert.ok(result.unsupportedFeatures.includes('word boundary (\\b)'));
+      assert.ok(result.suggestion);
+    });
+
+    test('Should detect lookbehind as unsupported', () => {
+      const result = checkAutomataSupport('(?<=a)b');
+      assert.strictEqual(result.isSupported, false);
+      assert.ok(result.unsupportedFeatures.includes('lookbehind assertion'));
+    });
+
+    test('Should detect negative lookbehind as unsupported', () => {
+      const result = checkAutomataSupport('(?<!a)b');
+      assert.strictEqual(result.isSupported, false);
+      assert.ok(result.unsupportedFeatures.includes('lookbehind assertion'));
+    });
+
+    test('Should detect backreferences as unsupported', () => {
+      const result = checkAutomataSupport('(a)\\1');
+      assert.strictEqual(result.isSupported, false);
+      assert.ok(result.unsupportedFeatures.includes('backreferences'));
+    });
+
+    test('Should accept simple patterns', () => {
+      const result = checkAutomataSupport('[a-z]+');
+      assert.strictEqual(result.isSupported, true);
+      assert.strictEqual(result.unsupportedFeatures.length, 0);
+    });
+
+    test('Should accept patterns with \\w', () => {
+      const result = checkAutomataSupport('\\w+');
+      assert.strictEqual(result.isSupported, true);
+      assert.strictEqual(result.unsupportedFeatures.length, 0);
+    });
+
+    test('Should accept patterns with lookahead', () => {
+      const result = checkAutomataSupport('a(?=b)');
+      assert.strictEqual(result.isSupported, true);
+      assert.strictEqual(result.unsupportedFeatures.length, 0);
+    });
+
+    test('Should detect multiple unsupported features', () => {
+      const result = checkAutomataSupport('\\b(a)\\1(?<=b)');
+      assert.strictEqual(result.isSupported, false);
+      assert.ok(result.unsupportedFeatures.includes('word boundary (\\b)'));
+      assert.ok(result.unsupportedFeatures.includes('backreferences'));
+      assert.ok(result.unsupportedFeatures.includes('lookbehind assertion'));
     });
   });
 });

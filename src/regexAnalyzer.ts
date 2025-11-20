@@ -55,6 +55,46 @@ export interface TwoDistinguishingWordsResult {
 }
 
 /**
+ * Check if a regex pattern contains unsupported features for automata analysis
+ * Returns { isSupported, unsupportedFeatures, suggestion }
+ */
+export function checkAutomataSupport(regex: string): {
+  isSupported: boolean;
+  unsupportedFeatures: string[];
+  suggestion?: string;
+} {
+  const unsupportedFeatures: string[] = [];
+  
+  // Check for word boundaries \b
+  if (/\\b/i.test(regex)) {
+    unsupportedFeatures.push('word boundary (\\b)');
+  }
+  
+  // Check for lookbehind assertions (?<= or (?<!
+  if (/\(\?<[=!]/.test(regex)) {
+    unsupportedFeatures.push('lookbehind assertion');
+  }
+  
+  // Check for backreferences
+  if (/\\[1-9]/.test(regex)) {
+    unsupportedFeatures.push('backreferences');
+  }
+  
+  let suggestion = '';
+  if (unsupportedFeatures.length > 0) {
+    if (unsupportedFeatures.includes('word boundary (\\b)')) {
+      suggestion = 'Consider using explicit character classes like [a-zA-Z0-9_] instead of \\w with anchors ^ and $ for boundaries';
+    }
+  }
+  
+  return {
+    isSupported: unsupportedFeatures.length === 0,
+    unsupportedFeatures,
+    suggestion
+  };
+}
+
+/**
  * RegexAnalyzer using automata theory (randexp + regex-utils)
  */
 export class RegexAnalyzer {
@@ -88,6 +128,24 @@ export class RegexAnalyzer {
    */
   async analyzeRelationship(regexA: string, regexB: string): Promise<RelationshipResult> {
     try {
+      // Check for unsupported features
+      const supportA = checkAutomataSupport(regexA);
+      const supportB = checkAutomataSupport(regexB);
+      
+      if (!supportA.isSupported) {
+        logger.info(`Pattern A "${regexA}" contains unsupported features: ${supportA.unsupportedFeatures.join(', ')}`);
+        if (supportA.suggestion) {
+          logger.info(`Suggestion: ${supportA.suggestion}`);
+        }
+      }
+      
+      if (!supportB.isSupported) {
+        logger.info(`Pattern B "${regexB}" contains unsupported features: ${supportB.unsupportedFeatures.join(', ')}`);
+        if (supportB.suggestion) {
+          logger.info(`Suggestion: ${supportB.suggestion}`);
+        }
+      }
+      
       const RB = await getRB();
       const rbA = RB(new RegExp(`^${regexA}$`));
       const rbB = RB(new RegExp(`^${regexB}$`));
