@@ -97,32 +97,79 @@ export class RegexAnalyzer {
       const bSubsetA = rbB.isSubsetOf(new RegExp(`^${regexA}$`));
       const isDisjoint = rbA.isDisjointFrom(new RegExp(`^${regexB}$`));
       
-      // Collect examples
-      const samplesA: string[] = [];
-      const samplesB: string[] = [];
+      // Collect examples using set operations for accuracy
+      const inBoth: string[] = [];
+      const onlyInA: string[] = [];
+      const onlyInB: string[] = [];
       
-      const genA = rbA.sample();
-      for (let i = 0; i < 5; i++) {
-        const next = genA.next();
-        if (!next.done) {
-          samplesA.push(next.value);
+      // Get intersection (A ∩ B) - words in both
+      try {
+        const intersection = rbA.and(new RegExp(`^${regexB}$`));
+        const genIntersection = intersection.sample();
+        for (let i = 0; i < 5; i++) {
+          const next = genIntersection.next();
+          if (!next.done) {
+            inBoth.push(next.value);
+          }
+        }
+      } catch {
+        // Intersection might fail, try fallback
+        const genA = rbA.sample();
+        const reB = new RegExp(`^${regexB}$`);
+        for (let i = 0; i < 10; i++) {
+          const next = genA.next();
+          if (!next.done && reB.test(next.value)) {
+            inBoth.push(next.value);
+            if (inBoth.length >= 5) {break;}
+          }
         }
       }
       
-      const genB = rbB.sample();
-      for (let i = 0; i < 5; i++) {
-        const next = genB.next();
-        if (!next.done) {
-          samplesB.push(next.value);
+      // Get words only in A (A - B)
+      try {
+        const onlyInASet = rbA.without(new RegExp(`^${regexB}$`));
+        const genOnlyA = onlyInASet.sample();
+        for (let i = 0; i < 5; i++) {
+          const next = genOnlyA.next();
+          if (!next.done) {
+            onlyInA.push(next.value);
+          }
+        }
+      } catch {
+        // Set difference might fail, try fallback
+        const genA = rbA.sample();
+        const reB = new RegExp(`^${regexB}$`);
+        for (let i = 0; i < 20; i++) {
+          const next = genA.next();
+          if (!next.done && !reB.test(next.value)) {
+            onlyInA.push(next.value);
+            if (onlyInA.length >= 5) {break;}
+          }
         }
       }
       
-      const reA = new RegExp(`^${regexA}$`);
-      const reB = new RegExp(`^${regexB}$`);
-      
-      const inBoth = samplesA.filter(w => reB.test(w)).slice(0, 3);
-      const onlyInA = samplesA.filter(w => !reB.test(w)).slice(0, 3);
-      const onlyInB = samplesB.filter(w => !reA.test(w)).slice(0, 3);
+      // Get words only in B (B - A)
+      try {
+        const onlyInBSet = rbB.without(new RegExp(`^${regexA}$`));
+        const genOnlyB = onlyInBSet.sample();
+        for (let i = 0; i < 5; i++) {
+          const next = genOnlyB.next();
+          if (!next.done) {
+            onlyInB.push(next.value);
+          }
+        }
+      } catch {
+        // Set difference might fail, try fallback
+        const genB = rbB.sample();
+        const reA = new RegExp(`^${regexA}$`);
+        for (let i = 0; i < 20; i++) {
+          const next = genB.next();
+          if (!next.done && !reA.test(next.value)) {
+            onlyInB.push(next.value);
+            if (onlyInB.length >= 5) {break;}
+          }
+        }
+      }
       
       let relationship: RegexRelationship;
       let explanation: string;
@@ -147,7 +194,11 @@ export class RegexAnalyzer {
       return {
         relationship,
         explanation,
-        examples: { inBoth, onlyInA, onlyInB }
+        examples: { 
+          inBoth: inBoth.slice(0, 3), 
+          onlyInA: onlyInA.slice(0, 3), 
+          onlyInB: onlyInB.slice(0, 3) 
+        }
       };
     } catch (error) {
       throw new Error(`Failed to analyze: ${error}`);
@@ -318,10 +369,9 @@ export class RegexAnalyzer {
   /**
    * Generate two distinguishing words from candidates
    * 
-   * Uses a multi-strategy approach:
-   * 1. Try to sample from set differences (words unique to each regex)
-   * 2. Generate more samples per regex for better coverage
-   * 3. Find the two words with maximum distinguishing power
+   * Uses automata analysis to find words that maximally distinguish between candidates.
+   * Each word pair is chosen to provide maximum information gain by splitting the
+   * candidate set as evenly as possible.
    */
   async generateTwoDistinguishingWords(
     candidateRegexes: string[],
@@ -347,80 +397,94 @@ export class RegexAnalyzer {
     }
 
     try {
-      const RB = await getRB();
       const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
       
-      // Strategy 1: Try to get words from pairwise set differences
-      // This directly finds words that distinguish between pairs of regexes
-      const allWords: string[] = [];
+      // Use automata analysis to find distinguishing examples between pairs
+      // Collect candidate words from pairwise differences
+      const candidateWords: string[] = [];
+      
+      // Analyze relationships between all pairs of regexes to find distinguishing words
       for (let i = 0; i < candidateRegexes.length && i < 3; i++) {
         for (let j = i + 1; j < candidateRegexes.length && j < 3; j++) {
           try {
-            const rb1 = RB(new RegExp(`^${candidateRegexes[i]}$`));
-            const rb2 = RB(new RegExp(`^${candidateRegexes[j]}$`));
+            // Use analyzeRelationship which deterministically finds distinguishing examples
+            const analysis = await this.analyzeRelationship(
+              candidateRegexes[i],
+              candidateRegexes[j]
+            );
             
-            // Get words only in regex i (i - j)
-            const onlyInI = rb1.without(new RegExp(`^${candidateRegexes[j]}$`));
-            const genI = onlyInI.sample();
-            for (let k = 0; k < 10; k++) {
-              const next = genI.next();
-              if (!next.done && !excludedWords.includes(next.value)) {
-                allWords.push(next.value);
+            // Add words that are only in one regex (these are guaranteed to distinguish)
+            if (analysis.examples) {
+              if (analysis.examples.onlyInA) {
+                candidateWords.push(...analysis.examples.onlyInA);
               }
-            }
-            
-            // Get words only in regex j (j - i)
-            const onlyInJ = rb2.without(new RegExp(`^${candidateRegexes[i]}$`));
-            const genJ = onlyInJ.sample();
-            for (let k = 0; k < 10; k++) {
-              const next = genJ.next();
-              if (!next.done && !excludedWords.includes(next.value)) {
-                allWords.push(next.value);
+              if (analysis.examples.onlyInB) {
+                candidateWords.push(...analysis.examples.onlyInB);
+              }
+              if (analysis.examples.inBoth) {
+                candidateWords.push(...analysis.examples.inBoth);
               }
             }
           } catch {
-            // Set difference might fail for complex regexes, continue
+            // Analysis might fail for complex regexes, continue
             continue;
           }
         }
       }
       
-      // Strategy 2: Generate more samples from each regex (increased from 5 to 20)
-      for (const regex of candidateRegexes) {
-        try {
-          const words = this.generateMultipleWords(regex, 20, excludedWords);
-          allWords.push(...words);
-        } catch {
-          continue;
+      // Remove duplicates and excluded words
+      const unique = Array.from(new Set(candidateWords))
+        .filter(w => !excludedWords.includes(w));
+      
+      // If we don't have enough words from automata analysis, supplement with sampling
+      if (unique.length < 10) {
+        for (const regex of candidateRegexes) {
+          try {
+            const words = this.generateMultipleWords(regex, 5, excludedWords);
+            unique.push(...words);
+          } catch {
+            continue;
+          }
         }
       }
       
-      // Remove duplicates and excluded
-      const unique = Array.from(new Set(allWords))
-        .filter(w => !excludedWords.includes(w));
-      
-      // Find two words with max different match vectors
+      // Score each word by how it splits the candidate set
       interface Scored {
         word: string;
         matches: boolean[];
         count: number;
       }
       
-      const scored: Scored[] = unique.map(word => {
-        const matches = regexObjects.map(re => re.test(word));
-        const count = matches.filter(m => m).length;
-        return { word, matches, count };
-      });
+      const scored: Scored[] = Array.from(new Set(unique))
+        .filter(w => !excludedWords.includes(w))
+        .map(word => {
+          const matches = regexObjects.map(re => re.test(word));
+          const count = matches.filter(m => m).length;
+          return { word, matches, count };
+        });
       
+      if (scored.length === 0) {
+        throw new Error('Could not generate any candidate words');
+      }
+      
+      // Find the pair of words that provides maximum information gain
+      // Best pair is one where the words split candidates as differently as possible
       let best1 = scored[0];
       let best2 = scored[1] || scored[0];
-      let maxDiff = 0;
+      let maxInfoGain = 0;
       
       for (let i = 0; i < scored.length; i++) {
         for (let j = i + 1; j < scored.length; j++) {
+          // Calculate how differently these words split the candidates
           const diff = scored[i].matches.filter((m, k) => m !== scored[j].matches[k]).length;
-          if (diff > maxDiff) {
-            maxDiff = diff;
+          
+          // Prefer pairs where both words are informative (not all or none)
+          const balance1 = Math.min(scored[i].count, candidateRegexes.length - scored[i].count);
+          const balance2 = Math.min(scored[j].count, candidateRegexes.length - scored[j].count);
+          const infoGain = diff * (balance1 + balance2);
+          
+          if (infoGain > maxInfoGain) {
+            maxInfoGain = infoGain;
             best1 = scored[i];
             best2 = scored[j];
           }
@@ -429,7 +493,7 @@ export class RegexAnalyzer {
       
       return {
         words: [best1.word, best2.word],
-        explanation: `Max distinguishing power (diff: ${maxDiff})`,
+        explanation: `Maximally distinguishing pair (info gain: ${maxInfoGain})`,
         properties: [
           `Matches ${best1.count}/${candidateRegexes.length}`,
           `Matches ${best2.count}/${candidateRegexes.length}`
