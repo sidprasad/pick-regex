@@ -9,6 +9,126 @@ async function getRB() {
 }
 
 /**
+ * Check if a regex pattern contains features unsupported by @gruhn/regex-utils
+ * These patterns include: word boundaries (\b), lookbehind assertions
+ */
+function hasUnsupportedFeatures(regex: string): boolean {
+  // Check for word boundaries
+  if (/\\b/.test(regex)) {
+    return true;
+  }
+  
+  // Check for lookbehind assertions (positive (?<=...) or negative (?<!...))
+  if (/\(\?<[!=]/.test(regex)) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Sampling-based relationship analysis for patterns with unsupported features
+ * Uses statistical sampling to estimate relationships between regexes
+ */
+async function analyzeRelationshipBySampling(
+  regexA: string,
+  regexB: string,
+  sampleSize = 200
+): Promise<RelationshipResult> {
+  const reA = new RegExp(`^${regexA}$`);
+  const reB = new RegExp(`^${regexB}$`);
+  
+  // Generate samples from both regexes
+  const samplesA: string[] = [];
+  const samplesB: string[] = [];
+  
+  try {
+    const randexpA = new RandExp(regexA);
+    randexpA.max = 10;
+    for (let i = 0; i < sampleSize && i < 100; i++) {
+      try {
+        samplesA.push(randexpA.gen());
+      } catch {
+        break;
+      }
+    }
+  } catch {
+    // If generation fails, we can't do sampling-based analysis
+  }
+  
+  try {
+    const randexpB = new RandExp(regexB);
+    randexpB.max = 10;
+    for (let i = 0; i < sampleSize && i < 100; i++) {
+      try {
+        samplesB.push(randexpB.gen());
+      } catch {
+        break;
+      }
+    }
+  } catch {
+    // If generation fails, we can't do sampling-based analysis
+  }
+  
+  // Categorize samples
+  const inBoth: string[] = [];
+  const onlyInA: string[] = [];
+  const onlyInB: string[] = [];
+  
+  // Check samples from A
+  for (const sample of samplesA) {
+    if (reB.test(sample)) {
+      inBoth.push(sample);
+    } else {
+      onlyInA.push(sample);
+    }
+  }
+  
+  // Check samples from B
+  for (const sample of samplesB) {
+    if (!reA.test(sample)) {
+      onlyInB.push(sample);
+    } else if (!inBoth.includes(sample)) {
+      inBoth.push(sample);
+    }
+  }
+  
+  // Determine relationship based on samples
+  let relationship: RegexRelationship;
+  let explanation: string;
+  
+  const allAMatchB = samplesA.length > 0 && onlyInA.length === 0;
+  const allBMatchA = samplesB.length > 0 && onlyInB.length === 0;
+  
+  if (allAMatchB && allBMatchA && samplesA.length > 0 && samplesB.length > 0) {
+    relationship = RegexRelationship.EQUIVALENT;
+    explanation = 'Regexes appear equivalent (all samples match both patterns)';
+  } else if (allAMatchB && samplesA.length > 0) {
+    relationship = RegexRelationship.A_IN_B;
+    explanation = 'A appears to be a subset of B (all A samples match B)';
+  } else if (allBMatchA && samplesB.length > 0) {
+    relationship = RegexRelationship.B_IN_A;
+    explanation = 'B appears to be a subset of A (all B samples match A)';
+  } else if (inBoth.length === 0) {
+    relationship = RegexRelationship.DISJOINT;
+    explanation = 'Regexes appear disjoint (no common samples found)';
+  } else {
+    relationship = RegexRelationship.INTERSECTING;
+    explanation = 'Regexes intersect but neither is a subset (based on sampling)';
+  }
+  
+  return {
+    relationship,
+    explanation: explanation + ' [sampling-based analysis]',
+    examples: {
+      inBoth: inBoth.slice(0, 3),
+      onlyInA: onlyInA.slice(0, 3),
+      onlyInB: onlyInB.slice(0, 3)
+    }
+  };
+}
+
+/**
  * Represents the relationship between two regular expressions
  */
 export enum RegexRelationship {
@@ -86,6 +206,11 @@ export class RegexAnalyzer {
    * 2. Analyze relationship between two regexes using automata
    */
   async analyzeRelationship(regexA: string, regexB: string): Promise<RelationshipResult> {
+    // Check if either regex has unsupported features
+    if (hasUnsupportedFeatures(regexA) || hasUnsupportedFeatures(regexB)) {
+      return analyzeRelationshipBySampling(regexA, regexB);
+    }
+    
     try {
       const RB = await getRB();
       const rbA = RB(new RegExp(`^${regexA}$`));
@@ -201,7 +326,8 @@ export class RegexAnalyzer {
         }
       };
     } catch (error) {
-      throw new Error(`Failed to analyze: ${error}`);
+      // If automata-based analysis fails, fall back to sampling
+      return analyzeRelationshipBySampling(regexA, regexB);
     }
   }
 
@@ -209,19 +335,21 @@ export class RegexAnalyzer {
    * 3. Generate a word IN and a word NOT IN a regex
    */
   async generateWordPair(regex: string, excludedWords: string[] = []): Promise<WordPairResult> {
-    try {
-      const RB = await getRB();
-      const re = new RegExp(`^${regex}$`);
-      
-      // Word that matches
-      const wordIn = this.generateWord(regex, excludedWords).word;
-      
-      // Word that doesn't match (using complement)
-      const rb = RB(new RegExp(`^${regex}$`));
-      const complement = rb.not();
-      
-      let wordNotIn = '';
+    const re = new RegExp(`^${regex}$`);
+    
+    // Word that matches
+    const wordIn = this.generateWord(regex, excludedWords).word;
+    
+    // Word that doesn't match
+    let wordNotIn = '';
+    
+    // If regex has unsupported features, use mutation strategies only
+    if (!hasUnsupportedFeatures(regex)) {
       try {
+        const RB = await getRB();
+        const rb = RB(new RegExp(`^${regex}$`));
+        const complement = rb.not();
+        
         // Try to generate from complement
         const gen = complement.sample();
         for (let i = 0; i < 10; i++) {
@@ -235,35 +363,37 @@ export class RegexAnalyzer {
           }
         }
       } catch {
-        // Fallback: simple mutations
-        const strategies = [
-          () => wordIn + 'X',
-          () => 'X' + wordIn,
-          () => wordIn.slice(0, -1),
-          () => wordIn.toUpperCase() !== wordIn ? wordIn.toUpperCase() : wordIn.toLowerCase(),
-        ];
-        
-        for (const strategy of strategies) {
-          const candidate = strategy();
-          if (!re.test(candidate) && !excludedWords.includes(candidate)) {
-            wordNotIn = candidate;
-            break;
-          }
+        // Complement generation failed, will use fallback
+      }
+    }
+    
+    // Fallback: simple mutations
+    if (!wordNotIn) {
+      const strategies = [
+        () => wordIn + 'X',
+        () => 'X' + wordIn,
+        () => wordIn.slice(0, -1),
+        () => wordIn.toUpperCase() !== wordIn ? wordIn.toUpperCase() : wordIn.toLowerCase(),
+      ];
+      
+      for (const strategy of strategies) {
+        const candidate = strategy();
+        if (!re.test(candidate) && !excludedWords.includes(candidate)) {
+          wordNotIn = candidate;
+          break;
         }
       }
-      
-      if (!wordNotIn) {
-        wordNotIn = '!!!invalid!!!';
-      }
-      
-      return {
-        wordIn,
-        wordNotIn,
-        explanation: `'${wordIn}' matches, '${wordNotIn}' doesn't`
-      };
-    } catch (error) {
-      throw new Error(`Failed to generate word pair: ${error}`);
     }
+    
+    if (!wordNotIn) {
+      wordNotIn = '!!!invalid!!!';
+    }
+    
+    return {
+      wordIn,
+      wordNotIn,
+      explanation: `'${wordIn}' matches, '${wordNotIn}' doesn't`
+    };
   }
 
   /**
@@ -307,63 +437,73 @@ export class RegexAnalyzer {
     regex2: string,
     excludedWords: string[] = []
   ): Promise<DistinguishingWordsResult> {
-    try {
-      const RB = await getRB();
-      const rb1 = RB(new RegExp(`^${regex1}$`));
-      const rb2 = RB(new RegExp(`^${regex2}$`));
-      
-      // Get words only in regex1 (A - B)
-      const onlyIn1 = rb1.without(new RegExp(`^${regex2}$`));
-      // Get words only in regex2 (B - A)
-      const onlyIn2 = rb2.without(new RegExp(`^${regex1}$`));
-      
-      let word1 = '';
-      let word2 = '';
-      
-      // Try to sample from differences
+    let word1 = '';
+    let word2 = '';
+    
+    // If either regex has unsupported features, use sampling approach
+    if (!hasUnsupportedFeatures(regex1) && !hasUnsupportedFeatures(regex2)) {
       try {
-        const gen1 = onlyIn1.sample();
-        for (let i = 0; i < 10; i++) {
-          const next = gen1.next();
-          if (!next.done) {
-            const word = next.value;
-            if (!excludedWords.includes(word)) {
-              word1 = word;
-              break;
+        const RB = await getRB();
+        const rb1 = RB(new RegExp(`^${regex1}$`));
+        const rb2 = RB(new RegExp(`^${regex2}$`));
+        
+        // Get words only in regex1 (A - B)
+        const onlyIn1 = rb1.without(new RegExp(`^${regex2}$`));
+        // Get words only in regex2 (B - A)
+        const onlyIn2 = rb2.without(new RegExp(`^${regex1}$`));
+        
+        // Try to sample from differences
+        try {
+          const gen1 = onlyIn1.sample();
+          for (let i = 0; i < 10; i++) {
+            const next = gen1.next();
+            if (!next.done) {
+              const word = next.value;
+              if (!excludedWords.includes(word)) {
+                word1 = word;
+                break;
+              }
             }
           }
+        } catch {
+          // Will use fallback
         }
-      } catch {
-        // Fallback
-        word1 = this.generateWord(regex1, excludedWords).word;
-      }
-      
-      try {
-        const gen2 = onlyIn2.sample();
-        for (let i = 0; i < 10; i++) {
-          const next = gen2.next();
-          if (!next.done) {
-            const word = next.value;
-            if (!excludedWords.includes(word) && word !== word1) {
-              word2 = word;
-              break;
+        
+        try {
+          const gen2 = onlyIn2.sample();
+          for (let i = 0; i < 10; i++) {
+            const next = gen2.next();
+            if (!next.done) {
+              const word = next.value;
+              if (!excludedWords.includes(word) && word !== word1) {
+                word2 = word;
+                break;
+              }
             }
           }
+        } catch {
+          // Will use fallback
         }
       } catch {
-        // Fallback
-        word2 = this.generateWord(regex2, [...excludedWords, word1]).word;
+        // Automata approach failed, will use fallback
       }
-      
-      return {
-        word1,
-        word2,
-        explanation: `'${word1}' distinguishes from regex1, '${word2}' from regex2`,
-        distinguishingProperty: 'Maximally different matching patterns'
-      };
-    } catch (error) {
-      throw new Error(`Failed to generate distinguishing words: ${error}`);
     }
+    
+    // Fallback: generate samples and find distinguishing ones
+    if (!word1) {
+      word1 = this.generateWord(regex1, excludedWords).word;
+    }
+    
+    if (!word2) {
+      word2 = this.generateWord(regex2, [...excludedWords, word1]).word;
+    }
+    
+    return {
+      word1,
+      word2,
+      explanation: `'${word1}' distinguishes from regex1, '${word2}' from regex2`,
+      distinguishingProperty: 'Maximally different matching patterns'
+    };
   }
 
   /**

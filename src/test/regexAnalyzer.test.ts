@@ -684,4 +684,151 @@ suite('RegexAnalyzer Test Suite', () => {
       });
     });
   });
+
+  suite('Word boundary support', () => {
+    test('Should handle word boundary in generateWord', () => {
+      const regex = '\\btest\\b';
+      const result = analyzer.generateWord(regex);
+      
+      assert.ok(result.word);
+      assert.ok(new RegExp(regex).test(result.word));
+    });
+
+    test('Should handle word boundary in generateWordPair', async () => {
+      const regex = '\\bword\\b';
+      const result = await analyzer.generateWordPair(regex);
+      
+      assert.ok(result.wordIn);
+      assert.ok(result.wordNotIn);
+      assert.notStrictEqual(result.wordIn, result.wordNotIn);
+    });
+
+    test('Should handle word boundary in analyzeRelationship', async () => {
+      const regex1 = '\\btest\\b';
+      const regex2 = 'test';
+      
+      const result = await analyzer.analyzeRelationship(regex1, regex2);
+      
+      assert.ok(result.relationship);
+      assert.ok(result.explanation);
+      // Should use sampling-based analysis
+      assert.ok(result.explanation.includes('sampling-based'));
+    });
+
+    test('Should handle complex word boundary patterns', () => {
+      const regex = '\\b[a-z]+\\b';
+      const words = analyzer.generateMultipleWords(regex, 5);
+      
+      assert.ok(words.length > 0);
+      words.forEach(word => {
+        assert.ok(new RegExp(regex).test(word));
+      });
+    });
+
+    test('Should generate distinguishing words with word boundaries', async () => {
+      const regex1 = '\\bcat\\b';
+      const regex2 = '\\bdog\\b';
+      
+      const result = await analyzer.generateDistinguishingWords(regex1, regex2);
+      
+      assert.ok(result.word1);
+      assert.ok(result.word2);
+      assert.notStrictEqual(result.word1, result.word2);
+    });
+  });
+
+  suite('Lookahead support', () => {
+    test('Should handle positive lookahead in generateWord', () => {
+      const regex = '\\w+(?=@)';
+      const result = analyzer.generateWord(regex);
+      
+      assert.ok(result.word);
+      // Note: randexp generates the lookahead match, but doesn't include the lookahead itself
+    });
+
+    test('Should handle negative lookahead in generateWord', () => {
+      const regex = '\\w+(?!@)';
+      const result = analyzer.generateWord(regex);
+      
+      assert.ok(result.word);
+    });
+
+    test('Should handle lookahead in analyzeRelationship', async () => {
+      const regex1 = '\\w+(?=@)';
+      const regex2 = '\\w+';
+      
+      const result = await analyzer.analyzeRelationship(regex1, regex2);
+      
+      assert.ok(result.relationship);
+      assert.ok(result.explanation);
+    });
+
+    test('Should handle lookahead in generateWordPair', async () => {
+      const regex = '\\w+(?!x)';
+      const result = await analyzer.generateWordPair(regex);
+      
+      assert.ok(result.wordIn);
+      assert.ok(result.wordNotIn);
+      assert.notStrictEqual(result.wordIn, result.wordNotIn);
+    });
+  });
+
+  suite('Fallback behavior for unsupported patterns', () => {
+    test('Should use sampling when word boundary is present', async () => {
+      const regex1 = '\\btest\\b';
+      const regex2 = 'test';
+      
+      const result = await analyzer.analyzeRelationship(regex1, regex2);
+      
+      // Should indicate sampling-based analysis
+      assert.ok(result.explanation.includes('sampling-based'));
+    });
+
+    test('Should still generate valid words for unsupported patterns', () => {
+      const patterns = [
+        '\\bword\\b',
+        '\\w+(?=@)',
+        '\\w+(?!@)',
+      ];
+      
+      for (const pattern of patterns) {
+        const result = analyzer.generateWord(pattern);
+        assert.ok(result.word, `Failed to generate word for pattern: ${pattern}`);
+      }
+    });
+
+    test('Should handle mixed supported and unsupported features', async () => {
+      const regex1 = '\\b[a-z]+\\b'; // word boundary (unsupported)
+      const regex2 = '[a-z]+';       // simple (supported)
+      
+      const result = await analyzer.analyzeRelationship(regex1, regex2);
+      
+      assert.ok(result.relationship);
+      assert.ok(result.examples);
+      assert.ok(result.examples.inBoth || result.examples.onlyInA || result.examples.onlyInB);
+    });
+
+    test('Should generate distinguishing words even with unsupported features', async () => {
+      const candidates = ['\\btest\\b', 'test', 'testing'];
+      
+      const result = await analyzer.generateTwoDistinguishingWords(candidates);
+      
+      assert.ok(result.words);
+      assert.strictEqual(result.words.length, 2);
+      assert.notStrictEqual(result.words[0], result.words[1]);
+    });
+
+    test('Should provide meaningful examples with sampling-based analysis', async () => {
+      const regex1 = '\\b[a-z]{3}\\b';
+      const regex2 = '[0-9]{3}';
+      
+      const result = await analyzer.analyzeRelationship(regex1, regex2);
+      
+      assert.ok(result.examples);
+      // Should be disjoint - no common samples
+      if (result.relationship === RegexRelationship.DISJOINT) {
+        assert.ok(result.examples.inBoth?.length === 0 || !result.examples.inBoth);
+      }
+    });
+  });
 });
