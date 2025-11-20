@@ -316,11 +316,12 @@ export class RegexAnalyzer {
   }
 
   /**
-   * 
-   * TODO: This is buggy -- sometimes the two words are the same?
-   * What about all the edge cases?
-   * 
    * Generate two distinguishing words from candidates
+   * 
+   * Uses a multi-strategy approach:
+   * 1. Try to sample from set differences (words unique to each regex)
+   * 2. Generate more samples per regex for better coverage
+   * 3. Find the two words with maximum distinguishing power
    */
   async generateTwoDistinguishingWords(
     candidateRegexes: string[],
@@ -346,13 +347,48 @@ export class RegexAnalyzer {
     }
 
     try {
+      const RB = await getRB();
       const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
       
-      // Generate candidates from all regexes
+      // Strategy 1: Try to get words from pairwise set differences
+      // This directly finds words that distinguish between pairs of regexes
       const allWords: string[] = [];
+      for (let i = 0; i < candidateRegexes.length && i < 3; i++) {
+        for (let j = i + 1; j < candidateRegexes.length && j < 3; j++) {
+          try {
+            const rb1 = RB(new RegExp(`^${candidateRegexes[i]}$`));
+            const rb2 = RB(new RegExp(`^${candidateRegexes[j]}$`));
+            
+            // Get words only in regex i (i - j)
+            const onlyInI = rb1.without(new RegExp(`^${candidateRegexes[j]}$`));
+            const genI = onlyInI.sample();
+            for (let k = 0; k < 10; k++) {
+              const next = genI.next();
+              if (!next.done && !excludedWords.includes(next.value)) {
+                allWords.push(next.value);
+              }
+            }
+            
+            // Get words only in regex j (j - i)
+            const onlyInJ = rb2.without(new RegExp(`^${candidateRegexes[i]}$`));
+            const genJ = onlyInJ.sample();
+            for (let k = 0; k < 10; k++) {
+              const next = genJ.next();
+              if (!next.done && !excludedWords.includes(next.value)) {
+                allWords.push(next.value);
+              }
+            }
+          } catch {
+            // Set difference might fail for complex regexes, continue
+            continue;
+          }
+        }
+      }
+      
+      // Strategy 2: Generate more samples from each regex (increased from 5 to 20)
       for (const regex of candidateRegexes) {
         try {
-          const words = this.generateMultipleWords(regex, 5, excludedWords);
+          const words = this.generateMultipleWords(regex, 20, excludedWords);
           allWords.push(...words);
         } catch {
           continue;
