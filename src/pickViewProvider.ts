@@ -399,11 +399,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
       
+      // Get status to send along with the final result
+      const status = this.controller.getStatus();
+      
       this.sendMessage({
         type: 'finalResult',
         regex: finalRegex,
         wordsIn,
-        wordsOut
+        wordsOut,
+        status
       });
     } catch (error) {
       logger.error(error, 'Error showing final results');
@@ -738,8 +742,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private getHtmlForWebview(webview: vscode.Webview) {
     const htmlPath = path.join(this.extensionUri.fsPath, 'media', 'pickView.html');
+    const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'pickView.js'));
+    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'pickView.css'));
+    
     try {
-      return fs.readFileSync(htmlPath, 'utf8');
+      let html = fs.readFileSync(htmlPath, 'utf8');
+      // Inject the CSS and JS file URIs into the HTML
+      html = html.replace('<!--CSS_URI_PLACEHOLDER-->', cssUri.toString());
+      html = html.replace('<!--JS_URI_PLACEHOLDER-->', jsUri.toString());
+      return html;
     } catch (err) {
       // In test environments the media file may not be available. Return a minimal
       // HTML fallback so unit tests that instantiate the view provider don't fail

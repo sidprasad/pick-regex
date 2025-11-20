@@ -1,0 +1,772 @@
+/**
+ * PICK Regex Builder - Webview JavaScript
+ * 
+ * This file contains all the client-side logic for the PICK webview interface.
+ * It must be initialized with the VS Code API object from the webview context.
+ */
+
+(function() {
+    'use strict';
+
+    /**
+     * Initialize the PICK webview interface
+     * @param {object} vscodeApi - The VS Code API object from acquireVsCodeApi()
+     */
+    window.initializePickView = function(vscodeApi) {
+        const vscode = vscodeApi;
+
+        // UI Elements
+        const promptSection = document.getElementById('promptSection');
+        const votingSection = document.getElementById('votingSection');
+        const finalSection = document.getElementById('finalSection');
+        const statusBar = document.getElementById('statusBar');
+        const statusMessage = document.getElementById('statusMessage');
+        const statusCancelBtn = document.getElementById('statusCancelBtn');
+        const inlineCancelBtn = document.getElementById('inlineCancelBtn');
+        const errorSection = document.getElementById('errorSection');
+        const literalToggle = document.getElementById('literalToggle');
+        const showCandidatesToggle = document.getElementById('showCandidatesToggle');
+        const displayOptionsBtn = document.getElementById('displayOptionsBtn');
+        const displayOptionsMenu = document.getElementById('displayOptionsMenu');
+        const currentPromptDisplay = document.getElementById('currentPromptDisplay');
+        const finalPromptDisplay = document.getElementById('finalPromptDisplay');
+
+        // Additional UI Elements
+        const promptInput = document.getElementById('promptInput');
+        const generateBtn = document.getElementById('generateBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const startFreshBtn = document.getElementById('startFreshBtn');
+        const cancelBtn = inlineCancelBtn;
+        
+        if (statusCancelBtn) {
+            statusCancelBtn.addEventListener('click', function() {
+                vscode.postMessage({ type: 'cancel' });
+            });
+        }
+        
+        const wordPair = document.getElementById('wordPair');
+        const candidatesList = document.getElementById('candidatesList');
+        const wordHistory = document.getElementById('wordHistory');
+        const historyItems = document.getElementById('historyItems');
+        const finalRegex = document.getElementById('finalRegex');
+        const wordsIn = document.getElementById('wordsIn');
+        const wordsOut = document.getElementById('wordsOut');
+
+        // Track literal mode state
+        let literalMode = true;
+
+        // Track classified words
+        const classifiedWords = new Set();
+
+        // Initialize body data attribute
+        document.body.setAttribute('data-literal-mode', literalMode.toString());
+
+        // Helper function to update prompt display
+        function updatePromptDisplay(prompt) {
+            const html = '<div class="prompt-label">Your Description</div>' +
+                '<div class="prompt-text" style="display: flex; justify-content: space-between; align-items: center;">' +
+                '<span>' + prompt + '</span>' +
+                '<button onclick="editPrompt()" class="icon-btn" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Edit and refine prompt">' +
+                '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 21v-3l12-12 3 3L6 21H3zM19.5 7.5l-3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+                '<span class="btn-label">Edit</span>' +
+                '</button>' +
+                '</div>';
+            if (currentPromptDisplay) {
+                currentPromptDisplay.innerHTML = html;
+            }
+            if (finalPromptDisplay) {
+                finalPromptDisplay.innerHTML = html;
+            }
+        }
+
+        function editPrompt() {
+            const currentPrompt = promptInput.value;
+            const editHtml = '<div class="prompt-label">Edit Your Description</div>' +
+                '<div style="display: flex; gap: 8px; align-items: center;">' +
+                '<input type="text" id="editPromptInput" value="' + currentPrompt + '" ' +
+                'style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;" ' +
+                'placeholder="Enter a refined description..." />' +
+                '<button onclick="submitEditedPrompt()" style="padding: 6px 12px; min-width: auto;" title="Generate new candidates with edited prompt">' +
+                '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="12" height="12">' +
+                '<path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>' +
+                '</button>' +
+                '<button onclick="cancelEditPrompt()" style="padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);" title="Cancel">Cancel</button>' +
+                '</div>';
+
+            if (currentPromptDisplay) {
+                currentPromptDisplay.innerHTML = editHtml;
+                setTimeout(function() {
+                    const input = document.getElementById('editPromptInput');
+                    if (input) input.focus();
+                }, 10);
+            } else if (finalPromptDisplay) {
+                finalPromptDisplay.innerHTML = editHtml;
+                setTimeout(function() {
+                    const input = document.getElementById('editPromptInput');
+                    if (input) input.focus();
+                }, 10);
+            }
+        }
+
+        function submitEditedPrompt() {
+            const editInput = document.getElementById('editPromptInput');
+            const newPrompt = editInput.value.trim();
+            if (newPrompt) {
+                promptInput.value = newPrompt;
+                updatePromptDisplay(newPrompt);
+                vscode.postMessage({ type: 'refineCandidates', prompt: newPrompt });
+                showSection('loading');
+            }
+        }
+
+        function cancelEditPrompt() {
+            const currentPrompt = promptInput.value;
+            updatePromptDisplay(currentPrompt);
+        }
+
+        function copyRegex(pattern) {
+            try {
+                vscode.postMessage({ type: 'copy', regex: pattern });
+            } catch (e) {
+                showError('Unable to copy.');
+            }
+        }
+
+        function toLiteralString(str) {
+            return str
+                .replace(/\n/g, '¶')
+                .replace(/\r/g, '¶')
+                .replace(/\t/g, '→')
+                .replace(/ /g, '␣')
+                .replace(/\u00A0/g, '⍽')
+                .replace(/\f/g, '↡')
+                .replace(/\v/g, '↓')
+                .replace(/\0/g, '␀')
+                .replace(/\\/g, '⧹')
+                .replace(/"/g, '"')
+                .replace(/'/g, "'");
+        }
+
+        function highlightRegex(pattern) {
+            if (!pattern) return '';
+
+            pattern = pattern.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            let result = '';
+            let i = 0;
+
+            while (i < pattern.length) {
+                const char = pattern[i];
+
+                if ('^$*+?|{}[]()\\'.includes(char)) {
+                    if (char === '\\' && i + 1 < pattern.length) {
+                        const nextChar = pattern[i + 1];
+                        result += '<span class="regex-escape">\\' + nextChar + '</span>';
+                        i += 2;
+                    } else if (char === '[' && pattern.substr(i).match(/^\[.*?\]/)) {
+                        const match = pattern.substr(i).match(/^\[.*?\]/)[0];
+                        result += '<span class="regex-class">' + match + '</span>';
+                        i += match.length;
+                    } else if (char === '(' && pattern.substr(i).match(/^\([^)]*\)/)) {
+                        const match = pattern.substr(i).match(/^\([^)]*\)/)[0];
+                        result += '<span class="regex-group">' + match + '</span>';
+                        i += match.length;
+                    } else if ('*+?{'.includes(char)) {
+                        result += '<span class="regex-quantifier">' + char + '</span>';
+                        i++;
+                    } else {
+                        result += '<span class="regex-meta">' + char + '</span>';
+                        i++;
+                    }
+                } else {
+                    result += '<span class="regex-literal">' + char + '</span>';
+                    i++;
+                }
+            }
+
+            return '<span class="regex-syntax">' + result + '</span>';
+        }
+
+        // Event Listeners
+        generateBtn.addEventListener('click', function() {
+            const prompt = promptInput.value.trim();
+            if (prompt) {
+                updatePromptDisplay(prompt);
+                vscode.postMessage({ type: 'generateCandidates', prompt: prompt });
+                showSection('loading');
+            }
+        });
+
+        promptInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                generateBtn.click();
+            }
+        });
+
+        resetBtn.addEventListener('click', function() {
+            vscode.postMessage({ type: 'reset', preserveClassifications: false });
+        });
+
+        startFreshBtn.addEventListener('click', function() {
+            vscode.postMessage({ type: 'reset', preserveClassifications: false });
+        });
+
+        cancelBtn.addEventListener('click', function() {
+            vscode.postMessage({ type: 'cancel' });
+        });
+
+        if (literalToggle) {
+            literalToggle.addEventListener('change', function() {
+                literalMode = literalToggle.checked;
+                document.body.setAttribute('data-literal-mode', literalMode.toString());
+                const menuRow = document.getElementById('literalMenuRow');
+                if (menuRow) menuRow.setAttribute('aria-checked', literalMode ? 'true' : 'false');
+            });
+        }
+
+        if (showCandidatesToggle) {
+            if (!showCandidatesToggle.checked) {
+                candidatesList.classList.add('hidden');
+            }
+            showCandidatesToggle.addEventListener('change', function() {
+                const show = showCandidatesToggle.checked;
+                if (show) {
+                    candidatesList.classList.remove('hidden');
+                } else {
+                    candidatesList.classList.add('hidden');
+                }
+                const menuRow = document.getElementById('showCandidatesMenuRow');
+                if (menuRow) menuRow.setAttribute('aria-checked', show ? 'true' : 'false');
+            });
+        }
+
+        if (displayOptionsBtn && displayOptionsMenu) {
+            displayOptionsBtn.addEventListener('click', function(e) {
+                const isOpen = !displayOptionsMenu.classList.contains('hidden');
+                if (isOpen) {
+                    displayOptionsMenu.classList.add('hidden');
+                    displayOptionsBtn.setAttribute('aria-expanded', 'false');
+                } else {
+                    displayOptionsMenu.classList.remove('hidden');
+                    displayOptionsBtn.setAttribute('aria-expanded', 'true');
+                    const cb = displayOptionsMenu.querySelector('input[type="checkbox"]');
+                    if (cb) cb.focus();
+                }
+                e.stopPropagation();
+            });
+
+            window.addEventListener('click', function(ev) {
+                if (!displayOptionsMenu.classList.contains('hidden')) {
+                    const target = ev.target;
+                    if (!displayOptionsMenu.contains(target) && target !== displayOptionsBtn) {
+                        displayOptionsMenu.classList.add('hidden');
+                        displayOptionsBtn.setAttribute('aria-expanded', 'false');
+                    }
+                }
+            });
+
+            window.addEventListener('keydown', function(ev) {
+                if (ev.key === 'Escape') {
+                    if (!displayOptionsMenu.classList.contains('hidden')) {
+                        displayOptionsMenu.classList.add('hidden');
+                        displayOptionsBtn.setAttribute('aria-expanded', 'false');
+                        displayOptionsBtn.focus();
+                        return;
+                    }
+                    const candidatesModal = document.getElementById('candidatesHelpModal');
+                    if (candidatesModal && !candidatesModal.classList.contains('hidden')) {
+                        candidatesModal.classList.add('hidden');
+                        displayOptionsBtn.focus();
+                    }
+                }
+            });
+        }
+
+        // Handle messages from extension
+        window.addEventListener('message', function(event) {
+            const message = event.data;
+
+            switch (message.type) {
+                case 'status':
+                    showStatus(message.message);
+                    break;
+                case 'error':
+                    showError(message.message);
+                    break;
+                case 'warning':
+                    showWarning(message.message);
+                    break;
+                case 'candidatesGenerated':
+                    inlineCancelBtn.classList.add('hidden');
+                    statusCancelBtn.classList.add('hidden');
+                    generateBtn.classList.remove('hidden');
+                    statusBar.classList.add('hidden');
+                    updateCandidates(message.candidates, 2);
+                    break;
+                case 'candidatesRefined':
+                    inlineCancelBtn.classList.add('hidden');
+                    statusCancelBtn.classList.add('hidden');
+                    generateBtn.classList.remove('hidden');
+                    statusBar.classList.add('hidden');
+                    updateCandidates(message.candidates, 2);
+                    break;
+                case 'newPair':
+                    classifiedWords.clear();
+                    showWordPair(message.pair, message.status);
+                    break;
+                case 'wordClassified':
+                    updateStatus(message.status);
+                    if (message.bothClassified) {
+                        classifiedWords.clear();
+                    }
+                    break;
+                case 'classificationUpdated':
+                    updateStatus(message.status);
+                    break;
+                case 'voteProcessed':
+                    updateStatus(message.status);
+                    break;
+                case 'finalResult':
+                    showFinalResultWithContext(message.regex, message.wordsIn, message.wordsOut, message.status);
+                    break;
+                case 'copied':
+                    showStatusWithoutCancel('Copied to clipboard');
+                    setTimeout(function() {
+                        statusBar.classList.add('hidden');
+                    }, 2000);
+                    break;
+                case 'noRegexFound':
+                    showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut);
+                    break;
+                case 'insufficientWords':
+                    showInsufficientWords(message.candidates, message.status);
+                    break;
+                case 'reset':
+                    resetUI(message.preserveClassifications);
+                    break;
+                case 'cancelled':
+                    handleCancelled(message.message);
+                    break;
+            }
+        });
+
+        function showSection(section) {
+            promptSection.classList.add('hidden');
+            votingSection.classList.add('hidden');
+            finalSection.classList.add('hidden');
+            errorSection.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            generateBtn.classList.remove('hidden');
+            statusBar.classList.add('hidden');
+
+            if (section === 'prompt') {
+                promptSection.classList.remove('hidden');
+            } else if (section === 'voting') {
+                votingSection.classList.remove('hidden');
+            } else if (section === 'final') {
+                finalSection.classList.remove('hidden');
+            } else if (section === 'loading') {
+                statusBar.classList.remove('hidden');
+                inlineCancelBtn.classList.remove('hidden');
+                statusCancelBtn.classList.remove('hidden');
+                generateBtn.classList.add('hidden');
+            }
+        }
+
+        function showStatus(message) {
+            if (statusMessage) statusMessage.innerHTML = '<span class="loading-spinner"></span><span>' + message + '</span>';
+            statusBar.classList.remove('hidden');
+            inlineCancelBtn.classList.remove('hidden');
+            statusCancelBtn.classList.remove('hidden');
+            generateBtn.classList.add('hidden');
+        }
+
+        function showStatusWithoutCancel(message) {
+            if (statusMessage) statusMessage.innerHTML = '<span>' + message + '</span>';
+            statusBar.classList.remove('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+        }
+
+        function showError(message) {
+            errorSection.textContent = message;
+            errorSection.classList.remove('hidden');
+        }
+
+        function showWarning(message) {
+            if (statusMessage) statusMessage.innerHTML = '<strong>Warning:</strong> ' + message;
+            statusBar.classList.remove('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+        }
+
+        function showInsufficientWords(candidates, status) {
+            showSection('voting');
+            updateCandidates(candidates, status.threshold);
+            updateWordHistory(status.wordHistory);
+
+            wordPair.innerHTML = '<div style="text-align: center; padding: 20px; background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); border-radius: 4px;">' +
+                '<h3>Unable to generate more words</h3>' +
+                '<p>The system ran out of distinguishing words to generate.</p>' +
+                '<p>Here are the remaining candidates - you may need to choose manually or start over with a different prompt.</p>' +
+                '<button onclick="location.reload()" style="margin-top: 10px;">Start Over</button>' +
+                '</div>';
+        }
+
+        function updateCandidates(candidates, threshold) {
+            candidatesList.innerHTML = '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">' +
+                '<h4 style="margin:0">Regex Candidates</h4>' +
+                '<button id="candidatesHelpBtn" class="icon-btn" title="Where do these candidates come from?" aria-haspopup="dialog" aria-controls="candidatesHelpModal">?</button>' +
+                '</div>';
+            
+            const helpBtn = document.getElementById('candidatesHelpBtn');
+            if (helpBtn) {
+                helpBtn.onclick = function() {
+                    const modal = document.getElementById('candidatesHelpModal');
+                    const overlay = document.getElementById('candidatesHelpOverlay');
+                    const closeBtn = document.getElementById('candidatesHelpClose');
+                    if (modal) modal.classList.remove('hidden');
+                    if (closeBtn) closeBtn.focus();
+                    if (overlay) overlay.onclick = function() { modal.classList.add('hidden'); };
+                    if (closeBtn) closeBtn.onclick = function() { modal.classList.add('hidden'); };
+                };
+            }
+
+            if (threshold !== undefined) {
+                const thresholdDiv = document.createElement('div');
+                thresholdDiv.className = 'threshold-info';
+                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative votes';
+                candidatesList.appendChild(thresholdDiv);
+            }
+
+            candidates.forEach(function(c) {
+                const div = document.createElement('div');
+                div.className = 'candidate-item ' + (c.eliminated ? 'eliminated' : 'active');
+                div.innerHTML = '<span class="candidate-pattern">' + highlightRegex(c.pattern) + '</span>' +
+                    '<div class="candidate-votes" style="display:flex; gap:8px; align-items:center;">' +
+                    '<button class="btn copy" data-pattern="' + encodeURIComponent(c.pattern) + '" onclick="copyRegex(decodeURIComponent(this.getAttribute(\'data-pattern\')))" title="Copy regex">' +
+                    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
+                    '</svg>' +
+                    '</button>' +
+                    '<span class="badge" style="background: #4caf50;">✓ ' + c.positiveVotes + '</span>' +
+                    '<span class="badge" style="background: #f44336;">✗ ' + c.negativeVotes + '</span>' +
+                    '</div>';
+                candidatesList.appendChild(div);
+            });
+        }
+
+        function updateCandidatesWithWinner(candidates, threshold, winnerRegex) {
+            candidatesList.innerHTML = '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">' +
+                '<h4 style="margin:0">Regex Candidates</h4>' +
+                '<button id="candidatesHelpBtn" class="icon-btn" title="Where do these candidates come from?" aria-haspopup="dialog" aria-controls="candidatesHelpModal">?</button>' +
+                '</div>';
+            
+            const helpBtn = document.getElementById('candidatesHelpBtn');
+            if (helpBtn) {
+                helpBtn.onclick = function() {
+                    const modal = document.getElementById('candidatesHelpModal');
+                    const overlay = document.getElementById('candidatesHelpOverlay');
+                    const closeBtn = document.getElementById('candidatesHelpClose');
+                    if (modal) modal.classList.remove('hidden');
+                    if (closeBtn) closeBtn.focus();
+                    if (overlay) overlay.onclick = function() { modal.classList.add('hidden'); };
+                    if (closeBtn) closeBtn.onclick = function() { modal.classList.add('hidden'); };
+                };
+            }
+
+            if (threshold !== undefined) {
+                const thresholdDiv = document.createElement('div');
+                thresholdDiv.className = 'threshold-info';
+                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative votes';
+                candidatesList.appendChild(thresholdDiv);
+            }
+
+            candidates.forEach(function(c) {
+                const isWinner = c.pattern === winnerRegex;
+                const div = document.createElement('div');
+                div.className = 'candidate-item ' + (c.eliminated ? 'eliminated' : 'active');
+                
+                if (isWinner) {
+                    div.style.cssText = 'border: 2px solid var(--pick-accept-color); background: var(--vscode-list-activeSelectionBackground);';
+                }
+                
+                const patternSpan = document.createElement('span');
+                patternSpan.className = 'candidate-pattern';
+                patternSpan.innerHTML = highlightRegex(c.pattern);
+                
+                const votesDiv = document.createElement('div');
+                votesDiv.className = 'candidate-votes';
+                votesDiv.style.cssText = 'display:flex; gap:8px; align-items:center;';
+                
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'btn copy';
+                copyBtn.setAttribute('data-pattern', encodeURIComponent(c.pattern));
+                copyBtn.setAttribute('title', 'Copy regex');
+                copyBtn.onclick = function() { copyRegex(decodeURIComponent(this.getAttribute('data-pattern'))); };
+                if (isWinner) {
+                    copyBtn.style.border = '1px solid var(--pick-accept-color)';
+                }
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
+                    '</svg>';
+                
+                const posVoteBadge = document.createElement('span');
+                posVoteBadge.className = 'badge';
+                posVoteBadge.style.background = '#4caf50';
+                posVoteBadge.textContent = '✓ ' + c.positiveVotes;
+                
+                const negVoteBadge = document.createElement('span');
+                negVoteBadge.className = 'badge';
+                negVoteBadge.style.background = '#f44336';
+                negVoteBadge.textContent = '✗ ' + c.negativeVotes;
+                
+                votesDiv.appendChild(copyBtn);
+                votesDiv.appendChild(posVoteBadge);
+                votesDiv.appendChild(negVoteBadge);
+                
+                div.appendChild(patternSpan);
+                div.appendChild(votesDiv);
+                candidatesList.appendChild(div);
+            });
+        }
+
+        function updateStatus(status) {
+            updateCandidates(status.candidateDetails, status.threshold);
+            updateWordHistory(status.wordHistory);
+            showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
+        }
+
+        function classifyWord(word, classification) {
+            classifiedWords.add(word);
+            vscode.postMessage({
+                type: 'classifyWord',
+                word: word,
+                classification: classification
+            });
+
+            const wordCards = document.querySelectorAll('.word-card');
+            wordCards.forEach(function(card) {
+                const cardWord = card.getAttribute('data-word');
+                if (cardWord === word) {
+                    card.classList.add('classified', 'classified-' + classification);
+                    const buttons = card.querySelectorAll('button');
+                    buttons.forEach(function(btn) { btn.disabled = true; });
+                }
+            });
+        }
+
+        function showWordPair(pair, status) {
+            showSection('voting');
+            updateCandidates(status.candidateDetails, status.threshold);
+            updateWordHistory(status.wordHistory);
+            showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
+
+            wordPair.innerHTML = '<div class="word-card" id="card-' + pair.word1 + '" data-word="' + pair.word1.replace(/"/g, '&quot;') + '">' +
+                '<div class="word-display">' +
+                '<span class="word-readable">' + pair.word1 + '</span>' +
+                '<span class="word-literal">' + toLiteralString(pair.word1) + '</span>' +
+                '</div>' +
+                '<div class="word-actions">' +
+                '<button class="btn accept" onclick="classifyWord(\'' + pair.word1.replace(/'/g, "\\'") + '\', \'accept\')" title="Upvote">' +
+                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                '<path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>' +
+                '</button>' +
+                '<button class="btn reject" onclick="classifyWord(\'' + pair.word1.replace(/'/g, "\\'") + '\', \'reject\')" title="Downvote">' +
+                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                '<path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>' +
+                '</button>' +
+                '<button class="btn unsure" onclick="classifyWord(\'' + pair.word1.replace(/'/g, "\\'") + '\', \'unsure\')" title="Skip">' +
+                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+                '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>' +
+                '</button>' +
+                '</div>' +
+                '</div>' +
+                '<div class="word-card" id="card-' + pair.word2 + '" data-word="' + pair.word2.replace(/"/g, '&quot;') + '">' +
+                '<div class="word-display">' +
+                '<span class="word-readable">' + pair.word2 + '</span>' +
+                '<span class="word-literal">' + toLiteralString(pair.word2) + '</span>' +
+                '</div>' +
+                '<div class="word-actions">' +
+                '<button class="btn accept" onclick="classifyWord(\'' + pair.word2.replace(/'/g, "\\'") + '\', \'accept\')" title="Upvote">' +
+                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                '<path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>' +
+                '</button>' +
+                '<button class="btn reject" onclick="classifyWord(\'' + pair.word2.replace(/'/g, "\\'") + '\', \'reject\')" title="Downvote">' +
+                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                '<path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>' +
+                '</button>' +
+                '<button class="btn unsure" onclick="classifyWord(\'' + pair.word2.replace(/'/g, "\\'") + '\', \'unsure\')" title="Skip">' +
+                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+                '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>' +
+                '</button>' +
+                '</div>' +
+                '</div>';
+        }
+
+        function updateWordHistory(history) {
+            if (!history || history.length === 0) {
+                historyItems.innerHTML = '<p style="color: var(--vscode-descriptionForeground); font-style: italic;">No words classified yet.</p>';
+                return;
+            }
+
+            historyItems.innerHTML = '';
+            history.forEach(function(item, index) {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = '<div>' +
+                    '<div class="word-display">' +
+                    '<span class="word-readable history-word" data-word="' + item.word.replace(/"/g, '&quot;') + '">' + item.word + '</span>' +
+                    '<span class="word-literal history-word" data-word="' + item.word.replace(/"/g, '&quot;') + '">' + toLiteralString(item.word) + '</span>' +
+                    '</div>' +
+                    '<div class="history-matches">' + item.matchingRegexes.length + ' regex(es) match this word</div>' +
+                    '</div>' +
+                    '<div class="history-classification">' +
+                    '<select onchange="updateClassification(' + index + ', this.value)">' +
+                    '<option value="accept"' + (item.classification === 'accept' ? ' selected' : '') + '>Accept</option>' +
+                    '<option value="reject"' + (item.classification === 'reject' ? ' selected' : '') + '>Reject</option>' +
+                    '<option value="unsure"' + (item.classification === 'unsure' ? ' selected' : '') + '>Unsure</option>' +
+                    '</select>' +
+                    '</div>';
+                historyItems.appendChild(div);
+            });
+        }
+
+        function updateClassification(index, newClassification) {
+            vscode.postMessage({
+                type: 'updateClassification',
+                index: index,
+                classification: newClassification
+            });
+        }
+
+        function vote(word) {
+            vscode.postMessage({ type: 'vote', acceptedWord: word });
+        }
+
+        function showFinalResultWithContext(regex, inWords, outWords, status) {
+            showSection('voting');
+            statusBar.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+
+            wordPair.innerHTML = '<div style="text-align: center; padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--pick-accept-color); border-radius: 8px;">' +
+                '<h2 style="margin: 0 0 10px 0; color: var(--pick-accept-color);">Final Regex Selected</h2>' +
+                '<p style="margin: 0; color: var(--vscode-descriptionForeground);">' +
+                'The selected regex is highlighted below. You can copy any candidate you prefer.' +
+                '</p>' +
+                '</div>';
+
+            if (status) {
+                updateCandidatesWithWinner(status.candidateDetails, status.threshold, regex);
+                updateWordHistory(status.wordHistory);
+            }
+
+            showStatusWithoutCancel('Classification complete! Selected regex highlighted below.');
+        }
+
+        function showNoRegexFound(message, candidateDetails, inWords, outWords) {
+            showSection('final');
+            statusBar.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+
+            finalRegex.innerHTML = '<div style="padding: 10px; background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-errorForeground); border-radius: 4px; margin-bottom: 10px;">' +
+                '<strong>No regex found</strong>' +
+                '<p style="margin: 8px 0 0 0; font-size: 0.9em;">' + message + '</p>' +
+                '</div>';
+
+            const detailsHtml = candidateDetails.map(function(c) {
+                return '<div class="example-item" style="opacity: 0.7; margin: 4px 0;">' +
+                    '<strong>' + highlightRegex(c.pattern) + '</strong> — Got ' + c.positiveVotes + ' upvote' + (c.positiveVotes !== 1 ? 's' : '') + ', ' + c.negativeVotes + ' downvote' + (c.negativeVotes !== 1 ? 's' : '') +
+                    '</div>';
+            }).join('');
+
+            wordsIn.innerHTML = (inWords && inWords.length > 0) 
+                ? inWords.map(function(w) {
+                    return '<div class="word-display">' +
+                        '<span class="word-readable example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + w + '</span>' +
+                        '<span class="word-literal example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + toLiteralString(w) + '</span>' +
+                        '</div>';
+                }).join('')
+                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as IN</div>';
+
+            wordsOut.innerHTML = (outWords && outWords.length > 0)
+                ? outWords.map(function(w) {
+                    return '<div class="word-display">' +
+                        '<span class="word-readable example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + w + '</span>' +
+                        '<span class="word-literal example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + toLiteralString(w) + '</span>' +
+                        '</div>';
+                }).join('')
+                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as OUT</div>';
+
+            if (candidateDetails && candidateDetails.length > 0) {
+                const candidatesNote = document.createElement('div');
+                candidatesNote.style.cssText = 'margin-top: 20px; padding: 10px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px;';
+                candidatesNote.innerHTML = '<div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">' +
+                    '<strong>All candidates were eliminated:</strong>' +
+                    '</div>' +
+                    detailsHtml;
+                const examplesGrid = document.querySelector('.examples');
+                if (examplesGrid && examplesGrid.parentNode) {
+                    examplesGrid.parentNode.insertBefore(candidatesNote, examplesGrid.nextSibling);
+                }
+            }
+        }
+
+        function resetUI(preserveClassifications) {
+            if (!preserveClassifications) {
+                promptInput.value = '';
+                if (currentPromptDisplay) {
+                    currentPromptDisplay.innerHTML = '';
+                }
+                if (finalPromptDisplay) {
+                    finalPromptDisplay.innerHTML = '';
+                }
+            }
+            classifiedWords.clear();
+            showSection('prompt');
+            if (statusMessage) statusMessage.innerHTML = '';
+            statusBar.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+        }
+
+        function handleCancelled(message) {
+            if (statusMessage) statusMessage.innerHTML = '<span>' + (message || 'Operation cancelled') + '</span>';
+            statusBar.classList.remove('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+            setTimeout(function() {
+                resetUI(false);
+            }, 2000);
+        }
+
+        // Make functions available globally for inline onclick handlers
+        window.classifyWord = classifyWord;
+        window.updateClassification = updateClassification;
+        window.vote = vote;
+        window.editPrompt = editPrompt;
+        window.submitEditedPrompt = submitEditedPrompt;
+        window.cancelEditPrompt = cancelEditPrompt;
+        window.copyRegex = copyRegex;
+        window.toLiteralString = toLiteralString;
+        window.highlightRegex = highlightRegex;
+    };
+})();
