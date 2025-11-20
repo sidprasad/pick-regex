@@ -65,9 +65,9 @@ export function checkAutomataSupport(regex: string): {
 } {
   const unsupportedFeatures: string[] = [];
   
-  // Check for word boundaries \b
-  if (/\\b/i.test(regex)) {
-    unsupportedFeatures.push('word boundary (\\b)');
+  // Check for word boundaries \b or \B
+  if (/\\b/g.test(regex) || /\\B/g.test(regex)) {
+    unsupportedFeatures.push('word boundary (\\b or \\B)');
   }
   
   // Check for lookbehind assertions (?<= or (?<!
@@ -82,7 +82,7 @@ export function checkAutomataSupport(regex: string): {
   
   let suggestion = '';
   if (unsupportedFeatures.length > 0) {
-    if (unsupportedFeatures.includes('word boundary (\\b)')) {
+    if (unsupportedFeatures.some(f => f.includes('word boundary'))) {
       suggestion = 'Consider using explicit character classes like [a-zA-Z0-9_] instead of \\w with anchors ^ and $ for boundaries';
     }
   }
@@ -125,27 +125,30 @@ export class RegexAnalyzer {
 
   /**
    * 2. Analyze relationship between two regexes using automata
+   * 
+   * Note: If patterns contain unsupported features (\b, lookbehind, backreferences),
+   * this will throw an error. The caller should catch this and use deepSamplingEquivalenceCheck.
    */
   async analyzeRelationship(regexA: string, regexB: string): Promise<RelationshipResult> {
+    // Check for unsupported features and warn (but still attempt analysis)
+    const supportA = checkAutomataSupport(regexA);
+    const supportB = checkAutomataSupport(regexB);
+    
+    if (!supportA.isSupported) {
+      logger.info(`Pattern A "${regexA}" contains unsupported features: ${supportA.unsupportedFeatures.join(', ')}`);
+      if (supportA.suggestion) {
+        logger.info(`Suggestion: ${supportA.suggestion}`);
+      }
+    }
+    
+    if (!supportB.isSupported) {
+      logger.info(`Pattern B "${regexB}" contains unsupported features: ${supportB.unsupportedFeatures.join(', ')}`);
+      if (supportB.suggestion) {
+        logger.info(`Suggestion: ${supportB.suggestion}`);
+      }
+    }
+    
     try {
-      // Check for unsupported features
-      const supportA = checkAutomataSupport(regexA);
-      const supportB = checkAutomataSupport(regexB);
-      
-      if (!supportA.isSupported) {
-        logger.info(`Pattern A "${regexA}" contains unsupported features: ${supportA.unsupportedFeatures.join(', ')}`);
-        if (supportA.suggestion) {
-          logger.info(`Suggestion: ${supportA.suggestion}`);
-        }
-      }
-      
-      if (!supportB.isSupported) {
-        logger.info(`Pattern B "${regexB}" contains unsupported features: ${supportB.unsupportedFeatures.join(', ')}`);
-        if (supportB.suggestion) {
-          logger.info(`Suggestion: ${supportB.suggestion}`);
-        }
-      }
-      
       const RB = await getRB();
       const rbA = RB(new RegExp(`^${regexA}$`));
       const rbB = RB(new RegExp(`^${regexB}$`));

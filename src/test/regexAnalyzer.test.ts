@@ -743,10 +743,17 @@ suite('RegexAnalyzer Test Suite', () => {
   });
 
   suite('checkAutomataSupport', () => {
-    test('Should detect word boundary as unsupported', () => {
+    test('Should detect word boundary \\b as unsupported', () => {
       const result = checkAutomataSupport('\\ba\\b');
       assert.strictEqual(result.isSupported, false);
-      assert.ok(result.unsupportedFeatures.includes('word boundary (\\b)'));
+      assert.ok(result.unsupportedFeatures.some(f => f.includes('word boundary')));
+      assert.ok(result.suggestion);
+    });
+
+    test('Should detect non-word boundary \\B as unsupported', () => {
+      const result = checkAutomataSupport('\\Ba\\B');
+      assert.strictEqual(result.isSupported, false);
+      assert.ok(result.unsupportedFeatures.some(f => f.includes('word boundary')));
       assert.ok(result.suggestion);
     });
 
@@ -789,7 +796,7 @@ suite('RegexAnalyzer Test Suite', () => {
     test('Should detect multiple unsupported features', () => {
       const result = checkAutomataSupport('\\b(a)\\1(?<=b)');
       assert.strictEqual(result.isSupported, false);
-      assert.ok(result.unsupportedFeatures.includes('word boundary (\\b)'));
+      assert.ok(result.unsupportedFeatures.some(f => f.includes('word boundary')));
       assert.ok(result.unsupportedFeatures.includes('backreferences'));
       assert.ok(result.unsupportedFeatures.includes('lookbehind assertion'));
     });

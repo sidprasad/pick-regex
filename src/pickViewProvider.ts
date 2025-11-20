@@ -4,7 +4,7 @@ import * as path from 'path';
 import { PickController, PickState, WordPair, WordClassification } from './pickController';
 import { generateRegexFromDescription } from './regexService';
 import { logger } from './logger';
-import { createRegexAnalyzer, RegexRelationship } from './regexAnalyzer';
+import { createRegexAnalyzer, RegexRelationship, checkAutomataSupport } from './regexAnalyzer';
 
 export class PickViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'pick.pickView';
@@ -710,6 +710,27 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         if (!mightBeEquivalent) {
           // Samples proved they're different - skip expensive analysis
           logger.info(`Quick check: "${regex}" and "${uniqueRegex}" are different`);
+          continue;
+        }
+        
+        // Check if either pattern has unsupported features
+        // If so, skip straight to sampling fallback
+        const supportRegex = checkAutomataSupport(regex);
+        const supportUnique = checkAutomataSupport(uniqueRegex);
+        
+        if (!supportRegex.isSupported || !supportUnique.isSupported) {
+          // Use sampling fallback directly for unsupported patterns
+          logger.info(`Patterns contain unsupported features, using sampling-based check`);
+          automataAnalysisFailures++;
+          
+          const samplingResult = this.analyzer.deepSamplingEquivalenceCheck(regex, uniqueRegex);
+          if (samplingResult) {
+            logger.info(`Deep sampling suggests equivalent: "${regex}" === "${uniqueRegex}"`);
+            isEquivalent = true;
+            break;
+          } else {
+            logger.info(`Deep sampling suggests different: "${regex}" vs "${uniqueRegex}"`);
+          }
           continue;
         }
         
