@@ -491,34 +491,47 @@ export class RegexAnalyzer {
         }
       }
       
-      // If we only had one scored word, try to generate a second distinct word
+      // If we only had one scored word, generate a word NOT matching any regex
       if (!best2) {
-        // Try to generate an additional word from candidates that's different from best1
+        // Generate a word that doesn't match any of the candidate regexes
+        // This provides maximum information gain by testing if candidates incorrectly accept non-target strings
         const allExcluded = [...excludedWords, best1.word];
         
-        // Try each candidate to find a word that's different from best1
-        for (const regex of candidateRegexes) {
-          try {
-            const additionalWords = this.generateMultipleWords(regex, 10, allExcluded);
-            if (additionalWords.length > 0) {
-              // Score the new words and pick the one most different from best1
-              for (const word of additionalWords) {
-                const matches = regexObjects.map(re => re.test(word));
-                const count = matches.filter(m => m).length;
-                const diff = matches.filter((m, k) => m !== best1.matches[k]).length;
-                
-                if (diff > 0) {
-                  // Found a word with different match pattern
-                  best2 = { word, matches, count };
-                  break;
-                }
-              }
-              if (best2) {
-                break;
-              }
-            }
-          } catch {
+        // Try multiple strategies to generate a non-matching word
+        const strategies = [
+          // Strategy 1: Simple mutations of the existing word
+          () => best1.word + 'X',
+          () => 'X' + best1.word,
+          () => best1.word.slice(0, -1) || '!',
+          () => best1.word.toUpperCase() !== best1.word ? best1.word.toUpperCase() : best1.word.toLowerCase(),
+          // Strategy 2: Common non-matching patterns
+          () => '!!!invalid!!!',
+          () => '@@@@',
+          () => '____',
+          () => '0000',
+          () => 'XXXX',
+          // Strategy 3: Empty or very short strings
+          () => '',
+          () => ' ',
+          () => '\n',
+        ];
+        
+        for (const strategy of strategies) {
+          const candidate = strategy();
+          
+          // Check if this word is excluded or matches any regex
+          if (allExcluded.includes(candidate)) {
             continue;
+          }
+          
+          const matches = regexObjects.map(re => re.test(candidate));
+          const count = matches.filter(m => m).length;
+          
+          // We want a word that doesn't match any regex (count === 0)
+          // or at least matches differently than best1
+          if (count === 0 || matches.some((m, k) => m !== best1.matches[k])) {
+            best2 = { word: candidate, matches, count };
+            break;
           }
         }
       }
