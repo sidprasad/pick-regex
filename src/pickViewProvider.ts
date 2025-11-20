@@ -757,7 +757,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     if (automataAnalysisFailures > 0) {
       const message = `Some regex patterns (${automataAnalysisFailures}) contain unsupported syntax (e.g., word boundaries \\b or lookbehind assertions). Used sampling-based equivalence checking as fallback.`;
       logger.warn(message);
-      void vscode.window.showWarningMessage(`PICK: ${message}`);
+      //void vscode.window.showWarningMessage(`PICK: ${message}`);
     }
     
     logger.info(`Final: ${unique.length}/${regexes.length} semantically unique regexes`);
