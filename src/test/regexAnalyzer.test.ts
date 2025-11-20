@@ -334,6 +334,25 @@ suite('RegexAnalyzer Test Suite', () => {
       
       assert.ok(differences > 0, 'Words should have different match patterns');
     });
+
+    test('Should never return duplicate words in the pair', async () => {
+      // Test with multiple candidate patterns
+      const testCases = [
+        ['[a-z]+', '[0-9]+'],
+        ['[a-z]{3}', '[0-9]{3}'],
+        ['(cat|dog)', '(bird|fish)'],
+        ['[0-9]{4}'], // Single candidate case
+      ];
+
+      for (const candidates of testCases) {
+        const result = await analyzer.generateTwoDistinguishingWords(candidates);
+        
+        assert.strictEqual(result.words.length, 2, 
+          `Should return exactly 2 words for candidates: ${candidates.join(', ')}`);
+        assert.notStrictEqual(result.words[0], result.words[1], 
+          `Words should be distinct. Got: [${result.words[0]}, ${result.words[1]}] for candidates: ${candidates.join(', ')}`);
+      }
+    });
   });
 
   suite('Helper methods', () => {

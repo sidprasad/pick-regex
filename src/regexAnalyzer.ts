@@ -470,7 +470,7 @@ export class RegexAnalyzer {
       // Find the pair of words that provides maximum information gain
       // Best pair is one where the words split candidates as differently as possible
       let best1 = scored[0];
-      let best2 = scored[1] || scored[0];
+      let best2 = scored.length > 1 ? scored[1] : null;
       let maxInfoGain = 0;
       
       for (let i = 0; i < scored.length; i++) {
@@ -489,6 +489,56 @@ export class RegexAnalyzer {
             best2 = scored[j];
           }
         }
+      }
+      
+      // If we only had one scored word, generate a word NOT matching any regex
+      if (!best2) {
+        // Generate a word that doesn't match any of the candidate regexes
+        // This provides maximum information gain by testing if candidates incorrectly accept non-target strings
+        const allExcluded = [...excludedWords, best1.word];
+        
+        // Try multiple strategies to generate a non-matching word
+        const strategies = [
+          // Strategy 1: Simple mutations of the existing word
+          () => best1.word + 'X',
+          () => 'X' + best1.word,
+          () => best1.word.slice(0, -1) || '!',
+          () => best1.word.toUpperCase() !== best1.word ? best1.word.toUpperCase() : best1.word.toLowerCase(),
+          // Strategy 2: Common non-matching patterns
+          () => '!!!invalid!!!',
+          () => '@@@@',
+          () => '____',
+          () => '0000',
+          () => 'XXXX',
+          // Strategy 3: Empty or very short strings
+          () => '',
+          () => ' ',
+          () => '\n',
+        ];
+        
+        for (const strategy of strategies) {
+          const candidate = strategy();
+          
+          // Check if this word is excluded or matches any regex
+          if (allExcluded.includes(candidate)) {
+            continue;
+          }
+          
+          const matches = regexObjects.map(re => re.test(candidate));
+          const count = matches.filter(m => m).length;
+          
+          // We want a word that doesn't match any regex (count === 0)
+          // or at least matches differently than best1
+          if (count === 0 || matches.some((m, k) => m !== best1.matches[k])) {
+            best2 = { word: candidate, matches, count };
+            break;
+          }
+        }
+      }
+      
+      // If we still don't have a second word, throw an error rather than returning duplicates
+      if (!best2) {
+        throw new Error('Could not generate two distinct distinguishing words');
       }
       
       return {
