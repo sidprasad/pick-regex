@@ -66,7 +66,7 @@ export function checkAutomataSupport(regex: string): {
   const unsupportedFeatures: string[] = [];
   
   // Check for word boundaries \b or \B
-  if (/\\b/g.test(regex) || /\\B/g.test(regex)) {
+  if (/\\[bB]/.test(regex)) {
     unsupportedFeatures.push('word boundary (\\b or \\B)');
   }
   
@@ -83,7 +83,7 @@ export function checkAutomataSupport(regex: string): {
   let suggestion = '';
   if (unsupportedFeatures.length > 0) {
     if (unsupportedFeatures.some(f => f.includes('word boundary'))) {
-      suggestion = 'Consider using explicit character classes like [a-zA-Z0-9_] instead of \\w with anchors ^ and $ for boundaries';
+      suggestion = 'Replace word boundaries (\\b) with anchors (^ and $) for start/end of string, or use explicit non-word characters like [^a-zA-Z0-9_] to match word edges';
     }
   }
   
