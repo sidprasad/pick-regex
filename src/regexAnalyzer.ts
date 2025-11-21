@@ -349,7 +349,8 @@ export class RegexAnalyzer {
   verifyMatch(word: string, regex: string): boolean {
     try {
       return new RegExp(`^${regex}$`).test(word);
-    } catch {
+    } catch (error) {
+      logger.error(`Error verifying match for word '${word}' and regex '${regex}': ${error}`);
       return false;
     }
   }
