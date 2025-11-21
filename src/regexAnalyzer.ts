@@ -320,6 +320,13 @@ export class RegexAnalyzer {
    * - Unicode property escapes: \p{...}, \P{...}
    * - Named groups: (?<name>...)
    * - Global/local flags (these shouldn't appear in pattern body anyway)
+   * 
+   * Note: This validation uses simple regex patterns that may have false positives
+   * in extremely rare edge cases (e.g., patterns containing literal '\\b' to match
+   * a backslash followed by 'b'). This trade-off is acceptable because:
+   * 1. Such patterns are extremely rare in practice
+   * 2. False positives are conservative (rejecting safe patterns is better than accepting unsafe ones)
+   * 3. We cannot use lookbehind in our own validation logic (it's unsupported!)
    */
   hasSupportedSyntax(pattern: string): boolean {
     // First check if it's valid JavaScript regex
