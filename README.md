@@ -105,6 +105,12 @@ Development workflow:
 
 ---
 
+## Credits
+
+PICK is a collaboration between Siddhartha Prasad, Skyler Austen, Kathi Fisler, and Shriram Krishnamurthi. Siddhartha is the primary author of this version of the tool.
+
+---
+
 ## License
 
 MIT. See the `LICENSE` file.
