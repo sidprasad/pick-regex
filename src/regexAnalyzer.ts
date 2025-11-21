@@ -303,72 +303,54 @@ export class RegexAnalyzer {
   }
 
   /**
-   * Verify match
+   * Check if a regex pattern uses only syntax supported by @gruhn/regex-utils
+   * 
+   * This method attempts to create a regex-utils RB object from the pattern.
+   * If the library throws an exception, the pattern uses unsupported syntax.
+   * 
+   * Supported syntax:
+   * - Quantifiers: *, +, ?, {m,n}
+   * - Alternation: |
+   * - Character classes: ., \w, \d, \s, [...]
+   * - Escaping: \$, \., etc.
+   * - Groups: (?:...), (...)
+   * - Positive/negative lookahead: (?=...), (?!...)
+   * 
+   * Unsupported syntax that will cause this to return false:
+   * - Word boundaries: \b, \B
+   * - Lookbehind assertions: (?<=...), (?<!...)
+   * - Backreferences: \1, \2, etc.
+   * - Unicode property escapes: \p{...}, \P{...}
+   * - Named groups: (?<name>...)
+   * - Global/local flags (these shouldn't appear in pattern body anyway)
    */
-  verifyMatch(word: string, regex: string): boolean {
+  async hasSupportedSyntax(pattern: string): Promise<boolean> {
+    // First check if it's valid JavaScript regex
+    if (!this.isValidRegex(pattern)) {
+      logger.warn(`Pattern has invalid JavaScript syntax: ${pattern}`);
+      return false;
+    }
+
+    // Try to create an RB object from the pattern
+    // If @gruhn/regex-utils throws an exception, the syntax is unsupported
     try {
-      return new RegExp(`^${regex}$`).test(word);
-    } catch {
+      const RB = await getRB();
+      RB(new RegExp(`^${pattern}$`));
+      return true;
+    } catch (error) {
+      logger.warn(`Pattern uses unsupported syntax for @gruhn/regex-utils: ${pattern} - ${error}`);
       return false;
     }
   }
 
   /**
-   * Deep sampling-based equivalence test for when automata analysis fails
-   * Returns true if regexes appear equivalent based on extensive sampling
+   * Verify match
    */
-  deepSamplingEquivalenceCheck(regexA: string, regexB: string): boolean {
+  verifyMatch(word: string, regex: string): boolean {
     try {
-      // First check if both regexes are valid
-      if (!this.isValidRegex(regexA) || !this.isValidRegex(regexB)) {
-        return false; // Invalid regexes are never equivalent
-      }
-
-      const reA = new RegExp(`^${regexA}$`);
-      const reB = new RegExp(`^${regexB}$`);
-      
-      // Generate more samples from both regexes
-      const samplesA = this.generateMultipleWords(regexA, 50);
-      const samplesB = this.generateMultipleWords(regexB, 50);
-      
-      // Check if A ⊆ B (all samples from A match B)
-      for (const word of samplesA) {
-        if (!reB.test(word)) {
-          return false;
-        }
-      }
-      
-      // Check if B ⊆ A (all samples from B match A)
-      for (const word of samplesB) {
-        if (!reA.test(word)) {
-          return false;
-        }
-      }
-      
-      // Also test common test cases that might reveal differences
-      const testWords = [
-        '', ' ', '  ', '\n', '\t',
-        'a', 'A', 'aa', 'aaa',
-        'b', 'ab', 'ba', 'aba',
-        '1', '12', '123',
-        'test', 'TEST', 'Test',
-        '!', '@', '#', '$',
-        'a1', '1a', 'a1b',
-        ...samplesA, ...samplesB
-      ];
-      
-      for (const word of testWords) {
-        const matchA = reA.test(word);
-        const matchB = reB.test(word);
-        if (matchA !== matchB) {
-          return false;
-        }
-      }
-      
-      // Passed all tests - likely equivalent
-      return true;
+      return new RegExp(`^${regex}$`).test(word);
     } catch (error) {
-      // On error, assume not equivalent (conservative)
+      logger.error(`Error verifying match for word '${word}' and regex '${regex}': ${error}`);
       return false;
     }
   }
@@ -652,6 +634,12 @@ export class RegexAnalyzer {
       // If we still don't have a second word, throw an error rather than returning duplicates
       if (!best2) {
         throw new Error('Could not generate two distinct distinguishing words');
+      }
+      
+      // CRITICAL: At least ONE word must match at least one candidate
+      // If both words have count === 0, we've run out of words to generate
+      if (best1.count === 0 && best2.count === 0) {
+        throw new Error('Could not generate unique word - both words match zero candidates (exhausted word space)');
       }
       
       return {

@@ -129,25 +129,34 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      // Filter out invalid regexes first
-      const validCandidates = candidates.filter(regex => {
+      // Filter out invalid regexes and regexes with unsupported syntax
+      const validCandidates: string[] = [];
+      for (const regex of candidates) {
         const isValid = this.analyzer.isValidRegex(regex);
         if (!isValid) {
           logger.warn(`Filtered out invalid regex: "${regex}"`);
+          continue;
         }
-        return isValid;
-      });
+        
+        const hasSupported = await this.analyzer.hasSupportedSyntax(regex);
+        if (!hasSupported) {
+          logger.warn(`Filtered out regex with unsupported syntax: "${regex}"`);
+          continue;
+        }
+        
+        validCandidates.push(regex);
+      }
 
       if (validCandidates.length === 0) {
         this.sendMessage({ 
           type: 'error', 
-          message: 'All generated regexes contain invalid JavaScript syntax. Please try again.' 
+          message: 'All generated regexes contain invalid or unsupported syntax (e.g., word boundaries \\b, lookbehinds). Please try again.' 
         });
         return;
       }
 
       if (validCandidates.length < candidates.length) {
-        logger.info(`Filtered out ${candidates.length - validCandidates.length} invalid regex(es)`);
+        logger.info(`Filtered out ${candidates.length - validCandidates.length} invalid or unsupported regex(es)`);
       }
 
       // Filter out equivalent/duplicate regexes
@@ -499,25 +508,34 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      // Filter out invalid regexes first
-      const validCandidates = candidates.filter(regex => {
+      // Filter out invalid regexes and regexes with unsupported syntax
+      const validCandidates: string[] = [];
+      for (const regex of candidates) {
         const isValid = this.analyzer.isValidRegex(regex);
         if (!isValid) {
           logger.warn(`Filtered out invalid regex: "${regex}"`);
+          continue;
         }
-        return isValid;
-      });
+        
+        const hasSupported = await this.analyzer.hasSupportedSyntax(regex);
+        if (!hasSupported) {
+          logger.warn(`Filtered out regex with unsupported syntax: "${regex}"`);
+          continue;
+        }
+        
+        validCandidates.push(regex);
+      }
 
       if (validCandidates.length === 0) {
         this.sendMessage({ 
           type: 'error', 
-          message: 'All generated regexes contain invalid JavaScript syntax. Please try again.' 
+          message: 'All generated regexes contain invalid or unsupported syntax (e.g., word boundaries \\b, lookbehinds). Please try again.' 
         });
         return;
       }
 
       if (validCandidates.length < candidates.length) {
-        logger.info(`Filtered out ${candidates.length - validCandidates.length} invalid regex(es)`);
+        logger.info(`Filtered out ${candidates.length - validCandidates.length} invalid or unsupported regex(es)`);
       }
 
       // Filter out equivalent/duplicate regexes
@@ -729,21 +747,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
             throw error; // Re-throw cancellation
           }
           
-          // Automata analysis failed (unsupported syntax like \b or lookbehind)
-          // Fall back to deep sampling-based equivalence test
-          logger.warn(`Analysis failed for "${regex}" vs "${uniqueRegex}": ${error}`);
-          logger.info(`Attempting deep sampling equivalence check...`);
-          
+          // Automata analysis failed - this should not happen since we filtered
+          // unsupported patterns earlier. Log the error and skip equivalence check.
+          logger.error(error, `Unexpected automata analysis failure for "${regex}" vs "${uniqueRegex}"`);
           automataAnalysisFailures++;
-          
-          const samplingResult = this.analyzer.deepSamplingEquivalenceCheck(regex, uniqueRegex);
-          if (samplingResult) {
-            logger.info(`Deep sampling suggests equivalent: "${regex}" === "${uniqueRegex}"`);
-            isEquivalent = true;
-            break;
-          } else {
-            logger.info(`Deep sampling suggests different: "${regex}" vs "${uniqueRegex}"`);
-          }
+          // Treat as not equivalent (conservative approach)
         }
       }
       
@@ -755,9 +763,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     
     // Show warning if automata analysis failed for some regexes
     if (automataAnalysisFailures > 0) {
-      const message = `Some regex patterns (${automataAnalysisFailures}) contain unsupported syntax (e.g., word boundaries \\b or lookbehind assertions). Used sampling-based equivalence checking as fallback.`;
+      const message = `Unexpected automata analysis failures (${automataAnalysisFailures}). Some regexes may not have been properly deduplicated.`;
       logger.warn(message);
-      //void vscode.window.showWarningMessage(`PICK: ${message}`);
     }
     
     logger.info(`Final: ${unique.length}/${regexes.length} semantically unique regexes`);

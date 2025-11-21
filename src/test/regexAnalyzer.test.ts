@@ -379,6 +379,52 @@ suite('RegexAnalyzer Test Suite', () => {
           `Words should be distinct. Got: [${result.words[0]}, ${result.words[1]}] for candidates: ${candidates.join(', ')}`);
       }
     });
+
+    test('Should throw error when word space is exhausted', async () => {
+      // Test case: regex 'a' only matches one word, and we exclude it
+      // After excluding 'a', we can only generate words that DON'T match (count=0)
+      const candidates = ['a'];
+      const excluded = ['a']; // Exclude the only matching word
+      
+      try {
+        await analyzer.generateTwoDistinguishingWords(candidates, excluded);
+        assert.fail('Should have thrown an error when word space is exhausted');
+      } catch (error) {
+        assert.ok(error);
+        const errorMessage = String(error);
+        // Should mention that both words match zero candidates or exhausted word space
+        assert.ok(
+          errorMessage.includes('both words match zero candidates') || 
+          errorMessage.includes('exhausted word space') ||
+          errorMessage.includes('Could not generate unique word'),
+          `Error message should indicate word exhaustion. Got: ${errorMessage}`
+        );
+      }
+    });
+
+    test('Should ensure at least one word matches at least one candidate', async () => {
+      // For any valid scenario, at least one word should match at least one candidate
+      const testCases = [
+        ['[a-z]+'],
+        ['[a-z]+', '[0-9]+'],
+        ['[a-z]{2}', '[0-9]{2}'],
+      ];
+
+      for (const candidates of testCases) {
+        const result = await analyzer.generateTwoDistinguishingWords(candidates);
+        const regexObjects = candidates.map(c => new RegExp(`^${c}$`));
+        
+        const [word1, word2] = result.words;
+        const matches1 = regexObjects.some(re => re.test(word1));
+        const matches2 = regexObjects.some(re => re.test(word2));
+        
+        // At least one word must match at least one candidate
+        assert.ok(
+          matches1 || matches2,
+          `At least one word must match a candidate. Word1: "${word1}" matches: ${matches1}, Word2: "${word2}" matches: ${matches2}`
+        );
+      }
+    });
   });
 
   suite('Helper methods', () => {
@@ -453,6 +499,158 @@ suite('RegexAnalyzer Test Suite', () => {
       assert.strictEqual(analyzer.isValidRegex('(?<!\\w)a(?!\\w)'), true);
       assert.strictEqual(analyzer.isValidRegex('(?<=\\d)\\w+'), true);
       assert.strictEqual(analyzer.isValidRegex('\\w+(?=\\d)'), true);
+    });
+  });
+
+  suite('hasSupportedSyntax', () => {
+    test('Should accept patterns with supported syntax', async () => {
+      const supportedPatterns = [
+        '[a-z]+',              // Character classes
+        '\\d{3}',              // Quantifiers
+        '^a$',                 // Anchors
+        '(?:abc|def)',         // Non-capturing groups and alternation
+        '(test)',              // Capturing groups
+        '(?=abc)',             // Positive lookahead
+        '(?!xyz)',             // Negative lookahead
+        '[aA][bB][cC]',        // Case-insensitive patterns
+        '\\w+',                // Character class escapes
+        '\\.',                 // Escaped special characters
+        '[^a-z]',              // Negated character classes
+        'a{2,5}',              // Range quantifiers
+        'a*b+c?',              // Various quantifiers
+      ];
+
+      for (const pattern of supportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
+        assert.strictEqual(
+          result,
+          true,
+          `Pattern "${pattern}" should be supported`
+        );
+      }
+    });
+
+    test('Should reject patterns with word boundaries', async () => {
+      const unsupportedPatterns = [
+        '\\bword\\b',          // Word boundaries
+        '\\ba',                // Word boundary at start
+        'a\\b',                // Word boundary at end
+      ];
+
+      for (const pattern of unsupportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
+        assert.strictEqual(
+          result,
+          false,
+          `Pattern "${pattern}" should be rejected (word boundary)`
+        );
+      }
+    });
+
+
+    test('Should reject patterns with Unicode property escapes', async () => {
+      const unsupportedPatterns = [
+        '\\p{Letter}',         // Unicode property
+        '\\P{Number}',         // Negated Unicode property
+        '\\p{Ll}',             // Lowercase letter
+        '\\p{Script=Greek}',   // Unicode script
+      ];
+
+      for (const pattern of unsupportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
+        assert.strictEqual(
+          result,
+          false,
+          `Pattern "${pattern}" should be rejected (Unicode property escape)`
+        );
+      }
+    });
+
+
+    test('Should accept lookahead assertions (supported)', async () => {
+      const supportedPatterns = [
+        '(?=test)',            // Positive lookahead
+        '(?!xyz)',             // Negative lookahead
+        'a(?=b)',              // Lookahead in middle
+        '(?=\\d)\\w+',         // Lookahead at start
+      ];
+
+      for (const pattern of supportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
+        assert.strictEqual(
+          result,
+          true,
+          `Pattern "${pattern}" should be supported (lookahead is allowed)`
+        );
+      }
+    });
+
+    test('Should handle complex patterns correctly', async () => {
+      // Supported complex patterns
+      assert.strictEqual(
+        await analyzer.hasSupportedSyntax('(?:(?:[a-z]+)|(?:[0-9]+))+'),
+        true,
+        'Nested groups should be supported'
+      );
+      
+      assert.strictEqual(
+        await analyzer.hasSupportedSyntax('[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}'),
+        true,
+        'Email-like pattern should be supported'
+      );
+
+      // Unsupported complex patterns
+      assert.strictEqual(
+        await analyzer.hasSupportedSyntax('\\b[a-z]+\\b'),
+        false,
+        'Pattern with word boundaries should be rejected'
+      );
+      
+      assert.strictEqual(
+        await analyzer.hasSupportedSyntax('(?<=@)\\w+'),
+        false,
+        'Pattern with lookbehind should be rejected'
+      );
+    });
+
+    test('Should reject invalid patterns', async () => {
+      const invalidPatterns = [
+        '[a-z',                // Unclosed character class
+        '(?i)test',            // Inline flag (invalid in JS)
+        '(?>abc)',             // Atomic group (invalid in JS)
+      ];
+
+      for (const pattern of invalidPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
+        assert.strictEqual(
+          result,
+          false,
+          `Invalid pattern "${pattern}" should be rejected`
+        );
+      }
+    });
+
+    test('Should handle edge cases', async () => {
+      // Pattern with octal escape \0 (should be supported, not a backreference)
+      assert.strictEqual(
+        await analyzer.hasSupportedSyntax('\\0'),
+        true,
+        'Null character escape should be supported'
+      );
+
+      // Pattern with hex escape
+      assert.strictEqual(
+        await analyzer.hasSupportedSyntax('\\x41'),
+        true,
+        'Hex escape should be supported'
+      );
+
+      // Pattern that looks like lookbehind but isn't (character class)
+      assert.strictEqual(
+        await analyzer.hasSupportedSyntax('[(?<=)]'),
+        true,
+        'Character class containing lookbehind-like characters should be supported'
+      );
     });
   });
 
