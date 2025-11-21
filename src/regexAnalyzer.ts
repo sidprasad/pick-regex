@@ -636,6 +636,12 @@ export class RegexAnalyzer {
         throw new Error('Could not generate two distinct distinguishing words');
       }
       
+      // CRITICAL: At least ONE word must match at least one candidate
+      // If both words have count === 0, we've run out of words to generate
+      if (best1.count === 0 && best2.count === 0) {
+        throw new Error('Could not generate unique word - both words match zero candidates (exhausted word space)');
+      }
+      
       return {
         words: [best1.word, best2.word],
         explanation: `Maximally distinguishing pair (info gain: ${maxInfoGain})`,
