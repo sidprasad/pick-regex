@@ -341,7 +341,7 @@ suite('RegexAnalyzer Test Suite', () => {
 
     test('Should generate words with high distinguishing power', async () => {
       const candidates = ['[a-c]+', '[b-d]+', '[c-e]+'];
-      
+
       const result = await analyzer.generateTwoDistinguishingWords(candidates);
       
       const regexObjects = candidates.map(c => new RegExp(`^${c}$`));
@@ -357,8 +357,31 @@ suite('RegexAnalyzer Test Suite', () => {
           differences++;
         }
       }
-      
+
       assert.ok(differences > 0, 'Words should have different match patterns');
+    });
+
+    test('Should pick pairs that always eliminate candidates even with containment', async () => {
+      const candidates = ['a.*', 'ab', 'ac'];
+
+      const result = await analyzer.generateTwoDistinguishingWords(candidates);
+      const regexObjects = candidates.map(c => new RegExp(`^${c}$`));
+
+      const [word1, word2] = result.words;
+      const matches1 = regexObjects.map(re => re.test(word1));
+      const matches2 = regexObjects.map(re => re.test(word2));
+
+      // Every vote path (YY, YN, NY, NN) should remove at least one candidate
+      const yesYes = matches1.filter((m, i) => m && matches2[i]).length;
+      const yesNo = matches1.filter((m, i) => m && !matches2[i]).length;
+      const noYes = matches1.filter((m, i) => !m && matches2[i]).length;
+      const noNo = candidates.length - yesYes - yesNo - noYes;
+
+      const worstCase = Math.max(yesYes, yesNo, noYes, noNo);
+
+      assert.ok(worstCase < candidates.length, 'Each vote combination should eliminate something');
+      assert.ok(matches1.some(Boolean) && matches1.some(v => !v), 'First word must distinguish');
+      assert.ok(matches2.some(Boolean) && matches2.some(v => !v), 'Second word must distinguish');
     });
 
     test('Should never return duplicate words in the pair', async () => {

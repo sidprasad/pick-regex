@@ -562,7 +562,7 @@ export class RegexAnalyzer {
         matches: boolean[];
         count: number;
       }
-      
+
       const scored: Scored[] = Array.from(new Set(unique))
         .filter(w => !excludedWords.includes(w))
         .map(word => {
@@ -575,39 +575,83 @@ export class RegexAnalyzer {
         throw new Error('Could not generate any candidate words');
       }
       
-      // Find the pair of words that provides maximum information gain
-      // Best pair is one where the words split candidates as differently as possible
-      let best1 = scored[0];
-      let best2 = scored.length > 1 ? scored[1] : null;
-      let maxInfoGain = 0;
-      let shortestTotalLength = best2 ? best1.word.length + best2.word.length : Infinity;
-      
-      for (let i = 0; i < scored.length; i++) {
-        for (let j = i + 1; j < scored.length; j++) {
-          // Calculate how differently these words split the candidates
-          const diff = scored[i].matches.filter((m, k) => m !== scored[j].matches[k]).length;
-          
-          // Prefer pairs where both words are informative (not all or none)
-          const balance1 = Math.min(scored[i].count, candidateRegexes.length - scored[i].count);
-          const balance2 = Math.min(scored[j].count, candidateRegexes.length - scored[j].count);
-          const infoGain = diff * (balance1 + balance2);
-          
-          const totalLength = scored[i].word.length + scored[j].word.length;
+      // Prefer words where both upvotes and downvotes are informative
+      const informative = scored.filter(s => s.count > 0 && s.count < candidateRegexes.length);
+      const pool = informative.length > 0 ? informative : scored;
 
-          // Prefer pairs with higher information gain, with a tie-breaker toward shorter words
+      const calculateWorstCase = (first: Scored, second: Scored) => {
+        const yesYes = first.matches.filter((m, k) => m && second.matches[k]).length;
+        const yesNo = first.matches.filter((m, k) => m && !second.matches[k]).length;
+        const noYes = first.matches.filter((m, k) => !m && second.matches[k]).length;
+        const noNo = candidateRegexes.length - yesYes - yesNo - noYes;
+
+        return {
+          partitions: [yesYes, yesNo, noYes, noNo],
+          worstCase: Math.max(yesYes, yesNo, noYes, noNo)
+        };
+      };
+
+      // Find the pair of words that minimizes the worst-case remaining candidates across
+      // all four vote combinations (YY, YN, NY, NN). This set-partitioning metric guarantees
+      // that every vote moves us toward elimination when possible.
+      let bestPair: { first: Scored; second: Scored; worstCase: number } | null = null;
+      let bestElimination = -1;
+      let bestWorstCase = candidateRegexes.length;
+      let shortestTotalLength = Infinity;
+      let bestPartitionDiversity = 0;
+
+      for (let i = 0; i < pool.length; i++) {
+        for (let j = i + 1; j < pool.length; j++) {
+          const first = pool[i];
+          const second = pool[j];
+
+          // Skip pairs that have identical match vectors — they do not provide new information
+          const matchVectorsEqual = first.matches.every((m, idx) => m === second.matches[idx]);
+          if (matchVectorsEqual) {
+            continue;
+          }
+
+          const { partitions, worstCase } = calculateWorstCase(first, second);
+          const elimination = candidateRegexes.length - worstCase;
+
+          // Require that each vote combination eliminates something when possible
+          if (elimination < bestElimination) {
+            continue;
+          }
+
+          const partitionDiversity = partitions.filter(p => p > 0).length;
+          const totalLength = first.word.length + second.word.length;
+
+          const balanceScore = Math.min(first.count, candidateRegexes.length - first.count) +
+            Math.min(second.count, candidateRegexes.length - second.count);
+          const bestBalanceScore = bestPair
+            ? Math.min(bestPair.first.count, candidateRegexes.length - bestPair.first.count) +
+              Math.min(bestPair.second.count, candidateRegexes.length - bestPair.second.count)
+            : -Infinity;
+
           if (
-            infoGain > maxInfoGain ||
-            (infoGain === maxInfoGain && totalLength < shortestTotalLength)
+            elimination > bestElimination ||
+            (elimination === bestElimination && worstCase < bestWorstCase) ||
+            (elimination === bestElimination && worstCase === bestWorstCase && partitionDiversity > bestPartitionDiversity) ||
+            (elimination === bestElimination && worstCase === bestWorstCase && partitionDiversity === bestPartitionDiversity &&
+              balanceScore > 0 && balanceScore > bestBalanceScore) ||
+            (elimination === bestElimination && worstCase === bestWorstCase && partitionDiversity === bestPartitionDiversity &&
+              balanceScore === bestBalanceScore && totalLength < shortestTotalLength)
           ) {
-            maxInfoGain = infoGain;
+            bestElimination = elimination;
+            bestWorstCase = worstCase;
+            bestPartitionDiversity = partitionDiversity;
             shortestTotalLength = totalLength;
-            best1 = scored[i];
-            best2 = scored[j];
+            bestPair = { first, second, worstCase };
           }
         }
       }
-      
-      // If we only had one scored word, generate a word NOT matching any regex
+
+      let best1 = bestPair?.first ?? pool[0];
+      let best2 = bestPair?.second ?? null;
+
+      // If we only had one scored word or couldn't find a distinct pair,
+      // generate a word NOT matching any regex or with a different match vector
       if (!best2) {
         // Generate a word that doesn't match any of the candidate regexes
         // This provides maximum information gain by testing if candidates incorrectly accept non-target strings
@@ -642,14 +686,19 @@ export class RegexAnalyzer {
           
           const matches = regexObjects.map(re => re.test(candidate));
           const count = matches.filter(m => m).length;
-          
+
           // We want a word that doesn't match any regex (count === 0)
           // or at least matches differently than best1
           if (count === 0 || matches.some((m, k) => m !== best1.matches[k])) {
             best2 = { word: candidate, matches, count };
+            bestWorstCase = calculateWorstCase(best1, best2).worstCase;
             break;
           }
         }
+      }
+
+      if (best2) {
+        bestWorstCase = calculateWorstCase(best1, best2).worstCase;
       }
       
       // If we still don't have a second word, throw an error rather than returning duplicates
@@ -662,10 +711,10 @@ export class RegexAnalyzer {
       if (best1.count === 0 && best2.count === 0) {
         throw new Error('Could not generate unique word - both words match zero candidates (exhausted word space)');
       }
-      
+
       return {
         words: [best1.word, best2.word],
-        explanation: `Maximally distinguishing pair (info gain: ${maxInfoGain})`,
+        explanation: `Set-partitioning pair; worst-case remaining candidates: ${bestWorstCase}`,
         properties: [
           `Matches ${best1.count}/${candidateRegexes.length}`,
           `Matches ${best2.count}/${candidateRegexes.length}`
