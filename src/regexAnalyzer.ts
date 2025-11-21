@@ -305,6 +305,9 @@ export class RegexAnalyzer {
   /**
    * Check if a regex pattern uses only syntax supported by @gruhn/regex-utils
    * 
+   * This method attempts to create a regex-utils RB object from the pattern.
+   * If the library throws an exception, the pattern uses unsupported syntax.
+   * 
    * Supported syntax:
    * - Quantifiers: *, +, ?, {m,n}
    * - Alternation: |
@@ -313,62 +316,31 @@ export class RegexAnalyzer {
    * - Groups: (?:...), (...)
    * - Positive/negative lookahead: (?=...), (?!...)
    * 
-   * Unsupported syntax that will return false:
+   * Unsupported syntax that will cause this to return false:
    * - Word boundaries: \b, \B
    * - Lookbehind assertions: (?<=...), (?<!...)
    * - Backreferences: \1, \2, etc.
    * - Unicode property escapes: \p{...}, \P{...}
    * - Named groups: (?<name>...)
    * - Global/local flags (these shouldn't appear in pattern body anyway)
-   * 
-   * Note: This validation uses simple regex patterns that may have false positives
-   * in extremely rare edge cases (e.g., patterns containing literal '\\b' to match
-   * a backslash followed by 'b'). This trade-off is acceptable because:
-   * 1. Such patterns are extremely rare in practice
-   * 2. False positives are conservative (rejecting safe patterns is better than accepting unsafe ones)
-   * 3. We cannot use lookbehind in our own validation logic (it's unsupported!)
    */
-  hasSupportedSyntax(pattern: string): boolean {
+  async hasSupportedSyntax(pattern: string): Promise<boolean> {
     // First check if it's valid JavaScript regex
     if (!this.isValidRegex(pattern)) {
       logger.warn(`Pattern has invalid JavaScript syntax: ${pattern}`);
       return false;
     }
 
-    // Check for word boundaries \b or \B
-    if (/\\[bB]/.test(pattern)) {
-      logger.warn(`Pattern contains unsupported word boundary (\\b or \\B): ${pattern}`);
+    // Try to create an RB object from the pattern
+    // If @gruhn/regex-utils throws an exception, the syntax is unsupported
+    try {
+      const RB = await getRB();
+      RB(new RegExp(`^${pattern}$`));
+      return true;
+    } catch (error) {
+      logger.warn(`Pattern uses unsupported syntax for @gruhn/regex-utils: ${pattern} - ${error}`);
       return false;
     }
-
-    // Check for lookbehind assertions (?<=...) or (?<!...)
-    if (/\(\?<[=!]/.test(pattern)) {
-      logger.warn(`Pattern contains unsupported lookbehind assertion: ${pattern}`);
-      return false;
-    }
-
-    // Check for backreferences \1, \2, etc.
-    // Need to be careful not to match octal escapes like \0 or character classes
-    if (/\\[1-9]\d*/.test(pattern)) {
-      logger.warn(`Pattern contains unsupported backreference: ${pattern}`);
-      return false;
-    }
-
-    // Check for Unicode property escapes \p{...} or \P{...}
-    if (/\\[pP]\{/.test(pattern)) {
-      logger.warn(`Pattern contains unsupported Unicode property escape: ${pattern}`);
-      return false;
-    }
-
-    // Check for named capture groups (?<name>...)
-    // This is different from lookbehind - it's (?< followed by word chars and >
-    if (/\(\?<[a-zA-Z_]\w*>/.test(pattern)) {
-      logger.warn(`Pattern contains unsupported named capture group: ${pattern}`);
-      return false;
-    }
-
-    // All checks passed
-    return true;
   }
 
   /**
@@ -378,66 +350,6 @@ export class RegexAnalyzer {
     try {
       return new RegExp(`^${regex}$`).test(word);
     } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Deep sampling-based equivalence test for when automata analysis fails
-   * Returns true if regexes appear equivalent based on extensive sampling
-   */
-  deepSamplingEquivalenceCheck(regexA: string, regexB: string): boolean {
-    try {
-      // First check if both regexes are valid
-      if (!this.isValidRegex(regexA) || !this.isValidRegex(regexB)) {
-        return false; // Invalid regexes are never equivalent
-      }
-
-      const reA = new RegExp(`^${regexA}$`);
-      const reB = new RegExp(`^${regexB}$`);
-      
-      // Generate more samples from both regexes
-      const samplesA = this.generateMultipleWords(regexA, 50);
-      const samplesB = this.generateMultipleWords(regexB, 50);
-      
-      // Check if A ⊆ B (all samples from A match B)
-      for (const word of samplesA) {
-        if (!reB.test(word)) {
-          return false;
-        }
-      }
-      
-      // Check if B ⊆ A (all samples from B match A)
-      for (const word of samplesB) {
-        if (!reA.test(word)) {
-          return false;
-        }
-      }
-      
-      // Also test common test cases that might reveal differences
-      const testWords = [
-        '', ' ', '  ', '\n', '\t',
-        'a', 'A', 'aa', 'aaa',
-        'b', 'ab', 'ba', 'aba',
-        '1', '12', '123',
-        'test', 'TEST', 'Test',
-        '!', '@', '#', '$',
-        'a1', '1a', 'a1b',
-        ...samplesA, ...samplesB
-      ];
-      
-      for (const word of testWords) {
-        const matchA = reA.test(word);
-        const matchB = reB.test(word);
-        if (matchA !== matchB) {
-          return false;
-        }
-      }
-      
-      // Passed all tests - likely equivalent
-      return true;
-    } catch (error) {
-      // On error, assume not equivalent (conservative)
       return false;
     }
   }

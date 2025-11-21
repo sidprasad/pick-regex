@@ -457,7 +457,7 @@ suite('RegexAnalyzer Test Suite', () => {
   });
 
   suite('hasSupportedSyntax', () => {
-    test('Should accept patterns with supported syntax', () => {
+    test('Should accept patterns with supported syntax', async () => {
       const supportedPatterns = [
         '[a-z]+',              // Character classes
         '\\d{3}',              // Quantifiers
@@ -474,16 +474,17 @@ suite('RegexAnalyzer Test Suite', () => {
         'a*b+c?',              // Various quantifiers
       ];
 
-      supportedPatterns.forEach(pattern => {
+      for (const pattern of supportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
         assert.strictEqual(
-          analyzer.hasSupportedSyntax(pattern),
+          result,
           true,
           `Pattern "${pattern}" should be supported`
         );
-      });
+      }
     });
 
-    test('Should reject patterns with word boundaries', () => {
+    test('Should reject patterns with word boundaries', async () => {
       const unsupportedPatterns = [
         '\\bword\\b',          // Word boundaries
         '\\ba',                // Word boundary at start
@@ -492,16 +493,17 @@ suite('RegexAnalyzer Test Suite', () => {
         'test\\B',             // Non-word boundary at end
       ];
 
-      unsupportedPatterns.forEach(pattern => {
+      for (const pattern of unsupportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
         assert.strictEqual(
-          analyzer.hasSupportedSyntax(pattern),
+          result,
           false,
           `Pattern "${pattern}" should be rejected (word boundary)`
         );
-      });
+      }
     });
 
-    test('Should reject patterns with lookbehind assertions', () => {
+    test('Should reject patterns with lookbehind assertions', async () => {
       const unsupportedPatterns = [
         '(?<=\\d)\\w+',        // Positive lookbehind
         '(?<!\\w)test',        // Negative lookbehind
@@ -509,16 +511,17 @@ suite('RegexAnalyzer Test Suite', () => {
         '(?<![a-z])\\d',       // Negative lookbehind with character class
       ];
 
-      unsupportedPatterns.forEach(pattern => {
+      for (const pattern of unsupportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
         assert.strictEqual(
-          analyzer.hasSupportedSyntax(pattern),
+          result,
           false,
           `Pattern "${pattern}" should be rejected (lookbehind)`
         );
-      });
+      }
     });
 
-    test('Should reject patterns with backreferences', () => {
+    test('Should reject patterns with backreferences', async () => {
       const unsupportedPatterns = [
         '(a)\\1',              // Backreference to group 1
         '(\\w+)\\s+\\1',       // Backreference with whitespace
@@ -526,16 +529,17 @@ suite('RegexAnalyzer Test Suite', () => {
         '([a-z])\\1+',         // Backreference with quantifier
       ];
 
-      unsupportedPatterns.forEach(pattern => {
+      for (const pattern of unsupportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
         assert.strictEqual(
-          analyzer.hasSupportedSyntax(pattern),
+          result,
           false,
           `Pattern "${pattern}" should be rejected (backreference)`
         );
-      });
+      }
     });
 
-    test('Should reject patterns with Unicode property escapes', () => {
+    test('Should reject patterns with Unicode property escapes', async () => {
       const unsupportedPatterns = [
         '\\p{Letter}',         // Unicode property
         '\\P{Number}',         // Negated Unicode property
@@ -543,32 +547,34 @@ suite('RegexAnalyzer Test Suite', () => {
         '\\p{Script=Greek}',   // Unicode script
       ];
 
-      unsupportedPatterns.forEach(pattern => {
+      for (const pattern of unsupportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
         assert.strictEqual(
-          analyzer.hasSupportedSyntax(pattern),
+          result,
           false,
           `Pattern "${pattern}" should be rejected (Unicode property escape)`
         );
-      });
+      }
     });
 
-    test('Should reject patterns with named capture groups', () => {
+    test('Should reject patterns with named capture groups', async () => {
       const unsupportedPatterns = [
         '(?<name>test)',       // Named capture group
         '(?<word>\\w+)',       // Named group with character class
         '(?<id>\\d+)',         // Named group with digits
       ];
 
-      unsupportedPatterns.forEach(pattern => {
+      for (const pattern of unsupportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
         assert.strictEqual(
-          analyzer.hasSupportedSyntax(pattern),
+          result,
           false,
           `Pattern "${pattern}" should be rejected (named capture group)`
         );
-      });
+      }
     });
 
-    test('Should accept lookahead assertions (supported)', () => {
+    test('Should accept lookahead assertions (supported)', async () => {
       const supportedPatterns = [
         '(?=test)',            // Positive lookahead
         '(?!xyz)',             // Negative lookahead
@@ -576,77 +582,79 @@ suite('RegexAnalyzer Test Suite', () => {
         '(?=\\d)\\w+',         // Lookahead at start
       ];
 
-      supportedPatterns.forEach(pattern => {
+      for (const pattern of supportedPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
         assert.strictEqual(
-          analyzer.hasSupportedSyntax(pattern),
+          result,
           true,
           `Pattern "${pattern}" should be supported (lookahead is allowed)`
         );
-      });
+      }
     });
 
-    test('Should handle complex patterns correctly', () => {
+    test('Should handle complex patterns correctly', async () => {
       // Supported complex patterns
       assert.strictEqual(
-        analyzer.hasSupportedSyntax('(?:(?:[a-z]+)|(?:[0-9]+))+'),
+        await analyzer.hasSupportedSyntax('(?:(?:[a-z]+)|(?:[0-9]+))+'),
         true,
         'Nested groups should be supported'
       );
       
       assert.strictEqual(
-        analyzer.hasSupportedSyntax('[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}'),
+        await analyzer.hasSupportedSyntax('[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}'),
         true,
         'Email-like pattern should be supported'
       );
 
       // Unsupported complex patterns
       assert.strictEqual(
-        analyzer.hasSupportedSyntax('\\b[a-z]+\\b'),
+        await analyzer.hasSupportedSyntax('\\b[a-z]+\\b'),
         false,
         'Pattern with word boundaries should be rejected'
       );
       
       assert.strictEqual(
-        analyzer.hasSupportedSyntax('(?<=@)\\w+'),
+        await analyzer.hasSupportedSyntax('(?<=@)\\w+'),
         false,
         'Pattern with lookbehind should be rejected'
       );
     });
 
-    test('Should reject invalid patterns', () => {
+    test('Should reject invalid patterns', async () => {
       const invalidPatterns = [
         '[a-z',                // Unclosed character class
         '(?i)test',            // Inline flag (invalid in JS)
         '(?>abc)',             // Atomic group (invalid in JS)
       ];
 
-      invalidPatterns.forEach(pattern => {
+      for (const pattern of invalidPatterns) {
+        const result = await analyzer.hasSupportedSyntax(pattern);
         assert.strictEqual(
-          analyzer.hasSupportedSyntax(pattern),
+          result,
           false,
           `Invalid pattern "${pattern}" should be rejected`
         );
-      });
+      }
     });
 
-    test('Should handle edge cases', () => {
+    test('Should handle edge cases', async () => {
       // Pattern with octal escape \0 (should be supported, not a backreference)
       assert.strictEqual(
-        analyzer.hasSupportedSyntax('\\0'),
+        await analyzer.hasSupportedSyntax('\\0'),
         true,
         'Null character escape should be supported'
       );
 
       // Pattern with hex escape
       assert.strictEqual(
-        analyzer.hasSupportedSyntax('\\x41'),
+        await analyzer.hasSupportedSyntax('\\x41'),
         true,
         'Hex escape should be supported'
       );
 
       // Pattern that looks like lookbehind but isn't (character class)
       assert.strictEqual(
-        analyzer.hasSupportedSyntax('[(?<=)]'),
+        await analyzer.hasSupportedSyntax('[(?<=)]'),
         true,
         'Character class containing lookbehind-like characters should be supported'
       );
