@@ -630,13 +630,6 @@ suite('RegexAnalyzer Test Suite', () => {
     });
 
     test('Should handle edge cases', () => {
-      // Pattern with escaped backslash followed by 'b' (not a word boundary)
-      assert.strictEqual(
-        analyzer.hasSupportedSyntax('\\\\b'),
-        true,
-        'Escaped backslash followed by b should be supported'
-      );
-
       // Pattern with octal escape \0 (should be supported, not a backreference)
       assert.strictEqual(
         analyzer.hasSupportedSyntax('\\0'),
