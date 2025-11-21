@@ -721,6 +721,12 @@
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
 
+            // Display the current prompt with edit button
+            const currentPrompt = promptInput.value;
+            if (currentPrompt) {
+                updatePromptDisplay(currentPrompt);
+            }
+
             finalRegex.innerHTML = '<div style="padding: 10px; background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-errorForeground); border-radius: 4px; margin-bottom: 10px;">' +
                 '<strong>No regex found</strong>' +
                 '<p style="margin: 8px 0 0 0; font-size: 0.9em;">' + message + '</p>' +
