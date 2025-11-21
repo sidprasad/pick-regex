@@ -773,4 +773,148 @@ suite('PickController Test Suite', () => {
       assert.ok(statusAfter2.usedWords >= 3);
     });
   });
+
+  suite('Implicit voting logic', () => {
+    test('ACCEPT should give positive votes to matching and negative to non-matching', async () => {
+      // Set up three candidates: letters, numbers, alphanumeric
+      const patterns = ['[a-z]+', '[0-9]+', '[a-z0-9]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      // Generate a word that matches only letters (e.g., "abc")
+      // Force generate from the first pattern
+      const letterWord = controller['analyzer'].generateWord('[a-z]+', []).word;
+      
+      // Accept this letter-only word
+      const pair = await controller.generateNextPair();
+      // Use one of the pair words or inject our test word into history
+      controller['currentPair'] = { word1: letterWord, word2: pair.word2 };
+      
+      controller.classifyWord(letterWord, WordClassification.ACCEPT);
+      
+      const status = controller.getStatus();
+      
+      // Find each candidate
+      const letterCandidate = status.candidateDetails.find(c => c.pattern === '[a-z]+');
+      const numberCandidate = status.candidateDetails.find(c => c.pattern === '[0-9]+');
+      const alphanumCandidate = status.candidateDetails.find(c => c.pattern === '[a-z0-9]+');
+      
+      // Letter pattern should match and get positive vote
+      assert.ok(letterCandidate, 'Letter candidate should exist');
+      assert.strictEqual(letterCandidate.positiveVotes, 1, 
+        'Letter candidate should have 1 positive vote (matched accepted word)');
+      assert.strictEqual(letterCandidate.negativeVotes, 0,
+        'Letter candidate should have 0 negative votes');
+      
+      // Number pattern should NOT match and get negative vote (implicit)
+      assert.ok(numberCandidate, 'Number candidate should exist');
+      assert.strictEqual(numberCandidate.positiveVotes, 0,
+        'Number candidate should have 0 positive votes');
+      assert.strictEqual(numberCandidate.negativeVotes, 1,
+        'Number candidate should have 1 negative vote (failed to match accepted word)');
+      
+      // Alphanumeric pattern should match and get positive vote
+      assert.ok(alphanumCandidate, 'Alphanumeric candidate should exist');
+      assert.strictEqual(alphanumCandidate.positiveVotes, 1,
+        'Alphanumeric candidate should have 1 positive vote (matched accepted word)');
+      assert.strictEqual(alphanumCandidate.negativeVotes, 0,
+        'Alphanumeric candidate should have 0 negative votes');
+    });
+
+    test('REJECT should give negative votes to matching and positive to non-matching', async () => {
+      // Set up three candidates: letters, numbers, alphanumeric
+      const patterns = ['[a-z]+', '[0-9]+', '[a-z0-9]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      // Generate a word that matches only letters (e.g., "abc")
+      const letterWord = controller['analyzer'].generateWord('[a-z]+', []).word;
+      
+      // Reject this letter-only word (saying "no, letters should NOT be in the pattern")
+      const pair = await controller.generateNextPair();
+      controller['currentPair'] = { word1: letterWord, word2: pair.word2 };
+      
+      controller.classifyWord(letterWord, WordClassification.REJECT);
+      
+      const status = controller.getStatus();
+      
+      // Find each candidate
+      const letterCandidate = status.candidateDetails.find(c => c.pattern === '[a-z]+');
+      const numberCandidate = status.candidateDetails.find(c => c.pattern === '[0-9]+');
+      const alphanumCandidate = status.candidateDetails.find(c => c.pattern === '[a-z0-9]+');
+      
+      // Letter pattern should match and get negative vote (wrong to accept rejected word)
+      assert.ok(letterCandidate, 'Letter candidate should exist');
+      assert.strictEqual(letterCandidate.positiveVotes, 0,
+        'Letter candidate should have 0 positive votes');
+      assert.strictEqual(letterCandidate.negativeVotes, 1,
+        'Letter candidate should have 1 negative vote (incorrectly matched rejected word)');
+      
+      // Number pattern should NOT match and get positive vote (correct to reject)
+      assert.ok(numberCandidate, 'Number candidate should exist');
+      assert.strictEqual(numberCandidate.positiveVotes, 1,
+        'Number candidate should have 1 positive vote (correctly rejected word)');
+      assert.strictEqual(numberCandidate.negativeVotes, 0,
+        'Number candidate should have 0 negative votes');
+      
+      // Alphanumeric pattern should match and get negative vote
+      assert.ok(alphanumCandidate, 'Alphanumeric candidate should exist');
+      assert.strictEqual(alphanumCandidate.positiveVotes, 0,
+        'Alphanumeric candidate should have 0 positive votes');
+      assert.strictEqual(alphanumCandidate.negativeVotes, 1,
+        'Alphanumeric candidate should have 1 negative vote (incorrectly matched rejected word)');
+    });
+
+    test('Implicit voting should help eliminate incorrect candidates faster', async () => {
+      // With implicit voting, accepting a word that only matches one candidate
+      // should immediately give negative votes to all other candidates
+      const patterns = ['[a-z]+', '[0-9]+', '[A-Z]+'];
+      controller.setThreshold(2); // Eliminate after 2 negative votes
+      await controller.generateCandidates('test', patterns);
+      
+      // Generate and accept two lowercase letter words
+      const word1 = controller['analyzer'].generateWord('[a-z]+', []).word;
+      const word2 = controller['analyzer'].generateWord('[a-z]+', [word1]).word;
+      
+      const pair = await controller.generateNextPair();
+      controller['currentPair'] = { word1, word2: pair.word2 };
+      
+      // Accept first word
+      controller.classifyWord(word1, WordClassification.ACCEPT);
+      
+      let status = controller.getStatus();
+      let numberCandidate = status.candidateDetails.find(c => c.pattern === '[0-9]+');
+      let upperCandidate = status.candidateDetails.find(c => c.pattern === '[A-Z]+');
+      
+      // After first accept, number and upper should each have 1 negative vote
+      assert.strictEqual(numberCandidate?.negativeVotes, 1,
+        'Number candidate should have 1 negative vote after first accept');
+      assert.strictEqual(upperCandidate?.negativeVotes, 1,
+        'Uppercase candidate should have 1 negative vote after first accept');
+      assert.strictEqual(numberCandidate?.eliminated, false,
+        'Number candidate should not yet be eliminated');
+      assert.strictEqual(upperCandidate?.eliminated, false,
+        'Uppercase candidate should not yet be eliminated');
+      
+      // Accept second word
+      controller['currentPair'] = { word1: word2, word2: pair.word2 };
+      controller.classifyWord(word2, WordClassification.ACCEPT);
+      
+      status = controller.getStatus();
+      numberCandidate = status.candidateDetails.find(c => c.pattern === '[0-9]+');
+      upperCandidate = status.candidateDetails.find(c => c.pattern === '[A-Z]+');
+      
+      // After second accept, both should be eliminated (threshold = 2)
+      assert.strictEqual(numberCandidate?.negativeVotes, 2,
+        'Number candidate should have 2 negative votes');
+      assert.strictEqual(upperCandidate?.negativeVotes, 2,
+        'Uppercase candidate should have 2 negative votes');
+      assert.strictEqual(numberCandidate?.eliminated, true,
+        'Number candidate should be eliminated after reaching threshold');
+      assert.strictEqual(upperCandidate?.eliminated, true,
+        'Uppercase candidate should be eliminated after reaching threshold');
+      
+      // Only lowercase candidate should remain
+      assert.strictEqual(controller.getActiveCandidateCount(), 1,
+        'Only one candidate should remain active');
+    });
+  });
 });

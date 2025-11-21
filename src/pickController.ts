@@ -194,20 +194,38 @@ export class PickController {
 
     // Process classification
     if (classification === WordClassification.ACCEPT) {
-      // Give positive votes to matching regexes
+      // ACCEPT means: this word SHOULD match the target pattern
+      // - Positive vote for candidates that DO match (they're correct)
+      // - Negative vote for candidates that DON'T match (they're wrong - missing this word)
       logger.info(
-        `Classified "${word}" as ACCEPT. Updating ${this.candidates.length} candidates for positive votes.`
+        `Classified "${word}" as ACCEPT. Updating ${this.candidates.length} candidates.`
       );
       for (const candidate of this.candidates) {
         if (candidate.eliminated) {
           continue;
         }
-        if (this.analyzer.verifyMatch(word, candidate.pattern)) {
+        const matches = this.analyzer.verifyMatch(word, candidate.pattern);
+        
+        if (matches) {
+          // Candidate correctly matches the accepted word
           candidate.positiveVotes++;
+        } else {
+          // Candidate fails to match the accepted word - it's missing something it should have
+          candidate.negativeVotes++;
+          
+          // Eliminate if threshold reached
+          if (candidate.negativeVotes >= this.thresholdVotes) {
+            candidate.eliminated = true;
+            logger.info(
+              `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (failed to match accepted word "${word}").`
+            );
+          }
         }
       }
     } else if (classification === WordClassification.REJECT) {
-      // Give negative votes to matching regexes
+      // REJECT means: this word should NOT match the target pattern
+      // - Negative vote for candidates that DO match (they're wrong - accepting bad input)
+      // - Positive vote for candidates that DON'T match (they're correct - rejecting as expected)
       logger.info(
         `Classified "${word}" as REJECT. Applying elimination threshold ${this.thresholdVotes}.`
       );
@@ -215,16 +233,22 @@ export class PickController {
         if (candidate.eliminated) {
           continue;
         }
-        if (this.analyzer.verifyMatch(word, candidate.pattern)) {
+        const matches = this.analyzer.verifyMatch(word, candidate.pattern);
+        
+        if (matches) {
+          // Candidate incorrectly matches the rejected word
           candidate.negativeVotes++;
 
           // Eliminate if threshold reached
           if (candidate.negativeVotes >= this.thresholdVotes) {
             candidate.eliminated = true;
             logger.info(
-              `Eliminated candidate ${candidate.pattern} after ${candidate.negativeVotes} negative votes.`
+              `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (incorrectly matched rejected word "${word}").`
             );
           }
+        } else {
+          // Candidate correctly rejects the word
+          candidate.positiveVotes++;
         }
       }
     }
