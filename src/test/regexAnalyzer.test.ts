@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { createRegexAnalyzer, RegexRelationship } from '../regexAnalyzer';
+import { createRegexAnalyzer, RegexAnalyzer, RegexRelationship } from '../regexAnalyzer';
 
 suite('RegexAnalyzer Test Suite', () => {
   let analyzer: ReturnType<typeof createRegexAnalyzer>;
@@ -424,6 +424,38 @@ suite('RegexAnalyzer Test Suite', () => {
           `At least one word must match a candidate. Word1: "${word1}" matches: ${matches1}, Word2: "${word2}" matches: ${matches2}`
         );
       }
+    });
+
+    test('Should prefer shorter distinguishing pairs when information gain ties', async () => {
+      class MockAnalyzer extends RegexAnalyzer {
+        override async analyzeRelationship(_regexA: string, _regexB: string) {
+          return {
+            relationship: RegexRelationship.DISJOINT,
+            explanation: 'mock',
+            examples: {
+              // Provide long, distinguishing candidates discovered first
+              onlyInA: ['aaaaaaaaaa'],
+              onlyInB: ['bbbbbbbbbb']
+            }
+          };
+        }
+
+        override generateMultipleWords(regex: string): string[] {
+          // Provide shorter distinguishing words later via supplemental sampling
+          if (regex.startsWith('a')) {return ['a'];}
+          if (regex.startsWith('b')) {return ['b'];}
+          return [];
+        }
+      }
+
+      const mockAnalyzer = new MockAnalyzer();
+      const result = await mockAnalyzer.generateTwoDistinguishingWords(['a+', 'b+']);
+
+      assert.deepStrictEqual(
+        result.words.sort(),
+        ['a', 'b'],
+        'Should surface the shortest high-information pair when multiple options tie'
+      );
     });
   });
 

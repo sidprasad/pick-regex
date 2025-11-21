@@ -67,16 +67,27 @@ export class RegexAnalyzer {
     try {
       const randexp = new RandExp(regex);
       randexp.max = 10;
-      
+
       const seenSet = new Set(seenWords);
-      
+      let shortestWord: string | null = null;
+
       for (let i = 0; i < this.maxAttempts; i++) {
         const word = randexp.gen();
-        if (!seenSet.has(word)) {
-          return { word, explanation: `Generated from: ${regex}` };
+        if (seenSet.has(word)) {continue;}
+
+        // Keep the shortest unique word we've seen so far to minimize length
+        if (shortestWord === null || word.length < shortestWord.length) {
+          shortestWord = word;
+
+          // Early exit if we found an empty string or single-char word
+          if (shortestWord.length <= 1) {break;}
         }
       }
-      
+
+      if (shortestWord !== null) {
+        return { word: shortestWord, explanation: `Generated from: ${regex}` };
+      }
+
       throw new Error(`Could not generate unique word after ${this.maxAttempts} attempts`);
     } catch (error) {
       throw new Error(`Failed to generate word for '${regex}': ${error}`);
@@ -529,7 +540,9 @@ export class RegexAnalyzer {
       
       // Remove duplicates and excluded words
       const unique = Array.from(new Set(candidateWords))
-        .filter(w => !excludedWords.includes(w));
+        .filter(w => !excludedWords.includes(w))
+        // Prefer shorter candidates first so we bias toward concise examples
+        .sort((a, b) => a.length - b.length || a.localeCompare(b));
       
       // If we don't have enough words from automata analysis, supplement with sampling
       if (unique.length < 10) {
@@ -567,6 +580,7 @@ export class RegexAnalyzer {
       let best1 = scored[0];
       let best2 = scored.length > 1 ? scored[1] : null;
       let maxInfoGain = 0;
+      let shortestTotalLength = best2 ? best1.word.length + best2.word.length : Infinity;
       
       for (let i = 0; i < scored.length; i++) {
         for (let j = i + 1; j < scored.length; j++) {
@@ -578,8 +592,15 @@ export class RegexAnalyzer {
           const balance2 = Math.min(scored[j].count, candidateRegexes.length - scored[j].count);
           const infoGain = diff * (balance1 + balance2);
           
-          if (infoGain > maxInfoGain) {
+          const totalLength = scored[i].word.length + scored[j].word.length;
+
+          // Prefer pairs with higher information gain, with a tie-breaker toward shorter words
+          if (
+            infoGain > maxInfoGain ||
+            (infoGain === maxInfoGain && totalLength < shortestTotalLength)
+          ) {
             maxInfoGain = infoGain;
+            shortestTotalLength = totalLength;
             best1 = scored[i];
             best2 = scored[j];
           }
