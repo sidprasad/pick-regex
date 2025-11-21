@@ -17,7 +17,7 @@ The PICK algorithm's voting mechanism was only recording **explicit** votes but 
   - Candidates that DON'T match W are **wrong** (missing valid input) → -1 vote
 - REJECT word W means "W should NOT be in the target pattern":
   - Candidates that match W are **wrong** (accepting invalid input) → -1 vote
-  - Candidates that DON'T match W are **correct** → +1 vote
+  - Candidates that DON'T match W are **neutral** (correctly rejecting is expected) → 0 votes
 
 ### Example Scenario
 
@@ -39,6 +39,14 @@ User is shown word `"abc"` and clicks ACCEPT.
 - `[a-z0-9]+`: +1 (matches "abc") ✓
 
 The `[0-9]+` candidate should receive a negative vote because the user said "abc" is valid input, but `[0-9]+` rejects it. This means `[0-9]+` is missing something it should match.
+
+### Asymmetry: Why REJECT doesn't give positive votes
+
+**Important**: The voting is asymmetric by design:
+- **ACCEPT** gives both positive votes (to matching) and negative votes (to non-matching)
+- **REJECT** only gives negative votes (to matching), no votes to non-matching
+
+**Rationale**: When a pattern correctly rejects a word, that's neutral/expected behavior - not worth rewarding. We only want to penalize patterns that incorrectly accept bad input. This prevents "reward inflation" where patterns accumulate positive votes just for NOT matching random rejected strings.
 
 ### Impact
 
@@ -81,9 +89,8 @@ else if (classification === WordClassification.REJECT) {
     if (matches) {
       candidate.negativeVotes++;   // Wrong: accepts invalid input
       // Check elimination threshold...
-    } else {
-      candidate.positiveVotes++;  // Correct: rejects as expected
     }
+    // If doesn't match: no vote (correctly rejecting is neutral/expected)
   }
 }
 ```
@@ -95,8 +102,8 @@ Three comprehensive tests in `pickController.test.ts`:
 1. **`ACCEPT should give positive votes to matching and negative to non-matching`**
    - Verifies that accepting a letter-only word gives +1 to letter patterns and -1 to number patterns
 
-2. **`REJECT should give negative votes to matching and positive to non-matching`**
-   - Verifies that rejecting a letter-only word gives -1 to letter patterns and +1 to number patterns
+2. **`REJECT should give negative votes to matching and no votes to non-matching`**
+   - Verifies that rejecting a letter-only word gives -1 to letter patterns and 0 to number patterns (no reward for correct rejection)
 
 3. **`Implicit voting should help eliminate incorrect candidates faster`**
    - Demonstrates that with implicit voting, accepting just 2 words can eliminate incompatible candidates when threshold=2

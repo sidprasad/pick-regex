@@ -848,10 +848,10 @@ suite('PickController Test Suite', () => {
       assert.strictEqual(letterCandidate.negativeVotes, 1,
         'Letter candidate should have 1 negative vote (incorrectly matched rejected word)');
       
-      // Number pattern should NOT match and get positive vote (correct to reject)
+      // Number pattern should NOT match and get no vote (neutral - correctly rejects)
       assert.ok(numberCandidate, 'Number candidate should exist');
-      assert.strictEqual(numberCandidate.positiveVotes, 1,
-        'Number candidate should have 1 positive vote (correctly rejected word)');
+      assert.strictEqual(numberCandidate.positiveVotes, 0,
+        'Number candidate should have 0 positive votes (no reward for correct rejection)');
       assert.strictEqual(numberCandidate.negativeVotes, 0,
         'Number candidate should have 0 negative votes');
       

@@ -225,7 +225,7 @@ export class PickController {
     } else if (classification === WordClassification.REJECT) {
       // REJECT means: this word should NOT match the target pattern
       // - Negative vote for candidates that DO match (they're wrong - accepting bad input)
-      // - Positive vote for candidates that DON'T match (they're correct - rejecting as expected)
+      // - No vote for candidates that DON'T match (neutral - just doing their job)
       logger.info(
         `Classified "${word}" as REJECT. Applying elimination threshold ${this.thresholdVotes}.`
       );
@@ -246,10 +246,8 @@ export class PickController {
               `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (incorrectly matched rejected word "${word}").`
             );
           }
-        } else {
-          // Candidate correctly rejects the word
-          candidate.positiveVotes++;
         }
+        // If doesn't match: no vote (correctly rejecting is neutral/expected)
       }
     }
     // If UNSURE, don't update any votes
