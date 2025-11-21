@@ -129,25 +129,33 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      // Filter out invalid regexes first
+      // Filter out invalid regexes and regexes with unsupported syntax
       const validCandidates = candidates.filter(regex => {
         const isValid = this.analyzer.isValidRegex(regex);
         if (!isValid) {
           logger.warn(`Filtered out invalid regex: "${regex}"`);
+          return false;
         }
-        return isValid;
+        
+        const hasSupported = this.analyzer.hasSupportedSyntax(regex);
+        if (!hasSupported) {
+          logger.warn(`Filtered out regex with unsupported syntax: "${regex}"`);
+          return false;
+        }
+        
+        return true;
       });
 
       if (validCandidates.length === 0) {
         this.sendMessage({ 
           type: 'error', 
-          message: 'All generated regexes contain invalid JavaScript syntax. Please try again.' 
+          message: 'All generated regexes contain invalid or unsupported syntax (e.g., word boundaries \\b, lookbehinds). Please try again.' 
         });
         return;
       }
 
       if (validCandidates.length < candidates.length) {
-        logger.info(`Filtered out ${candidates.length - validCandidates.length} invalid regex(es)`);
+        logger.info(`Filtered out ${candidates.length - validCandidates.length} invalid or unsupported regex(es)`);
       }
 
       // Filter out equivalent/duplicate regexes
@@ -499,25 +507,33 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      // Filter out invalid regexes first
+      // Filter out invalid regexes and regexes with unsupported syntax
       const validCandidates = candidates.filter(regex => {
         const isValid = this.analyzer.isValidRegex(regex);
         if (!isValid) {
           logger.warn(`Filtered out invalid regex: "${regex}"`);
+          return false;
         }
-        return isValid;
+        
+        const hasSupported = this.analyzer.hasSupportedSyntax(regex);
+        if (!hasSupported) {
+          logger.warn(`Filtered out regex with unsupported syntax: "${regex}"`);
+          return false;
+        }
+        
+        return true;
       });
 
       if (validCandidates.length === 0) {
         this.sendMessage({ 
           type: 'error', 
-          message: 'All generated regexes contain invalid JavaScript syntax. Please try again.' 
+          message: 'All generated regexes contain invalid or unsupported syntax (e.g., word boundaries \\b, lookbehinds). Please try again.' 
         });
         return;
       }
 
       if (validCandidates.length < candidates.length) {
-        logger.info(`Filtered out ${candidates.length - validCandidates.length} invalid regex(es)`);
+        logger.info(`Filtered out ${candidates.length - validCandidates.length} invalid or unsupported regex(es)`);
       }
 
       // Filter out equivalent/duplicate regexes

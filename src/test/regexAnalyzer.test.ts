@@ -456,6 +456,210 @@ suite('RegexAnalyzer Test Suite', () => {
     });
   });
 
+  suite('hasSupportedSyntax', () => {
+    test('Should accept patterns with supported syntax', () => {
+      const supportedPatterns = [
+        '[a-z]+',              // Character classes
+        '\\d{3}',              // Quantifiers
+        '^a$',                 // Anchors
+        '(?:abc|def)',         // Non-capturing groups and alternation
+        '(test)',              // Capturing groups
+        '(?=abc)',             // Positive lookahead
+        '(?!xyz)',             // Negative lookahead
+        '[aA][bB][cC]',        // Case-insensitive patterns
+        '\\w+',                // Character class escapes
+        '\\.',                 // Escaped special characters
+        '[^a-z]',              // Negated character classes
+        'a{2,5}',              // Range quantifiers
+        'a*b+c?',              // Various quantifiers
+      ];
+
+      supportedPatterns.forEach(pattern => {
+        assert.strictEqual(
+          analyzer.hasSupportedSyntax(pattern),
+          true,
+          `Pattern "${pattern}" should be supported`
+        );
+      });
+    });
+
+    test('Should reject patterns with word boundaries', () => {
+      const unsupportedPatterns = [
+        '\\bword\\b',          // Word boundaries
+        '\\ba',                // Word boundary at start
+        'a\\b',                // Word boundary at end
+        '\\Btest',             // Non-word boundary
+        'test\\B',             // Non-word boundary at end
+      ];
+
+      unsupportedPatterns.forEach(pattern => {
+        assert.strictEqual(
+          analyzer.hasSupportedSyntax(pattern),
+          false,
+          `Pattern "${pattern}" should be rejected (word boundary)`
+        );
+      });
+    });
+
+    test('Should reject patterns with lookbehind assertions', () => {
+      const unsupportedPatterns = [
+        '(?<=\\d)\\w+',        // Positive lookbehind
+        '(?<!\\w)test',        // Negative lookbehind
+        '(?<=abc)xyz',         // Positive lookbehind with literal
+        '(?<![a-z])\\d',       // Negative lookbehind with character class
+      ];
+
+      unsupportedPatterns.forEach(pattern => {
+        assert.strictEqual(
+          analyzer.hasSupportedSyntax(pattern),
+          false,
+          `Pattern "${pattern}" should be rejected (lookbehind)`
+        );
+      });
+    });
+
+    test('Should reject patterns with backreferences', () => {
+      const unsupportedPatterns = [
+        '(a)\\1',              // Backreference to group 1
+        '(\\w+)\\s+\\1',       // Backreference with whitespace
+        '(abc)(def)\\1\\2',    // Multiple backreferences
+        '([a-z])\\1+',         // Backreference with quantifier
+      ];
+
+      unsupportedPatterns.forEach(pattern => {
+        assert.strictEqual(
+          analyzer.hasSupportedSyntax(pattern),
+          false,
+          `Pattern "${pattern}" should be rejected (backreference)`
+        );
+      });
+    });
+
+    test('Should reject patterns with Unicode property escapes', () => {
+      const unsupportedPatterns = [
+        '\\p{Letter}',         // Unicode property
+        '\\P{Number}',         // Negated Unicode property
+        '\\p{Ll}',             // Lowercase letter
+        '\\p{Script=Greek}',   // Unicode script
+      ];
+
+      unsupportedPatterns.forEach(pattern => {
+        assert.strictEqual(
+          analyzer.hasSupportedSyntax(pattern),
+          false,
+          `Pattern "${pattern}" should be rejected (Unicode property escape)`
+        );
+      });
+    });
+
+    test('Should reject patterns with named capture groups', () => {
+      const unsupportedPatterns = [
+        '(?<name>test)',       // Named capture group
+        '(?<word>\\w+)',       // Named group with character class
+        '(?<id>\\d+)',         // Named group with digits
+      ];
+
+      unsupportedPatterns.forEach(pattern => {
+        assert.strictEqual(
+          analyzer.hasSupportedSyntax(pattern),
+          false,
+          `Pattern "${pattern}" should be rejected (named capture group)`
+        );
+      });
+    });
+
+    test('Should accept lookahead assertions (supported)', () => {
+      const supportedPatterns = [
+        '(?=test)',            // Positive lookahead
+        '(?!xyz)',             // Negative lookahead
+        'a(?=b)',              // Lookahead in middle
+        '(?=\\d)\\w+',         // Lookahead at start
+      ];
+
+      supportedPatterns.forEach(pattern => {
+        assert.strictEqual(
+          analyzer.hasSupportedSyntax(pattern),
+          true,
+          `Pattern "${pattern}" should be supported (lookahead is allowed)`
+        );
+      });
+    });
+
+    test('Should handle complex patterns correctly', () => {
+      // Supported complex patterns
+      assert.strictEqual(
+        analyzer.hasSupportedSyntax('(?:(?:[a-z]+)|(?:[0-9]+))+'),
+        true,
+        'Nested groups should be supported'
+      );
+      
+      assert.strictEqual(
+        analyzer.hasSupportedSyntax('[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}'),
+        true,
+        'Email-like pattern should be supported'
+      );
+
+      // Unsupported complex patterns
+      assert.strictEqual(
+        analyzer.hasSupportedSyntax('\\b[a-z]+\\b'),
+        false,
+        'Pattern with word boundaries should be rejected'
+      );
+      
+      assert.strictEqual(
+        analyzer.hasSupportedSyntax('(?<=@)\\w+'),
+        false,
+        'Pattern with lookbehind should be rejected'
+      );
+    });
+
+    test('Should reject invalid patterns', () => {
+      const invalidPatterns = [
+        '[a-z',                // Unclosed character class
+        '(?i)test',            // Inline flag (invalid in JS)
+        '(?>abc)',             // Atomic group (invalid in JS)
+      ];
+
+      invalidPatterns.forEach(pattern => {
+        assert.strictEqual(
+          analyzer.hasSupportedSyntax(pattern),
+          false,
+          `Invalid pattern "${pattern}" should be rejected`
+        );
+      });
+    });
+
+    test('Should handle edge cases', () => {
+      // Pattern with escaped backslash followed by 'b' (not a word boundary)
+      assert.strictEqual(
+        analyzer.hasSupportedSyntax('\\\\b'),
+        true,
+        'Escaped backslash followed by b should be supported'
+      );
+
+      // Pattern with octal escape \0 (should be supported, not a backreference)
+      assert.strictEqual(
+        analyzer.hasSupportedSyntax('\\0'),
+        true,
+        'Null character escape should be supported'
+      );
+
+      // Pattern with hex escape
+      assert.strictEqual(
+        analyzer.hasSupportedSyntax('\\x41'),
+        true,
+        'Hex escape should be supported'
+      );
+
+      // Pattern that looks like lookbehind but isn't (character class)
+      assert.strictEqual(
+        analyzer.hasSupportedSyntax('[(?<=)]'),
+        true,
+        'Character class containing lookbehind-like characters should be supported'
+      );
+    });
+  });
+
   suite('Excluded words parameter tests', () => {
     suite('generateWord with exclusions', () => {
       test('Should not generate any word from excluded list', () => {

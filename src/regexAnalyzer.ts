@@ -303,6 +303,68 @@ export class RegexAnalyzer {
   }
 
   /**
+   * Check if a regex pattern uses only syntax supported by @gruhn/regex-utils
+   * 
+   * Supported syntax:
+   * - Quantifiers: *, +, ?, {m,n}
+   * - Alternation: |
+   * - Character classes: ., \w, \d, \s, [...]
+   * - Escaping: \$, \., etc.
+   * - Groups: (?:...), (...)
+   * - Positive/negative lookahead: (?=...), (?!...)
+   * 
+   * Unsupported syntax that will return false:
+   * - Word boundaries: \b, \B
+   * - Lookbehind assertions: (?<=...), (?<!...)
+   * - Backreferences: \1, \2, etc.
+   * - Unicode property escapes: \p{...}, \P{...}
+   * - Named groups: (?<name>...)
+   * - Global/local flags (these shouldn't appear in pattern body anyway)
+   */
+  hasSupportedSyntax(pattern: string): boolean {
+    // First check if it's valid JavaScript regex
+    if (!this.isValidRegex(pattern)) {
+      logger.warn(`Pattern has invalid JavaScript syntax: ${pattern}`);
+      return false;
+    }
+
+    // Check for word boundaries \b or \B
+    if (/\\[bB]/.test(pattern)) {
+      logger.warn(`Pattern contains unsupported word boundary (\\b or \\B): ${pattern}`);
+      return false;
+    }
+
+    // Check for lookbehind assertions (?<=...) or (?<!...)
+    if (/\(\?<[=!]/.test(pattern)) {
+      logger.warn(`Pattern contains unsupported lookbehind assertion: ${pattern}`);
+      return false;
+    }
+
+    // Check for backreferences \1, \2, etc.
+    // Need to be careful not to match octal escapes like \0 or character classes
+    if (/\\[1-9]\d*/.test(pattern)) {
+      logger.warn(`Pattern contains unsupported backreference: ${pattern}`);
+      return false;
+    }
+
+    // Check for Unicode property escapes \p{...} or \P{...}
+    if (/\\[pP]\{/.test(pattern)) {
+      logger.warn(`Pattern contains unsupported Unicode property escape: ${pattern}`);
+      return false;
+    }
+
+    // Check for named capture groups (?<name>...)
+    // This is different from lookbehind - it's (?< followed by word chars and >
+    if (/\(\?<[a-zA-Z_]\w*>/.test(pattern)) {
+      logger.warn(`Pattern contains unsupported named capture group: ${pattern}`);
+      return false;
+    }
+
+    // All checks passed
+    return true;
+  }
+
+  /**
    * Verify match
    */
   verifyMatch(word: string, regex: string): boolean {
