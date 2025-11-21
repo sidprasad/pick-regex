@@ -379,6 +379,52 @@ suite('RegexAnalyzer Test Suite', () => {
           `Words should be distinct. Got: [${result.words[0]}, ${result.words[1]}] for candidates: ${candidates.join(', ')}`);
       }
     });
+
+    test('Should throw error when word space is exhausted', async () => {
+      // Test case: regex 'a' only matches one word, and we exclude it
+      // After excluding 'a', we can only generate words that DON'T match (count=0)
+      const candidates = ['a'];
+      const excluded = ['a']; // Exclude the only matching word
+      
+      try {
+        await analyzer.generateTwoDistinguishingWords(candidates, excluded);
+        assert.fail('Should have thrown an error when word space is exhausted');
+      } catch (error) {
+        assert.ok(error);
+        const errorMessage = String(error);
+        // Should mention that both words match zero candidates or exhausted word space
+        assert.ok(
+          errorMessage.includes('both words match zero candidates') || 
+          errorMessage.includes('exhausted word space') ||
+          errorMessage.includes('Could not generate unique word'),
+          `Error message should indicate word exhaustion. Got: ${errorMessage}`
+        );
+      }
+    });
+
+    test('Should ensure at least one word matches at least one candidate', async () => {
+      // For any valid scenario, at least one word should match at least one candidate
+      const testCases = [
+        ['[a-z]+'],
+        ['[a-z]+', '[0-9]+'],
+        ['[a-z]{2}', '[0-9]{2}'],
+      ];
+
+      for (const candidates of testCases) {
+        const result = await analyzer.generateTwoDistinguishingWords(candidates);
+        const regexObjects = candidates.map(c => new RegExp(`^${c}$`));
+        
+        const [word1, word2] = result.words;
+        const matches1 = regexObjects.some(re => re.test(word1));
+        const matches2 = regexObjects.some(re => re.test(word2));
+        
+        // At least one word must match at least one candidate
+        assert.ok(
+          matches1 || matches2,
+          `At least one word must match a candidate. Word1: "${word1}" matches: ${matches1}, Word2: "${word2}" matches: ${matches2}`
+        );
+      }
+    });
   });
 
   suite('Helper methods', () => {
