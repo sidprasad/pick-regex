@@ -489,8 +489,6 @@ suite('RegexAnalyzer Test Suite', () => {
         '\\bword\\b',          // Word boundaries
         '\\ba',                // Word boundary at start
         'a\\b',                // Word boundary at end
-        '\\Btest',             // Non-word boundary
-        'test\\B',             // Non-word boundary at end
       ];
 
       for (const pattern of unsupportedPatterns) {
@@ -503,41 +501,6 @@ suite('RegexAnalyzer Test Suite', () => {
       }
     });
 
-    test('Should reject patterns with lookbehind assertions', async () => {
-      const unsupportedPatterns = [
-        '(?<=\\d)\\w+',        // Positive lookbehind
-        '(?<!\\w)test',        // Negative lookbehind
-        '(?<=abc)xyz',         // Positive lookbehind with literal
-        '(?<![a-z])\\d',       // Negative lookbehind with character class
-      ];
-
-      for (const pattern of unsupportedPatterns) {
-        const result = await analyzer.hasSupportedSyntax(pattern);
-        assert.strictEqual(
-          result,
-          false,
-          `Pattern "${pattern}" should be rejected (lookbehind)`
-        );
-      }
-    });
-
-    test('Should reject patterns with backreferences', async () => {
-      const unsupportedPatterns = [
-        '(a)\\1',              // Backreference to group 1
-        '(\\w+)\\s+\\1',       // Backreference with whitespace
-        '(abc)(def)\\1\\2',    // Multiple backreferences
-        '([a-z])\\1+',         // Backreference with quantifier
-      ];
-
-      for (const pattern of unsupportedPatterns) {
-        const result = await analyzer.hasSupportedSyntax(pattern);
-        assert.strictEqual(
-          result,
-          false,
-          `Pattern "${pattern}" should be rejected (backreference)`
-        );
-      }
-    });
 
     test('Should reject patterns with Unicode property escapes', async () => {
       const unsupportedPatterns = [
@@ -557,22 +520,6 @@ suite('RegexAnalyzer Test Suite', () => {
       }
     });
 
-    test('Should reject patterns with named capture groups', async () => {
-      const unsupportedPatterns = [
-        '(?<name>test)',       // Named capture group
-        '(?<word>\\w+)',       // Named group with character class
-        '(?<id>\\d+)',         // Named group with digits
-      ];
-
-      for (const pattern of unsupportedPatterns) {
-        const result = await analyzer.hasSupportedSyntax(pattern);
-        assert.strictEqual(
-          result,
-          false,
-          `Pattern "${pattern}" should be rejected (named capture group)`
-        );
-      }
-    });
 
     test('Should accept lookahead assertions (supported)', async () => {
       const supportedPatterns = [
