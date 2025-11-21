@@ -19,21 +19,19 @@ In short: You will be shown a pair of strings. For each one, you vote (or mark y
 
 ## Quick Start
 
-**The first time you use PICK, VS Code will ask you to allow the extension to use Language Models. You must grant this permission for candidate generation.**
+PICK is currently implemented as an extension to Visual Studio Code (VSC).
 
-1. Install PICK Regex Builder and open its view from the Activity Bar.
-2. Describe the pattern for which you want an regex (e.g., "IPv4 octet 0–255", "email local-part").
-3. Click Start to generate candidate regexes.
-4. Classify the presented example strings:
-   - Accept: the string matches the pattern you want
-   - Reject: the string does not match the pattern you want
+1. Install the “PICK: Regex Builder” extension from the VSC Marketplace.
+2. Go to the Activity Bar and choose the extension's View.
+3. The first time you use PICK, VSC will ask you to allow the extension to use Language Models. **You must grant this permission for PICK to work.**
+4. Describe the pattern for which you want an regex (e.g., “IPv4 addresses”). In our experience, short, precise descriptions produce better LLM results than long, complicated ones. But if you are too concise, you leave open too many interpretations, so make sure you provide enough detail.
+5. Click the button to generate candidate regexes.
+6. Classify the presented example strings:
+   - Upvote: the string matches the pattern you want
+   - Downvote: the string does not match the pattern you want
    - Unsure: skip
-5. Continue until a single regex remains or you accept one.
-6. Copy or insert the final regex.
-
-In our experience, short, precise descriptions produce better LLM results. But if you are too concise, you leave open too many interpretations, so make sure you provide enough detail.
-
-If the examples suggest you need to *refine* your regex, don't start over! Instead, *edit* the existing description. When you do this, PICK will preserve all the classification work you've done and automatically apply it to the new candidate regexes.
+7. Continue until PICK terminates or you are satisfied with the regex(es).
+8. Copy or insert the final regex, if any. Otherwise refine your query. If you find yourself in this situation, don't start over! Instead, *edit* the existing description. When you do this, PICK will preserve all the classification work you've done and automatically apply it to the new candidate regexes.
 
 ---
 
