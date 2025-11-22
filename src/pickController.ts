@@ -642,8 +642,11 @@ export class PickController {
     }
 
     const minDistinguishing = Math.min(...counts);
-    const baseThreshold = this.thresholdVotes;
-    const recommendedGlobal = Math.max(1, Math.min(baseThreshold, minDistinguishing));
+    const initialThreshold = this.thresholdVotes;
+    // Only lower the global threshold when distinguishing evidence is truly scarce (e.g., only a single example
+    // separates two patterns). This avoids overreacting to limited samples when patterns have abundant differences.
+    const shouldLower = minDistinguishing < initialThreshold && minDistinguishing <= 1;
+    const recommendedGlobal = shouldLower ? Math.max(1, minDistinguishing) : initialThreshold;
 
     if (recommendedGlobal < this.thresholdVotes) {
       logger.info(
@@ -654,11 +657,13 @@ export class PickController {
       logger.info('Elimination threshold unchanged after candidate analysis.');
     }
 
-    // Allow candidates with abundant distinguishing evidence to require more proof before elimination.
+    // Allow candidates with abundant distinguishing evidence to require more proof before elimination, but never
+    // exceed the user-configured threshold. Only raise when the global threshold was lowered.
     this.candidates.forEach(candidate => {
       const distinguishingCount = distinguishingExamples.get(candidate.pattern)?.size ?? 0;
-      const raisedThreshold = distinguishingCount > this.thresholdVotes
-        ? Math.min(distinguishingCount, this.thresholdVotes + 1)
+      const canRaise = this.thresholdVotes < initialThreshold && distinguishingCount > this.thresholdVotes;
+      const raisedThreshold = canRaise
+        ? Math.min(distinguishingCount, initialThreshold)
         : this.thresholdVotes;
       candidate.eliminationThreshold = raisedThreshold;
 
