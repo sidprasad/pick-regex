@@ -162,6 +162,15 @@ suite('PickController Test Suite', () => {
     }
   });
 
+  test('Should lower threshold when candidates barely differ', async () => {
+    controller.setThreshold(3);
+    await controller.generateCandidates('test', ['a*', 'a+']);
+
+    const status = controller.getStatus();
+
+    assert.strictEqual(status.threshold, 1);
+  });
+
   test('Should get and set threshold', () => {
     assert.strictEqual(controller.getThreshold(), 2); // default
     

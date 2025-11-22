@@ -80,6 +80,8 @@ export class PickController {
     }));
     logger.info(`Initialized ${this.candidates.length} candidate regexes.`);
 
+    await this.autoAdjustThreshold(candidatePatterns);
+
     this.usedWords.clear();
     this.wordHistory = [];
     this.state = PickState.VOTING;
@@ -107,6 +109,8 @@ export class PickController {
 
     // Re-apply existing classifications to new candidates
     this.recalculateVotes();
+
+    await this.autoAdjustThreshold(newCandidatePatterns);
 
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state after refinement.');
@@ -571,5 +575,74 @@ export class PickController {
    */
   getThreshold(): number {
     return this.thresholdVotes;
+  }
+
+  /**
+   * Lower the elimination threshold when candidates barely differ.
+   *
+   * We analyze a limited number of candidate pairs to find distinguishing
+   * examples. If the fewest distinguishing examples available for any
+   * candidate is lower than the current threshold, we reduce the threshold to
+   * avoid stalemates where no candidate can accumulate enough negative votes.
+   */
+  private async autoAdjustThreshold(candidatePatterns: string[]): Promise<void> {
+    if (candidatePatterns.length < 2) {
+      return;
+    }
+
+    const maxPairsToAnalyze = 6;
+    const distinguishingExamples = new Map<string, Set<string>>();
+    candidatePatterns.forEach(pattern => distinguishingExamples.set(pattern, new Set<string>()));
+
+    let analyzedPairs = 0;
+
+    for (let i = 0; i < candidatePatterns.length; i++) {
+      for (let j = i + 1; j < candidatePatterns.length; j++) {
+        if (analyzedPairs >= maxPairsToAnalyze) {
+          break;
+        }
+
+        try {
+          const analysis = await this.analyzer.analyzeRelationship(
+            candidatePatterns[i],
+            candidatePatterns[j]
+          );
+          analyzedPairs++;
+
+          const examples = analysis.examples;
+          if (examples) {
+            examples.onlyInA?.forEach(word => distinguishingExamples.get(candidatePatterns[i])?.add(word));
+            examples.onlyInB?.forEach(word => distinguishingExamples.get(candidatePatterns[j])?.add(word));
+          }
+        } catch (error) {
+          logger.warn(`Could not analyze candidate pair '${candidatePatterns[i]}' vs '${candidatePatterns[j]}': ${error}`);
+        }
+      }
+
+      if (analyzedPairs >= maxPairsToAnalyze) {
+        break;
+      }
+    }
+
+    const counts = Array.from(distinguishingExamples.values())
+      .map(set => set.size)
+      .filter(size => size > 0);
+
+    if (counts.length === 0) {
+      logger.info('Elimination threshold unchanged (no distinguishing evidence discovered).');
+      return;
+    }
+
+    const minDistinguishing = Math.min(...counts);
+    const recommendedThreshold = Math.max(1, Math.min(this.thresholdVotes, minDistinguishing));
+
+    if (recommendedThreshold < this.thresholdVotes) {
+      logger.info(
+        `Auto-adjusted elimination threshold from ${this.thresholdVotes} to ${recommendedThreshold} based on limited distinguishing examples.`
+      );
+      this.thresholdVotes = recommendedThreshold;
+    } else {
+      logger.info('Elimination threshold unchanged after candidate analysis.');
+    }
   }
 }
