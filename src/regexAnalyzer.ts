@@ -398,71 +398,6 @@ export class RegexAnalyzer {
     return rbA.isEquivalent(new RegExp(`^${regexB}$`));
   }
 
-  /**
-   * Generate distinguishing words between two regexes
-   */
-  async generateDistinguishingWords(
-    regex1: string,
-    regex2: string,
-    excludedWords: string[] = []
-  ): Promise<DistinguishingWordsResult> {
-    try {
-      const rb1 = await createRb(regex1);
-      const rb2 = await createRb(regex2);
-      
-      // Get words only in regex1 (A - B)
-      const onlyIn1 = rb1.without(new RegExp(`^${regex2}$`));
-      // Get words only in regex2 (B - A)
-      const onlyIn2 = rb2.without(new RegExp(`^${regex1}$`));
-      
-      let word1 = '';
-      let word2 = '';
-      
-      // Try to sample from differences
-      try {
-        const gen1 = onlyIn1.sample();
-        for (let i = 0; i < 10; i++) {
-          const next = gen1.next();
-          if (!next.done) {
-            const word = next.value;
-            if (!excludedWords.includes(word)) {
-              word1 = word;
-              break;
-            }
-          }
-        }
-      } catch {
-        // Fallback
-        word1 = this.generateWord(regex1, excludedWords).word;
-      }
-      
-      try {
-        const gen2 = onlyIn2.sample();
-        for (let i = 0; i < 10; i++) {
-          const next = gen2.next();
-          if (!next.done) {
-            const word = next.value;
-            if (!excludedWords.includes(word) && word !== word1) {
-              word2 = word;
-              break;
-            }
-          }
-        }
-      } catch {
-        // Fallback
-        word2 = this.generateWord(regex2, [...excludedWords, word1]).word;
-      }
-      
-      return {
-        word1,
-        word2,
-        explanation: `'${word1}' distinguishes from regex1, '${word2}' from regex2`,
-        distinguishingProperty: 'Maximally different matching patterns'
-      };
-    } catch (error) {
-      throw new Error(`Failed to generate distinguishing words: ${error}`);
-    }
-  }
 
   /**
    * Generate two distinguishing words from candidates
@@ -511,8 +446,9 @@ export class RegexAnalyzer {
       const candidateWords: string[] = [];
 
       // Limit pairwise analysis to first few pairs for performance
-      for (let i = 0; i < candidateRegexes.length && i < 3; i++) {
-        for (let j = i + 1; j < candidateRegexes.length && j < 3; j++) {
+      const LIMIT = 5;
+      for (let i = 0; i < candidateRegexes.length && i < LIMIT; i++) {
+        for (let j = i + 1; j < candidateRegexes.length && j < LIMIT; j++) {
           const a = candidateRegexes[i];
           const b = candidateRegexes[j];
           const fromA = await sampleFromDifference(a, b);

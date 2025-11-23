@@ -165,84 +165,6 @@ suite('RegexAnalyzer Test Suite', () => {
     });
   });
 
-  suite('generateDistinguishingWords', () => {
-    test('Should generate words that distinguish two regexes', async () => {
-      const regex1 = '[a-z]+';
-      const regex2 = '[0-9]+';
-      
-      const result = await analyzer.generateDistinguishingWords(regex1, regex2);
-      
-      assert.ok(result.word1);
-      assert.ok(result.word2);
-      assert.notStrictEqual(result.word1, result.word2);
-    });
-
-    test('Should generate word1 matching regex1 but not regex2', async () => {
-      const regex1 = '[a-z]+';
-      const regex2 = '[0-9]+';
-      
-      const result = await analyzer.generateDistinguishingWords(regex1, regex2);
-      
-      const re1 = new RegExp(`^${regex1}$`);
-      const re2 = new RegExp(`^${regex2}$`);
-      
-      assert.ok(re1.test(result.word1));
-      assert.ok(!re2.test(result.word1));
-    });
-
-    test('Should generate word2 matching regex2 but not regex1', async () => {
-      const regex1 = '[a-z]+';
-      const regex2 = '[0-9]+';
-      
-      const result = await analyzer.generateDistinguishingWords(regex1, regex2);
-      
-      const re1 = new RegExp(`^${regex1}$`);
-      const re2 = new RegExp(`^${regex2}$`);
-      
-      assert.ok(re2.test(result.word2));
-      assert.ok(!re1.test(result.word2));
-    });
-
-    test('Should exclude specified words', async () => {
-      const regex1 = '[a-z]{3}';
-      const regex2 = '[0-9]{3}';
-      const excluded = ['abc', '123'];
-      
-      const result = await analyzer.generateDistinguishingWords(regex1, regex2, excluded);
-      
-      assert.ok(!excluded.includes(result.word1));
-      assert.ok(!excluded.includes(result.word2));
-    });
-
-    test('Should provide explanation', async () => {
-      const regex1 = '[a-z]+';
-      const regex2 = '[0-9]+';
-      
-      const result = await analyzer.generateDistinguishingWords(regex1, regex2);
-      
-      assert.ok(result.explanation);
-      assert.ok(result.explanation.includes(result.word1));
-      assert.ok(result.explanation.includes(result.word2));
-    });
-
-    test('Should handle overlapping regexes', async () => {
-      const regex1 = '[a-m]+';
-      const regex2 = '[k-z]+';
-      
-      const result = await analyzer.generateDistinguishingWords(regex1, regex2);
-      
-      const re1 = new RegExp(`^${regex1}$`);
-      const re2 = new RegExp(`^${regex2}$`);
-      
-      // word1 should be in [a-j] range (only in regex1)
-      assert.ok(re1.test(result.word1));
-      assert.ok(!re2.test(result.word1));
-      
-      // word2 should be in [n-z] range (only in regex2)
-      assert.ok(re2.test(result.word2));
-      assert.ok(!re1.test(result.word2));
-    });
-  });
 
   suite('generateTwoDistinguishingWords', () => {
     test('Should generate two words for single candidate (IN/OUT case)', async () => {
@@ -850,54 +772,6 @@ suite('RegexAnalyzer Test Suite', () => {
           
           excluded.push(result.wordIn, result.wordNotIn);
         }
-      });
-    });
-
-    suite('generateDistinguishingWords with exclusions', () => {
-      test('Should not use excluded words', async () => {
-        const regex1 = '[a-z]{3}';
-        const regex2 = '[0-9]{3}';
-        const excluded = ['abc', '123', 'xyz', '456'];
-        
-        const result = await analyzer.generateDistinguishingWords(regex1, regex2, excluded);
-        
-        assert.ok(!excluded.includes(result.word1), 
-          `word1 "${result.word1}" should not be excluded`);
-        assert.ok(!excluded.includes(result.word2), 
-          `word2 "${result.word2}" should not be excluded`);
-      });
-
-      test('Should generate fresh distinguishing words across multiple calls', async () => {
-        const regex1 = '[a-z]{4}';
-        const regex2 = '[0-9]{4}';
-        const excluded: string[] = [];
-        const allWords = new Set<string>();
-        
-        for (let i = 0; i < 3; i++) {
-          const result = await analyzer.generateDistinguishingWords(regex1, regex2, excluded);
-          
-          assert.ok(!allWords.has(result.word1), 'word1 should be fresh');
-          assert.ok(!allWords.has(result.word2), 'word2 should be fresh');
-          
-          allWords.add(result.word1);
-          allWords.add(result.word2);
-          excluded.push(result.word1, result.word2);
-        }
-        
-        assert.strictEqual(allWords.size, 6); // 3 calls × 2 words
-      });
-
-      test('Should handle when excluded words limit options for one regex', async () => {
-        const regex1 = '(a|b|c)'; // Only 3 options
-        const regex2 = '[0-9]'; // 10 options
-        const excluded = ['a', 'b']; // Exclude 2 of 3 from regex1
-        
-        const result = await analyzer.generateDistinguishingWords(regex1, regex2, excluded);
-        
-        // word1 should be 'c' (only remaining option)
-        assert.strictEqual(result.word1, 'c');
-        assert.ok(/^[0-9]$/.test(result.word2));
-        assert.ok(!excluded.includes(result.word2));
       });
     });
 
