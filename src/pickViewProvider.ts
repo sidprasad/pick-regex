@@ -13,6 +13,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private analyzer = createRegexAnalyzer();
   private cancellationTokenSource?: vscode.CancellationTokenSource;
   private analysisCache = new Map<string, Promise<any> | any>();
+  private equivalenceCache = new Map<string, Promise<boolean> | boolean>();
 
   constructor(private readonly extensionUri: vscode.Uri) {
     this.controller = new PickController();
@@ -161,7 +162,21 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
       // Filter out equivalent/duplicate regexes
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
-      const uniqueCandidates = await this.filterEquivalentRegexes(validCandidates);
+      let uniqueCandidates: string[] = [];
+      try {
+        uniqueCandidates = await this.filterEquivalentRegexes(validCandidates);
+      } catch (error) {
+        const errMsg = String(error);
+        if (this.cancellationTokenSource?.token.isCancellationRequested || errMsg.includes('cancelled')) {
+          logger.info('Duplicate filtering cancelled by user.');
+          this.sendMessage({ 
+            type: 'cancelled', 
+            message: 'Operation cancelled by user.' 
+          });
+          return;
+        }
+        throw error;
+      }
       
       // Check cancellation after filtering
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -421,7 +436,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         // All candidates were eliminated - none are correct
         this.sendMessage({
           type: 'noRegexFound',
-          message: 'All candidate regexes were eliminated. None of them match your requirements.',
+          message: 'No candidate regexes match your requirements.',
           candidateDetails: this.controller.getStatus().candidateDetails,
           wordsIn,
           wordsOut
@@ -540,7 +555,21 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
       // Filter out equivalent/duplicate regexes
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
-      const uniqueCandidates = await this.filterEquivalentRegexes(validCandidates);
+      let uniqueCandidates: string[] = [];
+      try {
+        uniqueCandidates = await this.filterEquivalentRegexes(validCandidates);
+      } catch (error) {
+        const errMsg = String(error);
+        if (this.cancellationTokenSource?.token.isCancellationRequested || errMsg.includes('cancelled')) {
+          logger.info('Duplicate filtering cancelled by user (refinement).');
+          this.sendMessage({ 
+            type: 'cancelled', 
+            message: 'Operation cancelled by user.' 
+          });
+          return;
+        }
+        throw error;
+      }
       
       // Check cancellation after filtering
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -648,7 +677,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   /**
    * Timeout wrapper with cancellation and caching
    */
-  private async analyzeWithTimeout(a: string, b: string, timeoutMs = 5000): Promise<any> {
+  private async analyzeWithTimeout(a: string, b: string, timeoutMs = 5000, token?: vscode.CancellationToken): Promise<any> {
     // Symmetric cache key
     const key = a < b ? `${a}::${b}` : `${b}::${a}`;
     
@@ -658,7 +687,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
 
     const analysisPromise = (async () => {
-      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+      const cancellationToken = token ?? this.cancellationTokenSource?.token;
+      if (cancellationToken?.isCancellationRequested) {
         throw new Error('Analysis cancelled by user');
       }
       return await this.analyzer.analyzeRelationship(a, b);
@@ -667,18 +697,79 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     // Store promise immediately for concurrent requests
     this.analysisCache.set(key, analysisPromise);
 
+    const cancellationPromise = new Promise((_, reject) => {
+      const cancellationToken = token ?? this.cancellationTokenSource?.token;
+      if (!cancellationToken) {return;}
+      cancellationToken.onCancellationRequested(() => reject(new Error('Analysis cancelled by user')));
+    });
+
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Analysis timeout - regex too complex')), timeoutMs)
     );
 
     try {
-      const result = await Promise.race([analysisPromise, timeoutPromise]);
+      const racers = [analysisPromise, timeoutPromise];
+      if (this.cancellationTokenSource?.token || token) {
+        racers.push(cancellationPromise);
+      }
+      const result = await Promise.race(racers);
       // Cache the resolved value
       this.analysisCache.set(key, result);
       return result;
     } catch (err) {
       // Remove from cache on error so future attempts can retry
       this.analysisCache.delete(key);
+      throw err;
+    }
+  }
+
+  /**
+   * Cheap equivalence wrapper with cancellation and timeout, using RB.isEquivalent.
+   */
+  private async checkEquivalenceWithTimeout(
+    a: string,
+    b: string,
+    timeoutMs = 5000,
+    token?: vscode.CancellationToken
+  ): Promise<boolean> {
+    const key = a < b ? `${a}::${b}` : `${b}::${a}`;
+    
+    if (this.equivalenceCache.has(key)) {
+      const cached = this.equivalenceCache.get(key);
+      if (cached !== undefined) {
+        return cached instanceof Promise ? await cached : cached;
+      }
+    }
+
+    const cancellationToken = token ?? this.cancellationTokenSource?.token;
+
+    const equivalencePromise = (async () => {
+      if (cancellationToken?.isCancellationRequested) {
+        throw new Error('Equivalence check cancelled by user');
+      }
+      return await this.analyzer.areEquivalent(a, b);
+    })();
+
+    this.equivalenceCache.set(key, equivalencePromise);
+
+    const cancellationPromise = cancellationToken
+      ? new Promise((_, reject) => cancellationToken.onCancellationRequested(() => reject(new Error('Equivalence check cancelled by user'))))
+      : undefined;
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Equivalence check timeout - regex too complex')), timeoutMs)
+    );
+
+    try {
+      const racers = [equivalencePromise, timeoutPromise];
+      if (cancellationPromise) {
+        racers.push(cancellationPromise);
+      }
+      const result = await Promise.race(racers);
+      this.equivalenceCache.set(key, result as boolean);
+      return result as boolean;
+    } catch (err) {
+      this.equivalenceCache.delete(key);
       throw err;
     }
   }
@@ -706,6 +797,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     // PASS 2: Semantic equivalence using sampling + automata analysis
     const unique: string[] = [];
     let automataAnalysisFailures = 0;
+    const signatureCache = new Map<string, string>();
     
     for (let i = 0; i < exactUnique.length; i++) {
       const regex = exactUnique[i];
@@ -716,6 +808,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
       
       let isEquivalent = false;
+      const regexSignature = signatureCache.get(regex) ?? await this.analyzer.sampleSignature(regex, 8);
+      signatureCache.set(regex, regexSignature);
       
       for (const uniqueRegex of unique) {
         // Check cancellation before each heavy operation
@@ -723,8 +817,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           throw new Error('Filtering cancelled by user');
         }
         
+        const uniqueSignature = signatureCache.get(uniqueRegex) ?? await this.analyzer.sampleSignature(uniqueRegex, 8);
+        signatureCache.set(uniqueRegex, uniqueSignature);
+
+        // If signatures differ, they're likely not equivalent
+        if (regexSignature !== uniqueSignature) {
+          continue;
+        }
+
         // Quick sample-based check first (cheap)
-        const mightBeEquivalent = this.analyzer.quickSampleCheck(regex, uniqueRegex, 15);
+        const mightBeEquivalent = await this.analyzer.quickSampleCheck(regex, uniqueRegex, 10);
         if (!mightBeEquivalent) {
           // Samples proved they're different - skip expensive analysis
           logger.info(`Quick check: "${regex}" and "${uniqueRegex}" are different`);
@@ -733,10 +835,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         
         // Samples suggest equivalence - do full automata analysis
         try {
-          logger.info(`Full analysis: comparing "${regex}" vs "${uniqueRegex}"...`);
-          const result = await this.analyzeWithTimeout(regex, uniqueRegex, 8000);
+          logger.info(`Full equivalence check: comparing "${regex}" vs "${uniqueRegex}"...`);
+          const equivalent = await this.checkEquivalenceWithTimeout(regex, uniqueRegex, 8000, this.cancellationTokenSource?.token);
           
-          if (result && result.relationship === RegexRelationship.EQUIVALENT) {
+          if (equivalent) {
             logger.info(`Found equivalent: "${regex}" === "${uniqueRegex}"`);
             isEquivalent = true;
             break;
@@ -746,12 +848,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           if (errMsg.includes('cancelled')) {
             throw error; // Re-throw cancellation
           }
-          
-          // Automata analysis failed - this should not happen since we filtered
-          // unsupported patterns earlier. Log the error and skip equivalence check.
-          logger.error(error, `Unexpected automata analysis failure for "${regex}" vs "${uniqueRegex}"`);
+
+          // Equivalence analysis failed or timed out. Log and conservatively keep both.
+          logger.warn(`Equivalence analysis failed for "${regex}" vs "${uniqueRegex}": ${errMsg}`);
           automataAnalysisFailures++;
-          // Treat as not equivalent (conservative approach)
         }
       }
       

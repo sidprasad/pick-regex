@@ -112,7 +112,6 @@
     "vsce": "^2.9.0"
   },
   "dependencies": {
-    "randexp": "^0.5.3",
     "@gruhn/regex-utils": "^2.7.3"
   }
 }

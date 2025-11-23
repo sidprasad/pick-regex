@@ -425,10 +425,10 @@ export class PickController {
       const wordsOut: string[] = [];
       
       // Generate words IN the regex
-      const inWords = this.analyzer.generateMultipleWords(
+      const inWords = (await this.analyzer.generateMultipleWords(
         this.finalRegex,
         count
-      ).filter(w => !this.usedWords.has(w));
+      )).filter(w => !this.usedWords.has(w));
       wordsIn.push(...inWords);
       
       // Generate words OUT of the regex
