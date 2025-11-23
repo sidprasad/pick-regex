@@ -297,33 +297,29 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       });
     } catch (error) {
       logger.error(error, 'Error generating next pair');
-      this.sendMessage({
-        type: 'error',
-        message: `Error generating pair: ${error}`
-      });
+      
       // Check if the error is about running out of words
       const errorMessage = String(error);
       if (errorMessage.includes('Could not generate unique word') || 
-          errorMessage.includes('Failed to generate')) {
+          errorMessage.includes('Failed to generate') ||
+          errorMessage.includes('Exhausted word space')) {
         // We ran out of words - show best candidates so far
         const status = this.controller.getStatus();
         const activeCandidates = status.candidateDetails.filter(c => !c.eliminated);
         
-        this.sendMessage({ 
-          type: 'warning', 
-          message: `Unable to generate more distinguishing words. ${activeCandidates.length} candidate(s) remain. These may be your best options:` 
-        });
-        
-        // Show current best candidates
+        // Send a single consolidated message about word exhaustion
         this.sendMessage({
           type: 'insufficientWords',
           candidates: activeCandidates,
-          status
+          status,
+          message: `Unable to generate more distinguishing words. ${activeCandidates.length} candidate(s) remain.`
         });
       } else {
+        // For other errors, send a clean error message
+        const cleanErrorMessage = error instanceof Error ? error.message : String(error);
         this.sendMessage({ 
           type: 'error', 
-          message: `Error generating pair: ${error}` 
+          message: `Error generating pair: ${cleanErrorMessage}` 
         });
       }
     }

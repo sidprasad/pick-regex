@@ -421,6 +421,10 @@
         }
 
         function showInsufficientWords(candidates, status) {
+            // Clear any existing error messages first
+            errorSection.classList.add('hidden');
+            statusBar.classList.add('hidden');
+            
             showSection('voting');
             updateCandidates(candidates, status.threshold);
             updateWordHistory(status.wordHistory);
@@ -428,8 +432,7 @@
             wordPair.innerHTML = '<div style="text-align: center; padding: 20px; background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); border-radius: 4px;">' +
                 '<h3>Unable to generate more words</h3>' +
                 '<p>The system ran out of distinguishing words to generate.</p>' +
-                '<p>Here are the remaining candidates - you may need to choose manually or start over with a different prompt.</p>' +
-                '<button onclick="location.reload()" style="margin-top: 10px;">Start Over</button>' +
+                '<p>Here are the remaining candidates. You can copy any candidate you prefer, or click "Build a New Regex" below to start fresh.</p>' +
                 '</div>';
         }
 
