@@ -6,6 +6,8 @@ import * as vscode from 'vscode';
  */
 class Logger {
         private channel: vscode.OutputChannel | undefined;
+        private readonly logBuffer: string[] = [];
+        private readonly maxLogLines = 500;
 
         initialize(context: vscode.ExtensionContext, name = 'PICK Regex Builder'): void {
                 if (this.channel) {
@@ -43,6 +45,11 @@ class Logger {
                 const timestamp = new Date().toISOString();
                 const formattedMessage = `[${timestamp}] [${level}] ${message}`;
 
+                this.logBuffer.push(formattedMessage);
+                if (this.logBuffer.length > this.maxLogLines) {
+                        this.logBuffer.shift();
+                }
+
                 if (this.channel) {
                         this.channel.appendLine(formattedMessage);
                 } else if (level === 'ERROR') {
@@ -50,6 +57,11 @@ class Logger {
                 } else {
                         console.log(formattedMessage);
                 }
+        }
+
+        getLogs(limit = this.maxLogLines): string {
+                const start = Math.max(0, this.logBuffer.length - limit);
+                return this.logBuffer.slice(start).join('\n');
         }
 }
 
