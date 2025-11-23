@@ -447,6 +447,49 @@ export class RegexAnalyzer {
     }
   }
 
+  /**
+   * Select intelligent fallback words that actually distinguish between regexes
+   * Tests potential fallback words and chooses ones that provide distinguishing information
+   */
+  private selectIntelligentFallbacks(regexObjects: RegExp[], excludedWords: string[]): [string, string] {
+    // Diverse set of potential fallback words
+    const potentialFallbacks = [
+      'abc', '123', 'xyz', '000', 'test', '999',
+      '0.0.0.0', '192.168.1.1', '255.255.255.255', '1.2.3.4',
+      'aaa', 'zzz', '111', '888',
+      'example', 'word', 'text', 'data'
+    ];
+    
+    // Filter out excluded words
+    const candidates = potentialFallbacks.filter(w => !excludedWords.includes(w));
+    
+    // Score each candidate by how well it distinguishes between regexes
+    const scored = candidates.map(word => {
+      const matches = regexObjects.map(re => re.test(word));
+      const trueCount = matches.filter(Boolean).length;
+      const falseCount = matches.length - trueCount;
+      const score = Math.min(trueCount, falseCount); // Best words split the set evenly
+      return { word, score, matches };
+    });
+    
+    // Sort by score (higher is better)
+    scored.sort((a, b) => b.score - a.score);
+    
+    // Pick first word (best score)
+    const firstWord = scored[0];
+    
+    // Pick second word that has different match pattern from first
+    let secondWord = scored[1]; // Default to second best
+    for (let i = 1; i < scored.length; i++) {
+      const hasDifference = scored[i].matches.some((m, idx) => m !== firstWord.matches[idx]);
+      if (hasDifference) {
+        secondWord = scored[i];
+        break;
+      }
+    }
+    
+    return [firstWord.word, secondWord?.word || scored[1]?.word || 'abc'];
+  }
 
   /**
    * Generate two distinguishing words from candidates
@@ -613,9 +656,10 @@ export class RegexAnalyzer {
         }
       }
 
+      // Final fallback: use intelligently chosen fallback words that actually distinguish
       const [word1, word2] = chosenWords.length >= 2
         ? chosenWords.slice(0, 2)
-        : ['abc', '123'];
+        : this.selectIntelligentFallbacks(regexObjects, excludedWords);
 
       // CRITICAL: Validate that at least one word matches at least one candidate
       // This prevents infinite loops when generateMultipleWords produces garbage
