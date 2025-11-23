@@ -182,25 +182,28 @@ export class RegexAnalyzer {
    * 3. Generate a word IN and a word NOT IN a regex
    * 
    * This method includes a timeout to prevent hanging on complex regexes.
+   * Uses enumerate() for fair enumeration instead of random sampling.
    */
   async generateWordPair(regex: string, excludedWords: string[] = []): Promise<WordPairResult> {
     const timeoutMs = 5000; // 5 seconds timeout
     
     let timeoutId: NodeJS.Timeout | undefined;
+    let partialWordIn = ''; // Track partial result for timeout case
     
     const generationPromise = (async () => {
       try {
         const rb = await createRb(regex);
         const re = new RegExp(`^${regex}$`);
 
-        // Word that matches
-        const genIn = rb.sample();
+        // Word that matches - use enumerate() for fair enumeration
+        const genIn = rb.enumerate();
         let wordIn = '';
         for (let i = 0; i < this.maxAttempts; i++) {
           const next = genIn.next();
           if (next.done) {break;}
           if (!excludedWords.includes(next.value)) {
             wordIn = next.value;
+            partialWordIn = wordIn; // Store partial result
             break;
           }
         }
@@ -212,7 +215,7 @@ export class RegexAnalyzer {
         let wordNotIn = '';
         try {
           const complement = rb.not();
-          const gen = complement.sample();
+          const gen = complement.enumerate(); // Use enumerate here too
           for (let i = 0; i < 10; i++) {
             const next = gen.next();
             if (!next.done) {
@@ -253,7 +256,15 @@ export class RegexAnalyzer {
       } catch (error) {
         if (isCacheOverflowError(error)) {
           logger.warn(`Regex too complex for word pair generation: '${regex}' - cache overflow`);
-          // Return a simple fallback pair
+          // Use partial result if available
+          if (partialWordIn) {
+            return {
+              wordIn: partialWordIn,
+              wordNotIn: partialWordIn + 'X',
+              explanation: 'Regex too complex - using partial results'
+            };
+          }
+          // Otherwise use fallback
           return {
             wordIn: 'test',
             wordNotIn: 'invalid',
@@ -271,12 +282,21 @@ export class RegexAnalyzer {
     
     const timeoutPromise = new Promise<WordPairResult>((resolve) => {
       timeoutId = setTimeout(() => {
-        logger.warn(`Word pair generation timed out after ${timeoutMs}ms for regex: '${regex}'`);
-        resolve({
-          wordIn: 'test',
-          wordNotIn: 'invalid',
-          explanation: 'Timeout - regex too complex for word generation'
-        });
+        logger.warn(`Word pair generation timed out after ${timeoutMs}ms for regex: '${regex}' - using partial results`);
+        // Use partial result if available
+        if (partialWordIn) {
+          resolve({
+            wordIn: partialWordIn,
+            wordNotIn: partialWordIn + 'X',
+            explanation: 'Timeout - using partial enumeration results'
+          });
+        } else {
+          resolve({
+            wordIn: 'test',
+            wordNotIn: 'invalid',
+            explanation: 'Timeout - regex too complex for word generation'
+          });
+        }
       }, timeoutMs);
     });
     
@@ -293,16 +313,17 @@ export class RegexAnalyzer {
 
   /**
    * Generate multiple unique words matching a regex
-   * Uses @gruhn/regex-utils .sample() iterator with filtering
+   * Uses @gruhn/regex-utils .enumerate() iterator for fair enumeration
    * 
    * This method includes a timeout to prevent hanging on complex regexes.
-   * If the timeout is exceeded, returns an empty array.
+   * If the timeout is exceeded, returns any words generated so far.
    */
   async generateMultipleWords(regex: string, count: number, excludedWords: string[] = [], cancellationToken?: { isCancellationRequested: boolean }): Promise<string[]> {
     // Wrap in a timeout to prevent hanging
     const timeoutMs = 5000; // 5 seconds timeout for word generation
     
     let timeoutId: NodeJS.Timeout | undefined;
+    let partialWords: string[] = []; // Track partial results for timeout case
     
     const generationPromise = (async () => {
       try {
@@ -310,20 +331,22 @@ export class RegexAnalyzer {
         const words: string[] = [];
         const seen = new Set<string>(excludedWords);
         
-        const sampler = rb.sample();
+        // Use enumerate() for fair enumeration instead of random sample()
+        const enumerator = rb.enumerate();
         for (let i = 0; i < this.maxAttempts && words.length < count; i++) {
           // Check for cancellation every few iterations to avoid hanging
           if (cancellationToken?.isCancellationRequested) {
             throw new Error('Word generation cancelled by user');
           }
           
-          const next = sampler.next();
+          const next = enumerator.next();
           if (next.done) {break;}
           
           const word = next.value;
           if (!seen.has(word)) {
             words.push(word);
             seen.add(word);
+            partialWords = [...words]; // Update partial results
           }
         }
         
@@ -335,7 +358,7 @@ export class RegexAnalyzer {
         }
         if (isCacheOverflowError(error)) {
           logger.warn(`Regex too complex for word generation: '${regex}' - cache overflow`);
-          return []; // Return empty array for complex regexes that overflow the cache
+          return partialWords.length > 0 ? partialWords : []; // Return partial results if available
         }
         throw new Error(`Failed to generate words for '${regex}': ${error}`);
       } finally {
@@ -348,8 +371,8 @@ export class RegexAnalyzer {
     
     const timeoutPromise = new Promise<string[]>((resolve) => {
       timeoutId = setTimeout(() => {
-        logger.warn(`Word generation timed out after ${timeoutMs}ms for regex: '${regex}'`);
-        resolve([]); // Return empty array on timeout
+        logger.warn(`Word generation timed out after ${timeoutMs}ms for regex: '${regex}' - returning ${partialWords.length} partial results`);
+        resolve(partialWords); // Return partial results instead of empty array
       }, timeoutMs);
     });
     
