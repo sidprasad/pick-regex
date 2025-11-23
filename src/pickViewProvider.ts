@@ -698,7 +698,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       setTimeout(() => reject(new Error('Equivalence check timeout - regex too complex')), timeoutMs)
     );
 
-    const racers: Promise<boolean | never>[] = [equivalencePromise, timeoutPromise];
+    const racers: Promise<boolean>[] = [equivalencePromise, timeoutPromise];
     if (cancellationPromise) {
       racers.push(cancellationPromise);
     }

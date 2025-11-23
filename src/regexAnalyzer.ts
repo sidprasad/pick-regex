@@ -9,18 +9,6 @@ async function getRB() {
 }
 
 /**
- * Lazy load CacheOverflowError for proper error checking
- */
-let CacheOverflowError: any;
-async function getCacheOverflowError() {
-  if (!CacheOverflowError) {
-    const module = await import('@gruhn/regex-utils');
-    CacheOverflowError = module.CacheOverflowError;
-  }
-  return CacheOverflowError;
-}
-
-/**
  * Check if an error is a CacheOverflowError
  */
 function isCacheOverflowError(error: unknown): boolean {
@@ -298,8 +286,8 @@ export class RegexAnalyzer {
       
       return words;
     } catch (error) {
-      const errorMessage = String(error);
-      if (errorMessage.includes('cancelled')) {
+      // Check for cancellation - look for our cancellation message
+      if (error instanceof Error && error.message.includes('cancelled')) {
         throw error; // Re-throw cancellation errors
       }
       if (isCacheOverflowError(error)) {
