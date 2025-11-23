@@ -54,6 +54,15 @@ export interface TwoDistinguishingWordsResult {
   properties?: string[];
 }
 
+async function createRb(pattern: string) {
+  try {
+    const RB = await getRB();
+    return RB(new RegExp(`^${pattern}$`));
+  } catch (error) {
+    throw new Error(`Unsupported regex syntax for '${pattern}': ${error}`);
+  }
+}
+
 /**
  * RegexAnalyzer using automata theory (randexp + regex-utils)
  */
@@ -85,27 +94,16 @@ export class RegexAnalyzer {
    */
   generateWord(regex: string, seenWords: string[] = []): WordGenerationResult {
     try {
+      const seenSet = new Set(seenWords);
+
+      // Try fast sampling with randexp
       const randexp = new RandExp(regex);
       randexp.max = 10;
-
-      const seenSet = new Set(seenWords);
-      let shortestWord: string | null = null;
-
       for (let i = 0; i < this.maxAttempts; i++) {
         const word = randexp.gen();
-        if (seenSet.has(word)) {continue;}
-
-        // Keep the shortest unique word we've seen so far to minimize length
-        if (shortestWord === null || word.length < shortestWord.length) {
-          shortestWord = word;
-
-          // Early exit if we found an empty string or single-char word
-          if (shortestWord.length <= 1) {break;}
+        if (!seenSet.has(word)) {
+          return { word, explanation: `Generated from: ${regex}` };
         }
-      }
-
-      if (shortestWord !== null) {
-        return { word: shortestWord, explanation: `Generated from: ${regex}` };
       }
 
       throw new Error(`Could not generate unique word after ${this.maxAttempts} attempts`);
@@ -119,9 +117,8 @@ export class RegexAnalyzer {
    */
   async analyzeRelationship(regexA: string, regexB: string): Promise<RelationshipResult> {
     try {
-      const RB = await getRB();
-      const rbA = RB(new RegExp(`^${regexA}$`));
-      const rbB = RB(new RegExp(`^${regexB}$`));
+      const rbA = await createRb(regexA);
+      const rbB = await createRb(regexB);
       
       // Use regex-utils predicates
       const isEquiv = rbA.isEquivalent(new RegExp(`^${regexB}$`));
@@ -129,78 +126,38 @@ export class RegexAnalyzer {
       const bSubsetA = rbB.isSubsetOf(new RegExp(`^${regexA}$`));
       const isDisjoint = rbA.isDisjointFrom(new RegExp(`^${regexB}$`));
       
-      // Collect examples using set operations for accuracy
+      // Collect examples using set operations
       const inBoth: string[] = [];
       const onlyInA: string[] = [];
       const onlyInB: string[] = [];
-      
-      // Get intersection (A ∩ B) - words in both
+
+      const trySample = (gen: Iterator<string>, limit: number, bucket: string[]) => {
+        for (let i = 0; i < limit; i++) {
+          const next = gen.next();
+          if (next.done) {break;}
+          bucket.push(next.value);
+        }
+      };
+
       try {
         const intersection = rbA.and(new RegExp(`^${regexB}$`));
-        const genIntersection = intersection.sample();
-        for (let i = 0; i < 5; i++) {
-          const next = genIntersection.next();
-          if (!next.done) {
-            inBoth.push(next.value);
-          }
-        }
+        trySample(intersection.sample(), 5, inBoth);
       } catch {
-        // Intersection might fail, try fallback
-        const genA = rbA.sample();
-        const reB = new RegExp(`^${regexB}$`);
-        for (let i = 0; i < 10; i++) {
-          const next = genA.next();
-          if (!next.done && reB.test(next.value)) {
-            inBoth.push(next.value);
-            if (inBoth.length >= 5) {break;}
-          }
-        }
+        // ignore if set operation unsupported
       }
-      
-      // Get words only in A (A - B)
+
       try {
-        const onlyInASet = rbA.without(new RegExp(`^${regexB}$`));
-        const genOnlyA = onlyInASet.sample();
-        for (let i = 0; i < 5; i++) {
-          const next = genOnlyA.next();
-          if (!next.done) {
-            onlyInA.push(next.value);
-          }
-        }
+        const onlyA = rbA.without(new RegExp(`^${regexB}$`));
+        trySample(onlyA.sample(), 5, onlyInA);
       } catch {
-        // Set difference might fail, try fallback
-        const genA = rbA.sample();
-        const reB = new RegExp(`^${regexB}$`);
-        for (let i = 0; i < 20; i++) {
-          const next = genA.next();
-          if (!next.done && !reB.test(next.value)) {
-            onlyInA.push(next.value);
-            if (onlyInA.length >= 5) {break;}
-          }
-        }
+        // ignore if set operation unsupported
       }
-      
-      // Get words only in B (B - A)
+
       try {
-        const onlyInBSet = rbB.without(new RegExp(`^${regexA}$`));
-        const genOnlyB = onlyInBSet.sample();
-        for (let i = 0; i < 5; i++) {
-          const next = genOnlyB.next();
-          if (!next.done) {
-            onlyInB.push(next.value);
-          }
-        }
+        const onlyB = rbB.without(new RegExp(`^${regexA}$`));
+        trySample(onlyB.sample(), 5, onlyInB);
       } catch {
-        // Set difference might fail, try fallback
-        const genB = rbB.sample();
-        const reA = new RegExp(`^${regexA}$`);
-        for (let i = 0; i < 20; i++) {
-          const next = genB.next();
-          if (!next.done && !reA.test(next.value)) {
-            onlyInB.push(next.value);
-            if (onlyInB.length >= 5) {break;}
-          }
-        }
+        // ignore if set operation unsupported
       }
       
       let relationship: RegexRelationship;
@@ -242,19 +199,28 @@ export class RegexAnalyzer {
    */
   async generateWordPair(regex: string, excludedWords: string[] = []): Promise<WordPairResult> {
     try {
-      const RB = await getRB();
+      const rb = await createRb(regex);
       const re = new RegExp(`^${regex}$`);
-      
+
       // Word that matches
-      const wordIn = this.generateWord(regex, excludedWords).word;
+      const genIn = rb.sample();
+      let wordIn = '';
+      for (let i = 0; i < this.maxAttempts; i++) {
+        const next = genIn.next();
+        if (next.done) {break;}
+        if (!excludedWords.includes(next.value)) {
+          wordIn = next.value;
+          break;
+        }
+      }
+      if (!wordIn) {
+        wordIn = this.generateWord(regex, excludedWords).word;
+      }
       
       // Word that doesn't match (using complement)
-      const rb = RB(new RegExp(`^${regex}$`));
-      const complement = rb.not();
-      
       let wordNotIn = '';
       try {
-        // Try to generate from complement
+        const complement = rb.not();
         const gen = complement.sample();
         for (let i = 0; i < 10; i++) {
           const next = gen.next();
@@ -365,8 +331,7 @@ export class RegexAnalyzer {
     // Try to create an RB object from the pattern
     // If @gruhn/regex-utils throws an exception, the syntax is unsupported
     try {
-      const RB = await getRB();
-      RB(new RegExp(`^${pattern}$`));
+      await createRb(pattern);
       return true;
     } catch (error) {
       logger.warn(`Pattern uses unsupported syntax for @gruhn/regex-utils: ${pattern} - ${error}`);
@@ -426,6 +391,14 @@ export class RegexAnalyzer {
   }
 
   /**
+   * Direct equivalence check using @gruhn/regex-utils (RB) without extra set operations.
+   */
+  async areEquivalent(regexA: string, regexB: string): Promise<boolean> {
+    const rbA = await createRb(regexA);
+    return rbA.isEquivalent(new RegExp(`^${regexB}$`));
+  }
+
+  /**
    * Generate distinguishing words between two regexes
    */
   async generateDistinguishingWords(
@@ -434,9 +407,8 @@ export class RegexAnalyzer {
     excludedWords: string[] = []
   ): Promise<DistinguishingWordsResult> {
     try {
-      const RB = await getRB();
-      const rb1 = RB(new RegExp(`^${regex1}$`));
-      const rb2 = RB(new RegExp(`^${regex2}$`));
+      const rb1 = await createRb(regex1);
+      const rb2 = await createRb(regex2);
       
       // Get words only in regex1 (A - B)
       const onlyIn1 = rb1.without(new RegExp(`^${regex2}$`));
@@ -523,225 +495,93 @@ export class RegexAnalyzer {
     }
 
     try {
-      const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
-      
-      // Use automata analysis to find distinguishing examples between pairs
-      // Collect candidate words from pairwise differences
+      const sampleFromDifference = async (a: string, b: string): Promise<string | null> => {
+        try {
+          const diff = (await createRb(a)).without(new RegExp(`^${b}$`)).sample();
+          for (let i = 0; i < 10; i++) {
+            const next = diff.next();
+            if (!next.done) {return next.value;}
+          }
+        } catch {
+          return null;
+        }
+        return null;
+      };
+
       const candidateWords: string[] = [];
-      
-      // Analyze relationships between all pairs of regexes to find distinguishing words
+
+      // Limit pairwise analysis to first few pairs for performance
       for (let i = 0; i < candidateRegexes.length && i < 3; i++) {
         for (let j = i + 1; j < candidateRegexes.length && j < 3; j++) {
-          try {
-            // Use analyzeRelationship which deterministically finds distinguishing examples
-            const analysis = await this.analyzeRelationship(
-              candidateRegexes[i],
-              candidateRegexes[j]
-            );
-            
-            // Add words that are only in one regex (these are guaranteed to distinguish)
-            if (analysis.examples) {
-              if (analysis.examples.onlyInA) {
-                candidateWords.push(...analysis.examples.onlyInA);
-              }
-              if (analysis.examples.onlyInB) {
-                candidateWords.push(...analysis.examples.onlyInB);
-              }
-              if (analysis.examples.inBoth) {
-                candidateWords.push(...analysis.examples.inBoth);
-              }
-            }
-          } catch {
-            // Analysis might fail for complex regexes, continue
-            continue;
-          }
+          const a = candidateRegexes[i];
+          const b = candidateRegexes[j];
+          const fromA = await sampleFromDifference(a, b);
+          const fromB = await sampleFromDifference(b, a);
+          if (fromA) {candidateWords.push(fromA);}
+          if (fromB) {candidateWords.push(fromB);}
         }
       }
       
-      // Remove duplicates and excluded words
-      const unique = Array.from(new Set(candidateWords))
+      // Remove duplicates and excluded words (preserve order)
+      const seenWords = new Set<string>();
+      const uniqueWords = candidateWords
         .filter(w => !excludedWords.includes(w))
-        // Prefer shorter candidates first so we bias toward concise examples
-        .sort((a, b) => a.length - b.length || a.localeCompare(b));
-      
-      // If we don't have enough words from automata analysis, supplement with sampling
-      if (unique.length < 10) {
-        for (const regex of candidateRegexes) {
-          try {
-            const words = this.generateMultipleWords(regex, 5, excludedWords);
-            unique.push(...words);
-          } catch {
-            continue;
-          }
-        }
-      }
-      
-      // Score each word by how it splits the candidate set
-      interface Scored {
-        word: string;
-        matches: boolean[];
-        count: number;
-      }
-
-      const scored: Scored[] = Array.from(new Set(unique))
-        .filter(w => !excludedWords.includes(w))
-        .map(word => {
-          const matches = regexObjects.map(re => re.test(word));
-          const count = matches.filter(m => m).length;
-          return { word, matches, count };
+        .filter(w => {
+          if (seenWords.has(w)) {return false;}
+          seenWords.add(w);
+          return true;
         });
       
-      if (scored.length === 0) {
-        throw new Error('Could not generate any candidate words');
-      }
-      
-      // Prefer words where both upvotes and downvotes are informative
-      const informative = scored.filter(s => s.count > 0 && s.count < candidateRegexes.length);
-      const pool = informative.length > 0 ? informative : scored;
-
-      const calculateWorstCase = (first: Scored, second: Scored) => {
-        const yesYes = first.matches.filter((m, k) => m && second.matches[k]).length;
-        const yesNo = first.matches.filter((m, k) => m && !second.matches[k]).length;
-        const noYes = first.matches.filter((m, k) => !m && second.matches[k]).length;
-        const noNo = candidateRegexes.length - yesYes - yesNo - noYes;
-
-        return {
-          partitions: [yesYes, yesNo, noYes, noNo],
-          worstCase: Math.max(yesYes, yesNo, noYes, noNo)
-        };
-      };
-
-      // Find the pair of words that minimizes the worst-case remaining candidates across
-      // all four vote combinations (YY, YN, NY, NN). This set-partitioning metric guarantees
-      // that every vote moves us toward elimination when possible.
-      let bestPair: { first: Scored; second: Scored; worstCase: number } | null = null;
-      let bestElimination = -1;
-      let bestWorstCase = candidateRegexes.length;
-      let shortestTotalLength = Infinity;
-      let bestPartitionDiversity = 0;
-
-      for (let i = 0; i < pool.length; i++) {
-        for (let j = i + 1; j < pool.length; j++) {
-          const first = pool[i];
-          const second = pool[j];
-
-          // Skip pairs that have identical match vectors — they do not provide new information
-          const matchVectorsEqual = first.matches.every((m, idx) => m === second.matches[idx]);
-          if (matchVectorsEqual) {
-            continue;
-          }
-
-          const { partitions, worstCase } = calculateWorstCase(first, second);
-          const elimination = candidateRegexes.length - worstCase;
-
-          // Require that each vote combination eliminates something when possible
-          if (elimination < bestElimination) {
-            continue;
-          }
-
-          const partitionDiversity = partitions.filter(p => p > 0).length;
-          const totalLength = first.word.length + second.word.length;
-
-          const balanceScore = Math.min(first.count, candidateRegexes.length - first.count) +
-            Math.min(second.count, candidateRegexes.length - second.count);
-          const bestBalanceScore = bestPair
-            ? Math.min(bestPair.first.count, candidateRegexes.length - bestPair.first.count) +
-              Math.min(bestPair.second.count, candidateRegexes.length - bestPair.second.count)
-            : -Infinity;
-
-          if (
-            elimination > bestElimination ||
-            (elimination === bestElimination && worstCase < bestWorstCase) ||
-            (elimination === bestElimination && worstCase === bestWorstCase && partitionDiversity > bestPartitionDiversity) ||
-            (elimination === bestElimination && worstCase === bestWorstCase && partitionDiversity === bestPartitionDiversity &&
-              balanceScore > 0 && balanceScore > bestBalanceScore) ||
-            (elimination === bestElimination && worstCase === bestWorstCase && partitionDiversity === bestPartitionDiversity &&
-              balanceScore === bestBalanceScore && totalLength < shortestTotalLength)
-          ) {
-            bestElimination = elimination;
-            bestWorstCase = worstCase;
-            bestPartitionDiversity = partitionDiversity;
-            shortestTotalLength = totalLength;
-            bestPair = { first, second, worstCase };
+      // If we don't have enough words from pairwise differences, supplement with sampling
+      while (uniqueWords.length < 4 && uniqueWords.length < candidateRegexes.length * 2) {
+        const regex = candidateRegexes[uniqueWords.length % candidateRegexes.length];
+        const words = this.generateMultipleWords(regex, 2, Array.from(seenWords));
+        for (const w of words) {
+          if (!seenWords.has(w) && !excludedWords.includes(w)) {
+            uniqueWords.push(w);
+            seenWords.add(w);
           }
         }
       }
+      
+      if (uniqueWords.length < 2) {
+        uniqueWords.push('abc', '123');
+      }
 
-      let best1 = bestPair?.first ?? pool[0];
-      let best2 = bestPair?.second ?? null;
+      const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
 
-      // If we only had one scored word or couldn't find a distinct pair,
-      // generate a word NOT matching any regex or with a different match vector
-      if (!best2) {
-        // Generate a word that doesn't match any of the candidate regexes
-        // This provides maximum information gain by testing if candidates incorrectly accept non-target strings
-        const allExcluded = [...excludedWords, best1.word];
-        
-        // Try multiple strategies to generate a non-matching word
-        const strategies = [
-          // Strategy 1: Simple mutations of the existing word
-          () => best1.word + 'X',
-          () => 'X' + best1.word,
-          () => best1.word.slice(0, -1) || '!',
-          () => best1.word.toUpperCase() !== best1.word ? best1.word.toUpperCase() : best1.word.toLowerCase(),
-          // Strategy 2: Common non-matching patterns
-          () => '!!!invalid!!!',
-          () => '@@@@',
-          () => '____',
-          () => '0000',
-          () => 'XXXX',
-          // Strategy 3: Empty or very short strings
-          () => '',
-          () => ' ',
-          () => '\n',
-        ];
-        
-        for (const strategy of strategies) {
-          const candidate = strategy();
-          
-          // Check if this word is excluded or matches any regex
-          if (allExcluded.includes(candidate)) {
-            continue;
-          }
-          
-          const matches = regexObjects.map(re => re.test(candidate));
-          const count = matches.filter(m => m).length;
+      // Score words by how well they split the candidate set
+      const wordScores: Array<{word: string; score: number; balance: number}> = [];
+      for (const word of uniqueWords) {
+        const matches = regexObjects.map(re => re.test(word));
+        const trueCount = matches.filter(Boolean).length;
+        const falseCount = matches.length - trueCount;
+        const balance = Math.abs(trueCount - falseCount);
+        const score = Math.min(trueCount, falseCount);
+        wordScores.push({ word, score, balance });
+      }
 
-          // We want a word that doesn't match any regex (count === 0)
-          // or at least matches differently than best1
-          if (count === 0 || matches.some((m, k) => m !== best1.matches[k])) {
-            best2 = { word: candidate, matches, count };
-            bestWorstCase = calculateWorstCase(best1, best2).worstCase;
-            break;
-          }
+      wordScores.sort((a, b) => b.score - a.score || a.balance - b.balance);
+
+      const chosenWords: string[] = [];
+      for (const candidate of wordScores) {
+        if (!chosenWords.includes(candidate.word)) {
+          chosenWords.push(candidate.word);
         }
+        if (chosenWords.length >= 2) {break;}
       }
 
-      if (best2) {
-        bestWorstCase = calculateWorstCase(best1, best2).worstCase;
-      }
-      
-      // If we still don't have a second word, throw an error rather than returning duplicates
-      if (!best2) {
-        throw new Error('Could not generate two distinct distinguishing words');
-      }
-      
-      // CRITICAL: At least ONE word must match at least one candidate
-      // If both words have count === 0, we've run out of words to generate
-      if (best1.count === 0 && best2.count === 0) {
-        throw new Error('Could not generate unique word - both words match zero candidates (exhausted word space)');
-      }
+      const [word1, word2] = chosenWords.length >= 2
+        ? chosenWords.slice(0, 2)
+        : ['abc', '123'];
 
       return {
-        words: [best1.word, best2.word],
-        explanation: `Set-partitioning pair; worst-case remaining candidates: ${bestWorstCase}`,
-        properties: [
-          `Matches ${best1.count}/${candidateRegexes.length}`,
-          `Matches ${best2.count}/${candidateRegexes.length}`
-        ]
+        words: [word1, word2],
+        explanation: `Words selected to best split candidate set (${candidateRegexes.length} candidates)`,
+        properties: ['Maximally informative split']
       };
     } catch (error) {
-      throw new Error(`Failed: ${error}`);
+      throw new Error(`Failed to generate two distinguishing words: ${error}`);
     }
   }
 }

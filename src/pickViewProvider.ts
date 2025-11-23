@@ -13,6 +13,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private analyzer = createRegexAnalyzer();
   private cancellationTokenSource?: vscode.CancellationTokenSource;
   private analysisCache = new Map<string, Promise<any> | any>();
+  private equivalenceCache = new Map<string, Promise<boolean> | boolean>();
 
   constructor(private readonly extensionUri: vscode.Uri) {
     this.controller = new PickController();
@@ -723,6 +724,55 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * Cheap equivalence wrapper with cancellation and timeout, using RB.isEquivalent.
+   */
+  private async checkEquivalenceWithTimeout(
+    a: string,
+    b: string,
+    timeoutMs = 5000,
+    token?: vscode.CancellationToken
+  ): Promise<boolean> {
+    const key = a < b ? `${a}::${b}` : `${b}::${a}`;
+    
+    if (this.equivalenceCache.has(key)) {
+      const cached = this.equivalenceCache.get(key);
+      return cached instanceof Promise ? await cached : cached;
+    }
+
+    const cancellationToken = token ?? this.cancellationTokenSource?.token;
+
+    const equivalencePromise = (async () => {
+      if (cancellationToken?.isCancellationRequested) {
+        throw new Error('Equivalence check cancelled by user');
+      }
+      return await this.analyzer.areEquivalent(a, b);
+    })();
+
+    this.equivalenceCache.set(key, equivalencePromise);
+
+    const cancellationPromise = cancellationToken
+      ? new Promise((_, reject) => cancellationToken.onCancellationRequested(() => reject(new Error('Equivalence check cancelled by user'))))
+      : undefined;
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Equivalence check timeout - regex too complex')), timeoutMs)
+    );
+
+    try {
+      const racers = [equivalencePromise, timeoutPromise];
+      if (cancellationPromise) {
+        racers.push(cancellationPromise);
+      }
+      const result = await Promise.race(racers);
+      this.equivalenceCache.set(key, result as boolean);
+      return result as boolean;
+    } catch (err) {
+      this.equivalenceCache.delete(key);
+      throw err;
+    }
+  }
+
+  /**
    * Filter out equivalent/duplicate regexes
    */
   private async filterEquivalentRegexes(regexes: string[]): Promise<string[]> {
@@ -746,11 +796,6 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     const unique: string[] = [];
     let automataAnalysisFailures = 0;
     const signatureCache = new Map<string, string>();
-    const complexityThreshold = 180;
-    const maxAutomataComparisons = 25;
-    let automataComparisons = 0;
-    const startTime = Date.now();
-    const timeBudgetMs = 12000;
     
     for (let i = 0; i < exactUnique.length; i++) {
       const regex = exactUnique[i];
@@ -758,12 +803,6 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       // Check cancellation
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
         throw new Error('Filtering cancelled by user');
-      }
-
-      if (Date.now() - startTime > timeBudgetMs) {
-        logger.warn(`Filtering time budget exceeded after ${unique.length} uniques; returning early.`);
-        unique.push(...exactUnique.slice(i));
-        break;
       }
       
       let isEquivalent = false;
@@ -792,26 +831,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           continue;
         }
         
-        // Avoid heavy automata analysis for very complex pairs
-        const complexityScore = this.analyzer.estimateComplexity(regex) + this.analyzer.estimateComplexity(uniqueRegex);
-        if (complexityScore > complexityThreshold) {
-          logger.warn(`Skipping automata analysis due to complexity (${complexityScore}) for "${regex}" vs "${uniqueRegex}"`);
-          continue;
-        }
-
-        if (automataComparisons >= maxAutomataComparisons) {
-          logger.warn(`Reached automata comparison cap (${maxAutomataComparisons}); treating remaining pairs as distinct.`);
-          continue;
-        }
-
-        automataComparisons++;
-
         // Samples suggest equivalence - do full automata analysis
         try {
-          logger.info(`Full analysis: comparing "${regex}" vs "${uniqueRegex}"...`);
-          const result = await this.analyzeWithTimeout(regex, uniqueRegex, 8000, this.cancellationTokenSource?.token);
+          logger.info(`Full equivalence check: comparing "${regex}" vs "${uniqueRegex}"...`);
+          const equivalent = await this.checkEquivalenceWithTimeout(regex, uniqueRegex, 8000, this.cancellationTokenSource?.token);
           
-          if (result && result.relationship === RegexRelationship.EQUIVALENT) {
+          if (equivalent) {
             logger.info(`Found equivalent: "${regex}" === "${uniqueRegex}"`);
             isEquivalent = true;
             break;
@@ -821,12 +846,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           if (errMsg.includes('cancelled')) {
             throw error; // Re-throw cancellation
           }
-          
-          // Automata analysis failed - this should not happen since we filtered
-          // unsupported patterns earlier. Log the error and skip equivalence check.
-          logger.error(error, `Unexpected automata analysis failure for "${regex}" vs "${uniqueRegex}"`);
+
+          // Equivalence analysis failed or timed out. Log and conservatively keep both.
+          logger.warn(`Equivalence analysis failed for "${regex}" vs "${uniqueRegex}": ${errMsg}`);
           automataAnalysisFailures++;
-          // Treat as not equivalent (conservative approach)
         }
       }
       
