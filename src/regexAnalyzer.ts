@@ -61,6 +61,26 @@ export class RegexAnalyzer {
   private maxAttempts = 100;
 
   /**
+   * Rough heuristic for regex complexity to decide when to avoid heavy automata analysis.
+   */
+  estimateComplexity(pattern: string): number {
+    const lengthWeight = pattern.length;
+    const quantifierWeight = ((pattern.match(/[*+?{]/g) || []).length) * 5;
+    const alternationWeight = ((pattern.match(/\|/g) || []).length) * 8;
+    const groupWeight = ((pattern.match(/\(/g) || []).length) * 3;
+    return lengthWeight + quantifierWeight + alternationWeight + groupWeight;
+  }
+
+  /**
+   * Create a quick fingerprint of a regex by sampling a few words.
+   * Used for cheap deduplication buckets before expensive checks.
+   */
+  sampleSignature(regex: string, sampleCount = 8): string {
+    const samples = this.generateMultipleWords(regex, sampleCount);
+    return samples.sort().join('|');
+  }
+
+  /**
    * 1. Generate a word matching a regex (excluding seen words)
    */
   generateWord(regex: string, seenWords: string[] = []): WordGenerationResult {
