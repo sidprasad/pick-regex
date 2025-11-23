@@ -260,42 +260,60 @@ export class RegexAnalyzer {
   /**
    * Generate multiple unique words matching a regex
    * Uses @gruhn/regex-utils .sample() iterator with filtering
+   * 
+   * This method includes a timeout to prevent hanging on complex regexes.
+   * If the timeout is exceeded, returns an empty array.
    */
   async generateMultipleWords(regex: string, count: number, excludedWords: string[] = [], cancellationToken?: { isCancellationRequested: boolean }): Promise<string[]> {
-    try {
-      const rb = await createRb(regex);
-      const words: string[] = [];
-      const seen = new Set<string>(excludedWords);
-      
-      const sampler = rb.sample();
-      for (let i = 0; i < this.maxAttempts && words.length < count; i++) {
-        // Check for cancellation every few iterations to avoid hanging
-        if (cancellationToken?.isCancellationRequested) {
-          throw new Error('Word generation cancelled by user');
+    // Wrap in a timeout to prevent hanging
+    const timeoutMs = 3000; // 3 seconds timeout for word generation
+    
+    const generationPromise = (async () => {
+      try {
+        const rb = await createRb(regex);
+        const words: string[] = [];
+        const seen = new Set<string>(excludedWords);
+        
+        const sampler = rb.sample();
+        for (let i = 0; i < this.maxAttempts && words.length < count; i++) {
+          // Check for cancellation every few iterations to avoid hanging
+          if (cancellationToken?.isCancellationRequested) {
+            throw new Error('Word generation cancelled by user');
+          }
+          
+          const next = sampler.next();
+          if (next.done) {break;}
+          
+          const word = next.value;
+          if (!seen.has(word)) {
+            words.push(word);
+            seen.add(word);
+          }
         }
         
-        const next = sampler.next();
-        if (next.done) {break;}
-        
-        const word = next.value;
-        if (!seen.has(word)) {
-          words.push(word);
-          seen.add(word);
+        return words;
+      } catch (error) {
+        // Check for cancellation - look for our cancellation message
+        if (error instanceof Error && error.message.includes('cancelled')) {
+          throw error; // Re-throw cancellation errors
         }
+        if (isCacheOverflowError(error)) {
+          logger.warn(`Regex too complex for word generation: '${regex}' - cache overflow`);
+          return []; // Return empty array for complex regexes that overflow the cache
+        }
+        throw new Error(`Failed to generate words for '${regex}': ${error}`);
       }
-      
-      return words;
-    } catch (error) {
-      // Check for cancellation - look for our cancellation message
-      if (error instanceof Error && error.message.includes('cancelled')) {
-        throw error; // Re-throw cancellation errors
-      }
-      if (isCacheOverflowError(error)) {
-        logger.warn(`Regex too complex for word generation: '${regex}' - cache overflow`);
-        return []; // Return empty array for complex regexes that overflow the cache
-      }
-      throw new Error(`Failed to generate words for '${regex}': ${error}`);
-    }
+    })();
+    
+    const timeoutPromise = new Promise<string[]>((resolve) => {
+      setTimeout(() => {
+        logger.warn(`Word generation timed out after ${timeoutMs}ms for regex: '${regex}'`);
+        resolve([]); // Return empty array on timeout
+      }, timeoutMs);
+    });
+    
+    // Race between generation and timeout
+    return await Promise.race([generationPromise, timeoutPromise]);
   }
 
   /**
