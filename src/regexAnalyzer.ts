@@ -180,81 +180,115 @@ export class RegexAnalyzer {
 
   /**
    * 3. Generate a word IN and a word NOT IN a regex
+   * 
+   * This method includes a timeout to prevent hanging on complex regexes.
    */
   async generateWordPair(regex: string, excludedWords: string[] = []): Promise<WordPairResult> {
-    try {
-      const rb = await createRb(regex);
-      const re = new RegExp(`^${regex}$`);
-
-      // Word that matches
-      const genIn = rb.sample();
-      let wordIn = '';
-      for (let i = 0; i < this.maxAttempts; i++) {
-        const next = genIn.next();
-        if (next.done) {break;}
-        if (!excludedWords.includes(next.value)) {
-          wordIn = next.value;
-          break;
-        }
-      }
-      if (!wordIn) {
-        throw new Error('Could not generate word matching regex');
-      }
-      
-      // Word that doesn't match (using complement)
-      let wordNotIn = '';
+    const timeoutMs = 5000; // 5 seconds timeout
+    
+    let timeoutId: NodeJS.Timeout | undefined;
+    
+    const generationPromise = (async () => {
       try {
-        const complement = rb.not();
-        const gen = complement.sample();
-        for (let i = 0; i < 10; i++) {
-          const next = gen.next();
-          if (!next.done) {
-            const word = next.value;
-            if (!excludedWords.includes(word) && word !== wordIn) {
-              wordNotIn = word;
+        const rb = await createRb(regex);
+        const re = new RegExp(`^${regex}$`);
+
+        // Word that matches
+        const genIn = rb.sample();
+        let wordIn = '';
+        for (let i = 0; i < this.maxAttempts; i++) {
+          const next = genIn.next();
+          if (next.done) {break;}
+          if (!excludedWords.includes(next.value)) {
+            wordIn = next.value;
+            break;
+          }
+        }
+        if (!wordIn) {
+          throw new Error('Could not generate word matching regex');
+        }
+        
+        // Word that doesn't match (using complement)
+        let wordNotIn = '';
+        try {
+          const complement = rb.not();
+          const gen = complement.sample();
+          for (let i = 0; i < 10; i++) {
+            const next = gen.next();
+            if (!next.done) {
+              const word = next.value;
+              if (!excludedWords.includes(word) && word !== wordIn) {
+                wordNotIn = word;
+                break;
+              }
+            }
+          }
+        } catch {
+          // Fallback: simple mutations
+          const strategies = [
+            () => wordIn + 'X',
+            () => 'X' + wordIn,
+            () => wordIn.slice(0, -1),
+            () => wordIn.toUpperCase() !== wordIn ? wordIn.toUpperCase() : wordIn.toLowerCase(),
+          ];
+          
+          for (const strategy of strategies) {
+            const candidate = strategy();
+            if (!re.test(candidate) && !excludedWords.includes(candidate)) {
+              wordNotIn = candidate;
               break;
             }
           }
         }
-      } catch {
-        // Fallback: simple mutations
-        const strategies = [
-          () => wordIn + 'X',
-          () => 'X' + wordIn,
-          () => wordIn.slice(0, -1),
-          () => wordIn.toUpperCase() !== wordIn ? wordIn.toUpperCase() : wordIn.toLowerCase(),
-        ];
         
-        for (const strategy of strategies) {
-          const candidate = strategy();
-          if (!re.test(candidate) && !excludedWords.includes(candidate)) {
-            wordNotIn = candidate;
-            break;
-          }
+        if (!wordNotIn) {
+          wordNotIn = '!!!invalid!!!';
+        }
+        
+        return {
+          wordIn,
+          wordNotIn,
+          explanation: `'${wordIn}' matches, '${wordNotIn}' doesn't`
+        };
+      } catch (error) {
+        if (isCacheOverflowError(error)) {
+          logger.warn(`Regex too complex for word pair generation: '${regex}' - cache overflow`);
+          // Return a simple fallback pair
+          return {
+            wordIn: 'test',
+            wordNotIn: 'invalid',
+            explanation: 'Regex too complex - using fallback words'
+          };
+        }
+        throw new Error(`Failed to generate word pair: ${error}`);
+      } finally {
+        // Clear timeout when generation completes
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
         }
       }
-      
-      if (!wordNotIn) {
-        wordNotIn = '!!!invalid!!!';
-      }
-      
-      return {
-        wordIn,
-        wordNotIn,
-        explanation: `'${wordIn}' matches, '${wordNotIn}' doesn't`
-      };
-    } catch (error) {
-      if (isCacheOverflowError(error)) {
-        logger.warn(`Regex too complex for word pair generation: '${regex}' - cache overflow`);
-        // Return a simple fallback pair
-        return {
+    })();
+    
+    const timeoutPromise = new Promise<WordPairResult>((resolve) => {
+      timeoutId = setTimeout(() => {
+        logger.warn(`Word pair generation timed out after ${timeoutMs}ms for regex: '${regex}'`);
+        resolve({
           wordIn: 'test',
           wordNotIn: 'invalid',
-          explanation: 'Regex too complex - using fallback words'
-        };
-      }
-      throw new Error(`Failed to generate word pair: ${error}`);
+          explanation: 'Timeout - regex too complex for word generation'
+        });
+      }, timeoutMs);
+    });
+    
+    // Race between generation and timeout
+    const result = await Promise.race([generationPromise, timeoutPromise]);
+    
+    // Clean up timeout if it hasn't fired yet
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
     }
+    
+    return result;
   }
 
   /**
@@ -266,7 +300,7 @@ export class RegexAnalyzer {
    */
   async generateMultipleWords(regex: string, count: number, excludedWords: string[] = [], cancellationToken?: { isCancellationRequested: boolean }): Promise<string[]> {
     // Wrap in a timeout to prevent hanging
-    const timeoutMs = 3000; // 3 seconds timeout for word generation
+    const timeoutMs = 5000; // 5 seconds timeout for word generation
     
     let timeoutId: NodeJS.Timeout | undefined;
     
