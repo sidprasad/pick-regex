@@ -7,6 +7,7 @@ interface CandidateRegex {
   negativeVotes: number;
   positiveVotes: number;
   eliminated: boolean;
+  eliminationThreshold: number;
 }
 
 export interface WordPair {
@@ -76,9 +77,12 @@ export class PickController {
       pattern,
       negativeVotes: 0,
       positiveVotes: 0,
-      eliminated: false
+      eliminated: false,
+      eliminationThreshold: this.thresholdVotes
     }));
     logger.info(`Initialized ${this.candidates.length} candidate regexes.`);
+
+    await this.autoAdjustThreshold(candidatePatterns);
 
     this.usedWords.clear();
     this.wordHistory = [];
@@ -101,12 +105,15 @@ export class PickController {
       pattern,
       negativeVotes: 0,
       positiveVotes: 0,
-      eliminated: false
+      eliminated: false,
+      eliminationThreshold: this.thresholdVotes
     }));
     logger.info(`Initialized ${this.candidates.length} new candidate regexes.`);
 
     // Re-apply existing classifications to new candidates
     this.recalculateVotes();
+
+    await this.autoAdjustThreshold(newCandidatePatterns);
 
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state after refinement.');
@@ -214,10 +221,10 @@ export class PickController {
           candidate.negativeVotes++;
           
           // Eliminate if threshold reached
-          if (candidate.negativeVotes >= this.thresholdVotes) {
+          if (candidate.negativeVotes >= candidate.eliminationThreshold) {
             candidate.eliminated = true;
             logger.info(
-              `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (failed to match accepted word "${word}").`
+              `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (failed to match accepted word "${word}" with threshold ${candidate.eliminationThreshold}).`
             );
           }
         }
@@ -240,10 +247,10 @@ export class PickController {
           candidate.negativeVotes++;
 
           // Eliminate if threshold reached
-          if (candidate.negativeVotes >= this.thresholdVotes) {
+          if (candidate.negativeVotes >= candidate.eliminationThreshold) {
             candidate.eliminated = true;
             logger.info(
-              `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (incorrectly matched rejected word "${word}").`
+              `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (incorrectly matched rejected word "${word}" with threshold ${candidate.eliminationThreshold}).`
             );
           }
         }
@@ -357,7 +364,7 @@ export class PickController {
         for (const candidate of this.candidates) {
           if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
             candidate.negativeVotes++;
-            if (candidate.negativeVotes >= this.thresholdVotes) {
+            if (candidate.negativeVotes >= candidate.eliminationThreshold) {
               candidate.eliminated = true;
             }
           }
@@ -534,11 +541,12 @@ export class PickController {
     totalCandidates: number;
     usedWords: number;
     threshold: number;
-    candidateDetails: Array<{ 
-      pattern: string; 
+    candidateDetails: Array<{
+      pattern: string;
       negativeVotes: number;
       positiveVotes: number;
       eliminated: boolean;
+      eliminationThreshold: number;
     }>;
     wordHistory: WordClassificationRecord[];
   } {
@@ -552,7 +560,8 @@ export class PickController {
         pattern: c.pattern,
         negativeVotes: c.negativeVotes,
         positiveVotes: c.positiveVotes,
-        eliminated: c.eliminated
+        eliminated: c.eliminated,
+        eliminationThreshold: c.eliminationThreshold
       })),
       wordHistory: this.getWordHistory()
     };
@@ -563,6 +572,9 @@ export class PickController {
    */
   setThreshold(threshold: number): void {
     this.thresholdVotes = Math.max(1, threshold);
+    this.candidates.forEach(candidate => {
+      candidate.eliminationThreshold = this.thresholdVotes;
+    });
     logger.info(`Updated elimination threshold to ${this.thresholdVotes}`);
   }
 
@@ -571,5 +583,95 @@ export class PickController {
    */
   getThreshold(): number {
     return this.thresholdVotes;
+  }
+
+  /**
+   * Lower the elimination threshold when candidates barely differ.
+   *
+   * We analyze a limited number of candidate pairs to find distinguishing
+   * examples. If the fewest distinguishing examples available for any
+   * candidate is lower than the current threshold, we reduce the threshold to
+   * avoid stalemates where no candidate can accumulate enough negative votes.
+   */
+  private async autoAdjustThreshold(candidatePatterns: string[]): Promise<void> {
+    if (candidatePatterns.length < 2) {
+      return;
+    }
+
+    const maxPairsToAnalyze = 6;
+    const distinguishingExamples = new Map<string, Set<string>>();
+    candidatePatterns.forEach(pattern => distinguishingExamples.set(pattern, new Set<string>()));
+
+    let analyzedPairs = 0;
+
+    for (let i = 0; i < candidatePatterns.length; i++) {
+      for (let j = i + 1; j < candidatePatterns.length; j++) {
+        if (analyzedPairs >= maxPairsToAnalyze) {
+          break;
+        }
+
+        try {
+          const analysis = await this.analyzer.analyzeRelationship(
+            candidatePatterns[i],
+            candidatePatterns[j]
+          );
+          analyzedPairs++;
+
+          const examples = analysis.examples;
+          if (examples) {
+            examples.onlyInA?.forEach(word => distinguishingExamples.get(candidatePatterns[i])?.add(word));
+            examples.onlyInB?.forEach(word => distinguishingExamples.get(candidatePatterns[j])?.add(word));
+          }
+        } catch (error) {
+          logger.warn(`Could not analyze candidate pair '${candidatePatterns[i]}' vs '${candidatePatterns[j]}': ${error}`);
+        }
+      }
+
+      if (analyzedPairs >= maxPairsToAnalyze) {
+        break;
+      }
+    }
+
+    const counts = Array.from(distinguishingExamples.values())
+      .map(set => set.size)
+      .filter(size => size > 0);
+
+    if (counts.length === 0) {
+      logger.info('Elimination threshold unchanged (no distinguishing evidence discovered).');
+      return;
+    }
+
+    const minDistinguishing = Math.min(...counts);
+    const initialThreshold = this.thresholdVotes;
+    // Only lower the global threshold when distinguishing evidence is truly scarce (e.g., only a single example
+    // separates two patterns). This avoids overreacting to limited samples when patterns have abundant differences.
+    const shouldLower = minDistinguishing < initialThreshold && minDistinguishing <= 1;
+    const recommendedGlobal = shouldLower ? Math.max(1, minDistinguishing) : initialThreshold;
+
+    if (recommendedGlobal < this.thresholdVotes) {
+      logger.info(
+        `Auto-adjusted elimination threshold from ${this.thresholdVotes} to ${recommendedGlobal} based on limited distinguishing examples.`
+      );
+      this.thresholdVotes = recommendedGlobal;
+    } else {
+      logger.info('Elimination threshold unchanged after candidate analysis.');
+    }
+
+    // Allow candidates with abundant distinguishing evidence to require more proof before elimination, but never
+    // exceed the user-configured threshold. Only raise when the global threshold was lowered.
+    this.candidates.forEach(candidate => {
+      const distinguishingCount = distinguishingExamples.get(candidate.pattern)?.size ?? 0;
+      const canRaise = this.thresholdVotes < initialThreshold && distinguishingCount > this.thresholdVotes;
+      const raisedThreshold = canRaise
+        ? Math.min(distinguishingCount, initialThreshold)
+        : this.thresholdVotes;
+      candidate.eliminationThreshold = raisedThreshold;
+
+      if (raisedThreshold > this.thresholdVotes) {
+        logger.info(
+          `Raised elimination threshold for '${candidate.pattern}' to ${raisedThreshold} (had ${distinguishingCount} distinguishing examples).`
+        );
+      }
+    });
   }
 }
