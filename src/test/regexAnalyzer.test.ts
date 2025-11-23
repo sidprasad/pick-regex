@@ -385,7 +385,7 @@ suite('RegexAnalyzer Test Suite', () => {
           };
         }
 
-        override generateMultipleWords(regex: string): string[] {
+        override async generateMultipleWords(regex: string): Promise<string[]> {
           // Provide shorter distinguishing words later via supplemental sampling
           if (regex.startsWith('a')) {return ['a'];}
           if (regex.startsWith('b')) {return ['b'];}
@@ -405,34 +405,9 @@ suite('RegexAnalyzer Test Suite', () => {
   });
 
   suite('Helper methods', () => {
-    test('Should generate word matching regex', () => {
-      const regex = '[a-z]+';
-      const result = analyzer.generateWord(regex);
-      
-      assert.ok(result.word);
-      assert.ok(new RegExp(`^${regex}$`).test(result.word));
-    });
-
-    test('Should generate unique words', () => {
-      const regex = '[a-z]+';
-      const seen = ['abc', 'def', 'ghi'];
-      const result = analyzer.generateWord(regex, seen);
-      
-      assert.ok(result.word);
-      assert.ok(!seen.includes(result.word));
-    });
-
-    test('Should verify match correctly', () => {
-      const regex = '[a-z]+';
-      
-      assert.strictEqual(analyzer.verifyMatch('abc', regex), true);
-      assert.strictEqual(analyzer.verifyMatch('123', regex), false);
-      assert.strictEqual(analyzer.verifyMatch('abc123', regex), false);
-    });
-
-    test('Should generate multiple unique words', () => {
+    test('Should generate multiple unique words', async () => {
       const regex = '[a-z]{3}';
-      const words = analyzer.generateMultipleWords(regex, 5);
+      const words = await analyzer.generateMultipleWords(regex, 5);
       
       assert.ok(words.length > 0);
       assert.ok(words.length <= 5);
@@ -447,7 +422,27 @@ suite('RegexAnalyzer Test Suite', () => {
       });
     });
 
-    test('Should correctly identify valid regex patterns', () => {
+    test('Should generate unique words with exclusions', async () => {
+      const regex = '[a-z]+';
+      const excluded = ['abc', 'def', 'ghi'];
+      const words = await analyzer.generateMultipleWords(regex, 5, excluded);
+      
+      assert.ok(words.length > 0);
+      words.forEach(word => {
+        assert.ok(!excluded.includes(word));
+        assert.ok(new RegExp(`^${regex}$`).test(word));
+      });
+    });
+
+    test('Should verify match correctly', () => {
+      const regex = '[a-z]+';
+      
+      assert.strictEqual(analyzer.verifyMatch('abc', regex), true);
+      assert.strictEqual(analyzer.verifyMatch('123', regex), false);
+      assert.strictEqual(analyzer.verifyMatch('abc123', regex), false);
+    });
+
+    test('Should verify match correctly', () => {
       assert.strictEqual(analyzer.isValidRegex('[a-z]+'), true);
       assert.strictEqual(analyzer.isValidRegex('\\d{3}'), true);
       assert.strictEqual(analyzer.isValidRegex('^a$'), true);
@@ -632,66 +627,12 @@ suite('RegexAnalyzer Test Suite', () => {
   });
 
   suite('Excluded words parameter tests', () => {
-    suite('generateWord with exclusions', () => {
-      test('Should not generate any word from excluded list', () => {
-        const regex = '[a-z]{3}';
-        const excluded = ['abc', 'def', 'xyz'];
-        
-        // Generate multiple times to ensure consistency
-        for (let i = 0; i < 10; i++) {
-          const result = analyzer.generateWord(regex, excluded);
-          assert.ok(!excluded.includes(result.word), 
-            `Generated word "${result.word}" should not be in excluded list`);
-        }
-      });
-
-      test('Should generate different words on repeated calls with exclusions', () => {
-        const regex = '[a-z]{4}';
-        const words = new Set<string>();
-        const excluded: string[] = [];
-        
-        // Generate 10 words, adding each to excluded list
-        for (let i = 0; i < 10; i++) {
-          const result = analyzer.generateWord(regex, excluded);
-          assert.ok(!words.has(result.word), 'Should generate fresh word');
-          words.add(result.word);
-          excluded.push(result.word);
-        }
-        
-        assert.strictEqual(words.size, 10);
-      });
-
-      test('Should throw error when excluded words make generation impossible', () => {
-        const regex = 'a'; // Only matches single 'a'
-        const excluded = ['a'];
-        
-        try {
-          analyzer.generateWord(regex, excluded);
-          assert.fail('Should have thrown an error');
-        } catch (error) {
-          assert.ok(String(error).includes('Could not generate unique word'));
-        }
-      });
-
-      test('Should handle large exclusion list', () => {
-        const regex = '[0-9]{3}';
-        // Exclude 100 words
-        const excluded = Array.from({ length: 100 }, (_, i) => 
-          String(i).padStart(3, '0')
-        );
-        
-        const result = analyzer.generateWord(regex, excluded);
-        assert.ok(!excluded.includes(result.word));
-        assert.ok(/^[0-9]{3}$/.test(result.word));
-      });
-    });
-
     suite('generateMultipleWords with exclusions', () => {
-      test('Should not generate any excluded words', () => {
+      test('Should not generate any excluded words', async () => {
         const regex = '[a-z]{3}';
         const excluded = ['abc', 'def', 'xyz'];
         
-        const words = analyzer.generateMultipleWords(regex, 10, excluded);
+        const words = await analyzer.generateMultipleWords(regex, 10, excluded);
         
         words.forEach(word => {
           assert.ok(!excluded.includes(word), 
@@ -699,11 +640,11 @@ suite('RegexAnalyzer Test Suite', () => {
         });
       });
 
-      test('Should respect exclusion limit and return fewer words if needed', () => {
+      test('Should respect exclusion limit and return fewer words if needed', async () => {
         const regex = '(a|b)'; // Only 2 possible words
         const excluded = ['a'];
         
-        const words = analyzer.generateMultipleWords(regex, 5, excluded);
+        const words = await analyzer.generateMultipleWords(regex, 5, excluded);
         
         // Should only get 'b' since 'a' is excluded
         assert.ok(words.length >= 1 && words.length <= 1, 
@@ -712,11 +653,11 @@ suite('RegexAnalyzer Test Suite', () => {
         assert.ok(words.includes('b'));
       });
 
-      test('Should return empty array when all possible words are excluded', () => {
+      test('Should return empty array when all possible words are excluded', async () => {
         const regex = '(cat|dog)';
         const excluded = ['cat', 'dog'];
         
-        const words = analyzer.generateMultipleWords(regex, 5, excluded);
+        const words = await analyzer.generateMultipleWords(regex, 5, excluded);
         
         // Should return empty since all options are excluded
         assert.strictEqual(words.length, 0, 

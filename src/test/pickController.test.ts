@@ -815,7 +815,8 @@ suite('PickController Test Suite', () => {
       
       // Generate a word that matches only letters (e.g., "abc")
       // Force generate from the first pattern
-      const letterWord = controller['analyzer'].generateWord('[a-z]+', []).word;
+      const letterWords = await controller['analyzer'].generateMultipleWords('[a-z]+', 1);
+      const letterWord = letterWords[0];
       
       // Accept this letter-only word
       const pair = await controller.generateNextPair();
@@ -859,7 +860,8 @@ suite('PickController Test Suite', () => {
       await controller.generateCandidates('test', patterns);
       
       // Generate a word that matches only letters (e.g., "abc")
-      const letterWord = controller['analyzer'].generateWord('[a-z]+', []).word;
+      const letterWords = await controller['analyzer'].generateMultipleWords('[a-z]+', 1);
+      const letterWord = letterWords[0];
       
       // Reject this letter-only word (saying "no, letters should NOT be in the pattern")
       const pair = await controller.generateNextPair();
@@ -904,8 +906,9 @@ suite('PickController Test Suite', () => {
       await controller.generateCandidates('test', patterns);
       
       // Generate and accept two lowercase letter words
-      const word1 = controller['analyzer'].generateWord('[a-z]+', []).word;
-      const word2 = controller['analyzer'].generateWord('[a-z]+', [word1]).word;
+      const words = await controller['analyzer'].generateMultipleWords('[a-z]+', 2);
+      const word1 = words[0];
+      const word2 = words[1];
       
       const pair = await controller.generateNextPair();
       controller['currentPair'] = { word1, word2: pair.word2 };

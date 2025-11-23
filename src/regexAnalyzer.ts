@@ -1,4 +1,3 @@
-import RandExp from 'randexp';
 import { logger } from './logger';
 
 /**
@@ -84,33 +83,14 @@ export class RegexAnalyzer {
    * Create a quick fingerprint of a regex by sampling a few words.
    * Used for cheap deduplication buckets before expensive checks.
    */
-  sampleSignature(regex: string, sampleCount = 8): string {
-    const samples = this.generateMultipleWords(regex, sampleCount);
+  async sampleSignature(regex: string, sampleCount = 8): Promise<string> {
+    const samples = await this.generateMultipleWords(regex, sampleCount);
     return samples.sort().join('|');
   }
 
   /**
    * 1. Generate a word matching a regex (excluding seen words)
    */
-  generateWord(regex: string, seenWords: string[] = []): WordGenerationResult {
-    try {
-      const seenSet = new Set(seenWords);
-
-      // Try fast sampling with randexp
-      const randexp = new RandExp(regex);
-      randexp.max = 10;
-      for (let i = 0; i < this.maxAttempts; i++) {
-        const word = randexp.gen();
-        if (!seenSet.has(word)) {
-          return { word, explanation: `Generated from: ${regex}` };
-        }
-      }
-
-      throw new Error(`Could not generate unique word after ${this.maxAttempts} attempts`);
-    } catch (error) {
-      throw new Error(`Failed to generate word for '${regex}': ${error}`);
-    }
-  }
 
   /**
    * 2. Analyze relationship between two regexes using automata
@@ -214,7 +194,7 @@ export class RegexAnalyzer {
         }
       }
       if (!wordIn) {
-        wordIn = this.generateWord(regex, excludedWords).word;
+        throw new Error('Could not generate word matching regex');
       }
       
       // Word that doesn't match (using complement)
@@ -265,25 +245,31 @@ export class RegexAnalyzer {
   }
 
   /**
-   * Generate multiple unique words
+   * Generate multiple unique words matching a regex
+   * Uses @gruhn/regex-utils .sample() iterator with filtering
    */
-  generateMultipleWords(regex: string, count: number, excludedWords: string[] = []): string[] {
-    const words: string[] = [];
-    const seen = new Set<string>([...excludedWords]);
-
-    for (let i = 0; i < count && i < this.maxAttempts; i++) {
-      try {
-        const result = this.generateWord(regex, Array.from(seen));
-        if (!seen.has(result.word)) {
-          words.push(result.word);
-          seen.add(result.word);
+  async generateMultipleWords(regex: string, count: number, excludedWords: string[] = []): Promise<string[]> {
+    try {
+      const rb = await createRb(regex);
+      const words: string[] = [];
+      const seen = new Set<string>(excludedWords);
+      
+      const sampler = rb.sample();
+      for (let i = 0; i < this.maxAttempts && words.length < count; i++) {
+        const next = sampler.next();
+        if (next.done) {break;}
+        
+        const word = next.value;
+        if (!seen.has(word)) {
+          words.push(word);
+          seen.add(word);
         }
-      } catch {
-        break;
       }
+      
+      return words;
+    } catch (error) {
+      throw new Error(`Failed to generate words for '${regex}': ${error}`);
     }
-
-    return words;
   }
 
   /**
@@ -356,7 +342,7 @@ export class RegexAnalyzer {
    * Returns true if regexes MIGHT be equivalent (need full analysis)
    * Returns false if definitely different (skip expensive analysis)
    */
-  quickSampleCheck(regexA: string, regexB: string, sampleCount = 20): boolean {
+  async quickSampleCheck(regexA: string, regexB: string, sampleCount = 20): Promise<boolean> {
     try {
       // Check if both regexes are valid
       if (!this.isValidRegex(regexA) || !this.isValidRegex(regexB)) {
@@ -367,7 +353,7 @@ export class RegexAnalyzer {
       const reB = new RegExp(`^${regexB}$`);
       
       // Generate samples from A and check if B accepts them all
-      const samplesA = this.generateMultipleWords(regexA, sampleCount);
+      const samplesA = await this.generateMultipleWords(regexA, sampleCount);
       for (const word of samplesA) {
         if (!reB.test(word)) {
           return false; // Found a word in A but not B - definitely not equivalent
@@ -375,7 +361,7 @@ export class RegexAnalyzer {
       }
       
       // Generate samples from B and check if A accepts them all
-      const samplesB = this.generateMultipleWords(regexB, sampleCount);
+      const samplesB = await this.generateMultipleWords(regexB, sampleCount);
       for (const word of samplesB) {
         if (!reA.test(word)) {
           return false; // Found a word in B but not A - definitely not equivalent
@@ -471,7 +457,7 @@ export class RegexAnalyzer {
       // If we don't have enough words from pairwise differences, supplement with sampling
       while (uniqueWords.length < 4 && uniqueWords.length < candidateRegexes.length * 2) {
         const regex = candidateRegexes[uniqueWords.length % candidateRegexes.length];
-        const words = this.generateMultipleWords(regex, 2, Array.from(seenWords));
+        const words = await this.generateMultipleWords(regex, 2, Array.from(seenWords));
         for (const w of words) {
           if (!seenWords.has(w) && !excludedWords.includes(w)) {
             uniqueWords.push(w);

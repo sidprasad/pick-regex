@@ -736,7 +736,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     
     if (this.equivalenceCache.has(key)) {
       const cached = this.equivalenceCache.get(key);
-      return cached instanceof Promise ? await cached : cached;
+      if (cached !== undefined) {
+        return cached instanceof Promise ? await cached : cached;
+      }
     }
 
     const cancellationToken = token ?? this.cancellationTokenSource?.token;
@@ -806,7 +808,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
       
       let isEquivalent = false;
-      const regexSignature = signatureCache.get(regex) ?? this.analyzer.sampleSignature(regex, 8);
+      const regexSignature = signatureCache.get(regex) ?? await this.analyzer.sampleSignature(regex, 8);
       signatureCache.set(regex, regexSignature);
       
       for (const uniqueRegex of unique) {
@@ -815,7 +817,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           throw new Error('Filtering cancelled by user');
         }
         
-        const uniqueSignature = signatureCache.get(uniqueRegex) ?? this.analyzer.sampleSignature(uniqueRegex, 8);
+        const uniqueSignature = signatureCache.get(uniqueRegex) ?? await this.analyzer.sampleSignature(uniqueRegex, 8);
         signatureCache.set(uniqueRegex, uniqueSignature);
 
         // If signatures differ, they're likely not equivalent
@@ -824,7 +826,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         }
 
         // Quick sample-based check first (cheap)
-        const mightBeEquivalent = this.analyzer.quickSampleCheck(regex, uniqueRegex, 10);
+        const mightBeEquivalent = await this.analyzer.quickSampleCheck(regex, uniqueRegex, 10);
         if (!mightBeEquivalent) {
           // Samples proved they're different - skip expensive analysis
           logger.info(`Quick check: "${regex}" and "${uniqueRegex}" are different`);
