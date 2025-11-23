@@ -268,6 +268,8 @@ export class RegexAnalyzer {
     // Wrap in a timeout to prevent hanging
     const timeoutMs = 3000; // 3 seconds timeout for word generation
     
+    let timeoutId: NodeJS.Timeout | undefined;
+    
     const generationPromise = (async () => {
       try {
         const rb = await createRb(regex);
@@ -302,18 +304,30 @@ export class RegexAnalyzer {
           return []; // Return empty array for complex regexes that overflow the cache
         }
         throw new Error(`Failed to generate words for '${regex}': ${error}`);
+      } finally {
+        // Clear timeout when generation completes
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
       }
     })();
     
     const timeoutPromise = new Promise<string[]>((resolve) => {
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         logger.warn(`Word generation timed out after ${timeoutMs}ms for regex: '${regex}'`);
         resolve([]); // Return empty array on timeout
       }, timeoutMs);
     });
     
     // Race between generation and timeout
-    return await Promise.race([generationPromise, timeoutPromise]);
+    const result = await Promise.race([generationPromise, timeoutPromise]);
+    
+    // Clean up timeout if it hasn't fired yet
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+    
+    return result;
   }
 
   /**
