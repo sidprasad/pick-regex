@@ -758,7 +758,7 @@
         .regex-literal {
             color: var(--vscode-editor-foreground);
         }
-    </style>
+
         /* Modal styles */
         .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 500; }
         .modal.hidden { display: none; }
