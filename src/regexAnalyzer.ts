@@ -505,6 +505,18 @@ export class RegexAnalyzer {
         ? chosenWords.slice(0, 2)
         : ['abc', '123'];
 
+      // CRITICAL: Validate that at least one word matches at least one candidate
+      // This prevents infinite loops when generateMultipleWords produces garbage
+      const word1Matches = regexObjects.some(re => re.test(word1));
+      const word2Matches = regexObjects.some(re => re.test(word2));
+      
+      if (!word1Matches && !word2Matches) {
+        throw new Error(
+          `Exhausted word space: generated words "${word1}" and "${word2}" match zero active candidates. ` +
+          `Cannot continue classification loop.`
+        );
+      }
+
       return {
         words: [word1, word2],
         explanation: `Words selected to best split candidate set (${candidateRegexes.length} candidates)`,
