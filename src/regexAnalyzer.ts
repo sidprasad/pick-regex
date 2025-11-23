@@ -497,7 +497,15 @@ export class RegexAnalyzer {
         wordScores.push({ word, score, balance });
       }
 
-      wordScores.sort((a, b) => b.score - a.score || a.balance - b.balance);
+      wordScores.sort((a, b) => {
+        const byScore = b.score - a.score;
+        if (byScore !== 0) {return byScore;}
+        const byBalance = a.balance - b.balance;
+        if (byBalance !== 0) {return byBalance;}
+        const byLength = a.word.length - b.word.length;
+        if (byLength !== 0) {return byLength;}
+        return a.word.localeCompare(b.word);
+      });
 
       const chosenWords: string[] = [];
       for (const candidate of wordScores) {
