@@ -480,8 +480,16 @@ export class RegexAnalyzer {
         }
       }
       
+      // Ensure we have at least 2 words - add fallbacks that are maximally different
       if (uniqueWords.length < 2) {
-        uniqueWords.push('abc', '123');
+        const fallbacks = ['abc', '123', 'xyz', '000', 'test', '999'];
+        for (const fallback of fallbacks) {
+          if (!seenWords.has(fallback) && !excludedWords.includes(fallback)) {
+            uniqueWords.push(fallback);
+            seenWords.add(fallback);
+            if (uniqueWords.length >= 2) {break;}
+          }
+        }
       }
 
       const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
@@ -508,11 +516,38 @@ export class RegexAnalyzer {
       });
 
       const chosenWords: string[] = [];
+      
+      // Try to pick words with different match patterns for maximum information gain
       for (const candidate of wordScores) {
-        if (!chosenWords.includes(candidate.word)) {
+        if (chosenWords.includes(candidate.word)) {continue;}
+        
+        if (chosenWords.length === 0) {
+          // Always take the highest scoring word first
           chosenWords.push(candidate.word);
+        } else {
+          // For the second word, prefer one with a different match pattern
+          const firstWord = chosenWords[0];
+          const matches1 = regexObjects.map(re => re.test(firstWord));
+          const matches2 = regexObjects.map(re => re.test(candidate.word));
+          
+          // Check if this word has a different match pattern
+          const hasDifference = matches1.some((m, i) => m !== matches2[i]);
+          
+          if (hasDifference) {
+            chosenWords.push(candidate.word);
+            break; // Found a good second word
+          }
         }
-        if (chosenWords.length >= 2) {break;}
+      }
+      
+      // If we couldn't find a word with different pattern, just take the next best
+      if (chosenWords.length < 2) {
+        for (const candidate of wordScores) {
+          if (!chosenWords.includes(candidate.word)) {
+            chosenWords.push(candidate.word);
+            if (chosenWords.length >= 2) {break;}
+          }
+        }
       }
 
       const [word1, word2] = chosenWords.length >= 2
