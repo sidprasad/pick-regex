@@ -9,6 +9,26 @@ async function getRB() {
 }
 
 /**
+ * Lazy load CacheOverflowError for proper error checking
+ */
+let CacheOverflowError: any;
+async function getCacheOverflowError() {
+  if (!CacheOverflowError) {
+    const module = await import('@gruhn/regex-utils');
+    CacheOverflowError = module.CacheOverflowError;
+  }
+  return CacheOverflowError;
+}
+
+/**
+ * Check if an error is a CacheOverflowError
+ */
+function isCacheOverflowError(error: unknown): boolean {
+  // Check by name since we might not have loaded the class yet
+  return error instanceof Error && error.name === 'CacheOverflowError';
+}
+
+/**
  * Represents the relationship between two regular expressions
  */
 export enum RegexRelationship {
@@ -78,19 +98,6 @@ export class RegexAnalyzer {
     const groupWeight = ((pattern.match(/\(/g) || []).length) * 3;
     return lengthWeight + quantifierWeight + alternationWeight + groupWeight;
   }
-
-  /**
-   * Create a quick fingerprint of a regex by sampling a few words.
-   * Used for cheap deduplication buckets before expensive checks.
-   */
-  async sampleSignature(regex: string, sampleCount = 8, cancellationToken?: { isCancellationRequested: boolean }): Promise<string> {
-    const samples = await this.generateMultipleWords(regex, sampleCount, [], cancellationToken);
-    return samples.sort().join('|');
-  }
-
-  /**
-   * 1. Generate a word matching a regex (excluding seen words)
-   */
 
   /**
    * 2. Analyze relationship between two regexes using automata
@@ -170,9 +177,8 @@ export class RegexAnalyzer {
         }
       };
     } catch (error) {
-      const errorMessage = String(error);
-      if (errorMessage.includes('CacheOverflowError')) {
-        logger.warn(`Regex too complex for relationship analysis: '${regexA}' vs '${regexB}' - ${errorMessage}`);
+      if (isCacheOverflowError(error)) {
+        logger.warn(`Regex too complex for relationship analysis: '${regexA}' vs '${regexB}' - cache overflow`);
         // For complex regexes, return a conservative INTERSECTING relationship
         return {
           relationship: RegexRelationship.INTERSECTING,
@@ -250,9 +256,8 @@ export class RegexAnalyzer {
         explanation: `'${wordIn}' matches, '${wordNotIn}' doesn't`
       };
     } catch (error) {
-      const errorMessage = String(error);
-      if (errorMessage.includes('CacheOverflowError')) {
-        logger.warn(`Regex too complex for word pair generation: '${regex}' - ${errorMessage}`);
+      if (isCacheOverflowError(error)) {
+        logger.warn(`Regex too complex for word pair generation: '${regex}' - cache overflow`);
         // Return a simple fallback pair
         return {
           wordIn: 'test',
@@ -297,8 +302,8 @@ export class RegexAnalyzer {
       if (errorMessage.includes('cancelled')) {
         throw error; // Re-throw cancellation errors
       }
-      if (errorMessage.includes('CacheOverflowError')) {
-        logger.warn(`Regex too complex for word generation: '${regex}' - ${errorMessage}`);
+      if (isCacheOverflowError(error)) {
+        logger.warn(`Regex too complex for word generation: '${regex}' - cache overflow`);
         return []; // Return empty array for complex regexes that overflow the cache
       }
       throw new Error(`Failed to generate words for '${regex}': ${error}`);
@@ -371,45 +376,6 @@ export class RegexAnalyzer {
   }
 
   /**
-   * Lightweight heuristic check: sample strings and compare
-   * Returns true if regexes MIGHT be equivalent (need full analysis)
-   * Returns false if definitely different (skip expensive analysis)
-   */
-  async quickSampleCheck(regexA: string, regexB: string, sampleCount = 20): Promise<boolean> {
-    try {
-      // Check if both regexes are valid
-      if (!this.isValidRegex(regexA) || !this.isValidRegex(regexB)) {
-        return false; // Invalid regexes are not equivalent
-      }
-
-      const reA = new RegExp(`^${regexA}$`);
-      const reB = new RegExp(`^${regexB}$`);
-      
-      // Generate samples from A and check if B accepts them all
-      const samplesA = await this.generateMultipleWords(regexA, sampleCount);
-      for (const word of samplesA) {
-        if (!reB.test(word)) {
-          return false; // Found a word in A but not B - definitely not equivalent
-        }
-      }
-      
-      // Generate samples from B and check if A accepts them all
-      const samplesB = await this.generateMultipleWords(regexB, sampleCount);
-      for (const word of samplesB) {
-        if (!reA.test(word)) {
-          return false; // Found a word in B but not A - definitely not equivalent
-        }
-      }
-      
-      // All samples matched both ways - might be equivalent (need full check)
-      return true;
-    } catch (error) {
-      // On error, assume might be equivalent (do full analysis)
-      return true;
-    }
-  }
-
-  /**
    * Direct equivalence check using @gruhn/regex-utils (RB) without extra set operations.
    */
   async areEquivalent(regexA: string, regexB: string): Promise<boolean> {
@@ -417,9 +383,8 @@ export class RegexAnalyzer {
       const rbA = await createRb(regexA);
       return rbA.isEquivalent(new RegExp(`^${regexB}$`));
     } catch (error) {
-      const errorMessage = String(error);
-      if (errorMessage.includes('CacheOverflowError')) {
-        logger.warn(`Regex too complex for equivalence check: '${regexA}' vs '${regexB}' - ${errorMessage}`);
+      if (isCacheOverflowError(error)) {
+        logger.warn(`Regex too complex for equivalence check: '${regexA}' vs '${regexB}' - cache overflow`);
         // For complex regexes that overflow the cache, conservatively assume they're not equivalent
         // This prevents hanging and allows the deduplication to continue
         return false;
