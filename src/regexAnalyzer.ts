@@ -83,8 +83,8 @@ export class RegexAnalyzer {
    * Create a quick fingerprint of a regex by sampling a few words.
    * Used for cheap deduplication buckets before expensive checks.
    */
-  async sampleSignature(regex: string, sampleCount = 8): Promise<string> {
-    const samples = await this.generateMultipleWords(regex, sampleCount);
+  async sampleSignature(regex: string, sampleCount = 8, cancellationToken?: { isCancellationRequested: boolean }): Promise<string> {
+    const samples = await this.generateMultipleWords(regex, sampleCount, [], cancellationToken);
     return samples.sort().join('|');
   }
 
@@ -170,6 +170,16 @@ export class RegexAnalyzer {
         }
       };
     } catch (error) {
+      const errorMessage = String(error);
+      if (errorMessage.includes('CacheOverflowError')) {
+        logger.warn(`Regex too complex for relationship analysis: '${regexA}' vs '${regexB}' - ${errorMessage}`);
+        // For complex regexes, return a conservative INTERSECTING relationship
+        return {
+          relationship: RegexRelationship.INTERSECTING,
+          explanation: 'Regexes are too complex to analyze (cache overflow)',
+          examples: { inBoth: [], onlyInA: [], onlyInB: [] }
+        };
+      }
       throw new Error(`Failed to analyze: ${error}`);
     }
   }
@@ -240,6 +250,16 @@ export class RegexAnalyzer {
         explanation: `'${wordIn}' matches, '${wordNotIn}' doesn't`
       };
     } catch (error) {
+      const errorMessage = String(error);
+      if (errorMessage.includes('CacheOverflowError')) {
+        logger.warn(`Regex too complex for word pair generation: '${regex}' - ${errorMessage}`);
+        // Return a simple fallback pair
+        return {
+          wordIn: 'test',
+          wordNotIn: 'invalid',
+          explanation: 'Regex too complex - using fallback words'
+        };
+      }
       throw new Error(`Failed to generate word pair: ${error}`);
     }
   }
@@ -248,7 +268,7 @@ export class RegexAnalyzer {
    * Generate multiple unique words matching a regex
    * Uses @gruhn/regex-utils .sample() iterator with filtering
    */
-  async generateMultipleWords(regex: string, count: number, excludedWords: string[] = []): Promise<string[]> {
+  async generateMultipleWords(regex: string, count: number, excludedWords: string[] = [], cancellationToken?: { isCancellationRequested: boolean }): Promise<string[]> {
     try {
       const rb = await createRb(regex);
       const words: string[] = [];
@@ -256,6 +276,11 @@ export class RegexAnalyzer {
       
       const sampler = rb.sample();
       for (let i = 0; i < this.maxAttempts && words.length < count; i++) {
+        // Check for cancellation every few iterations to avoid hanging
+        if (cancellationToken?.isCancellationRequested) {
+          throw new Error('Word generation cancelled by user');
+        }
+        
         const next = sampler.next();
         if (next.done) {break;}
         
@@ -268,6 +293,14 @@ export class RegexAnalyzer {
       
       return words;
     } catch (error) {
+      const errorMessage = String(error);
+      if (errorMessage.includes('cancelled')) {
+        throw error; // Re-throw cancellation errors
+      }
+      if (errorMessage.includes('CacheOverflowError')) {
+        logger.warn(`Regex too complex for word generation: '${regex}' - ${errorMessage}`);
+        return []; // Return empty array for complex regexes that overflow the cache
+      }
       throw new Error(`Failed to generate words for '${regex}': ${error}`);
     }
   }
@@ -380,8 +413,19 @@ export class RegexAnalyzer {
    * Direct equivalence check using @gruhn/regex-utils (RB) without extra set operations.
    */
   async areEquivalent(regexA: string, regexB: string): Promise<boolean> {
-    const rbA = await createRb(regexA);
-    return rbA.isEquivalent(new RegExp(`^${regexB}$`));
+    try {
+      const rbA = await createRb(regexA);
+      return rbA.isEquivalent(new RegExp(`^${regexB}$`));
+    } catch (error) {
+      const errorMessage = String(error);
+      if (errorMessage.includes('CacheOverflowError')) {
+        logger.warn(`Regex too complex for equivalence check: '${regexA}' vs '${regexB}' - ${errorMessage}`);
+        // For complex regexes that overflow the cache, conservatively assume they're not equivalent
+        // This prevents hanging and allows the deduplication to continue
+        return false;
+      }
+      throw error;
+    }
   }
 
 

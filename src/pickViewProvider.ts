@@ -794,10 +794,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       return exactUnique;
     }
 
-    // PASS 2: Semantic equivalence using sampling + automata analysis
+    // PASS 2: Semantic equivalence using direct automata analysis (RB)
+    // Skip sampling-based approaches and go straight to RB.isEquivalent for faster, more reliable deduplication
     const unique: string[] = [];
     let automataAnalysisFailures = 0;
-    const signatureCache = new Map<string, string>();
     
     for (let i = 0; i < exactUnique.length; i++) {
       const regex = exactUnique[i];
@@ -808,34 +808,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
       
       let isEquivalent = false;
-      const regexSignature = signatureCache.get(regex) ?? await this.analyzer.sampleSignature(regex, 8);
-      signatureCache.set(regex, regexSignature);
       
       for (const uniqueRegex of unique) {
-        // Check cancellation before each heavy operation
+        // Check cancellation before each comparison
         if (this.cancellationTokenSource?.token.isCancellationRequested) {
           throw new Error('Filtering cancelled by user');
         }
         
-        const uniqueSignature = signatureCache.get(uniqueRegex) ?? await this.analyzer.sampleSignature(uniqueRegex, 8);
-        signatureCache.set(uniqueRegex, uniqueSignature);
-
-        // If signatures differ, they're likely not equivalent
-        if (regexSignature !== uniqueSignature) {
-          continue;
-        }
-
-        // Quick sample-based check first (cheap)
-        const mightBeEquivalent = await this.analyzer.quickSampleCheck(regex, uniqueRegex, 10);
-        if (!mightBeEquivalent) {
-          // Samples proved they're different - skip expensive analysis
-          logger.info(`Quick check: "${regex}" and "${uniqueRegex}" are different`);
-          continue;
-        }
-        
-        // Samples suggest equivalence - do full automata analysis
+        // Direct automata-based equivalence check
         try {
-          logger.info(`Full equivalence check: comparing "${regex}" vs "${uniqueRegex}"...`);
+          logger.info(`Equivalence check: comparing "${regex}" vs "${uniqueRegex}"...`);
           const equivalent = await this.checkEquivalenceWithTimeout(regex, uniqueRegex, 8000, this.cancellationTokenSource?.token);
           
           if (equivalent) {
