@@ -455,7 +455,11 @@ export class RegexAnalyzer {
         });
       
       // If we don't have enough words from pairwise differences, supplement with sampling
+      let noProgressCount = 0;
+      const MAX_NO_PROGRESS = 3; // Stop after 3 failed attempts to generate new words
+      
       while (uniqueWords.length < 4 && uniqueWords.length < candidateRegexes.length * 2) {
+        const beforeLength = uniqueWords.length;
         const regex = candidateRegexes[uniqueWords.length % candidateRegexes.length];
         const words = await this.generateMultipleWords(regex, 2, Array.from(seenWords));
         for (const w of words) {
@@ -463,6 +467,16 @@ export class RegexAnalyzer {
             uniqueWords.push(w);
             seenWords.add(w);
           }
+        }
+        
+        // Detect if we're stuck (no new words added)
+        if (uniqueWords.length === beforeLength) {
+          noProgressCount++;
+          if (noProgressCount >= MAX_NO_PROGRESS) {
+            break; // Give up trying to generate more words
+          }
+        } else {
+          noProgressCount = 0; // Reset on progress
         }
       }
       
@@ -520,7 +534,7 @@ export class RegexAnalyzer {
       return {
         words: [word1, word2],
         explanation: `Words selected to best split candidate set (${candidateRegexes.length} candidates)`,
-        properties: ['Maximally informative split']
+        properties: ['Distinguishing word 1', 'Distinguishing word 2']
       };
     } catch (error) {
       throw new Error(`Failed to generate two distinguishing words: ${error}`);
