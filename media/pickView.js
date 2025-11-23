@@ -727,10 +727,16 @@
                 updatePromptDisplay(currentPrompt);
             }
 
-            finalRegex.innerHTML = '<div style="padding: 10px; background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-errorForeground); border-radius: 4px; margin-bottom: 10px;">' +
-                '<strong>No regex found</strong>' +
-                '<p style="margin: 8px 0 0 0; font-size: 0.9em;">' + message + '</p>' +
-                '</div>';
+            const container = document.createElement('div');
+            container.style.cssText = 'padding:10px; background:var(--vscode-inputValidation-errorBackground); color:var(--vscode-errorForeground); border-radius:4px; margin-bottom:10px; max-width:100%; box-sizing:border-box;';
+
+            const p = document.createElement('p');
+            p.style.cssText = 'margin:8px 0 0 0; font-size:0.9em; white-space:normal; word-break:break-word; overflow-wrap:anywhere; hyphens:auto;';
+            p.textContent = message; // use textContent to avoid injecting HTML
+
+            container.appendChild(p);
+            finalRegex.innerHTML = '';
+            finalRegex.appendChild(container);
 
             const detailsHtml = candidateDetails.map(function(c) {
                 return '<div class="candidate-item eliminated" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 6px 0; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px;">' +

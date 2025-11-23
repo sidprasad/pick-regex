@@ -436,7 +436,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         // All candidates were eliminated - none are correct
         this.sendMessage({
           type: 'noRegexFound',
-          message: 'All candidate regexes were eliminated. None of them match your requirements.',
+          message: 'No candidate regexes match your requirements.',
           candidateDetails: this.controller.getStatus().candidateDetails,
           wordsIn,
           wordsOut
