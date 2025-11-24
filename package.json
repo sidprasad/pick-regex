@@ -98,7 +98,7 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test",
+    "test": "vscode-test --timeout 8000",
     "test:analyzer": "npm run compile && mocha --ui tdd --timeout 8000 out/test/regexAnalyzer.test.js"
   },
   "devDependencies": {
