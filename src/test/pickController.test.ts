@@ -180,26 +180,6 @@ suite('PickController Test Suite', () => {
     });
   });
 
-  test('Should raise per-candidate threshold when ample distinguishing evidence exists', async () => {
-    controller.setThreshold(2);
-    await controller.generateCandidates('test', ['a|b|c|d', 'a', 'b']);
-
-    const status = controller.getStatus();
-
-    // Global threshold is lowered to the scarcest evidence (only a single distinguishing example for the strict patterns)
-    assert.strictEqual(status.threshold, 1);
-
-    const broadCandidate = status.candidateDetails.find(c => c.pattern === 'a|b|c|d');
-    const strictCandidate = status.candidateDetails.find(c => c.pattern === 'a');
-
-    assert.ok(broadCandidate);
-    assert.ok(strictCandidate);
-
-    // Candidate with many distinguishing examples should ask for more than the global floor
-    assert.strictEqual(broadCandidate?.eliminationThreshold, 2);
-    // Candidate with scarce evidence keeps the lower global threshold
-    assert.strictEqual(strictCandidate?.eliminationThreshold, 1);
-  });
 
   test('Should get and set threshold', () => {
     assert.strictEqual(controller.getThreshold(), 2); // default

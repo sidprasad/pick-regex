@@ -373,6 +373,25 @@ suite('RegexAnalyzer Test Suite', () => {
       }
     });
 
+    test('Should keep distinguishing when a broad regex remains with exclusions', async () => {
+      const candidates = ['a', '.'];
+      const excluded = ['a', 'b']; // already seen/used
+
+      const result = await analyzer.generateTwoDistinguishingWords(candidates, excluded);
+      assert.strictEqual(result.words.length, 2);
+      assert.ok(!excluded.includes(result.words[0]));
+      assert.ok(!excluded.includes(result.words[1]));
+      const reA = /^a$/;
+      const reDot = /^.$/;
+      const vectors = result.words.map(w => [reA.test(w), reDot.test(w)]);
+
+      // Need a word that matches '.' but not 'a' to keep elimination moving
+      assert.ok(
+        vectors.some(([matchesA, matchesDot]) => !matchesA && matchesDot),
+        `Expected a word that matches '.' but not 'a'. Got: ${result.words.join(', ')}`
+      );
+    });
+
     test('Should prefer shorter distinguishing pairs when information gain ties', async () => {
       const candidates = ['[a-c]+', '[d-f]+'];
       const result = await analyzer.generateTwoDistinguishingWords(candidates);

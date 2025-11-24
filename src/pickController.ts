@@ -1,4 +1,4 @@
-import { createRegexAnalyzer, RegexAnalyzer } from './regexAnalyzer';
+import { createRegexAnalyzer, RegexAnalyzer, RegexRelationship } from './regexAnalyzer';
 import * as vscode from 'vscode';
 import { logger } from './logger';
 
@@ -586,92 +586,70 @@ export class PickController {
   }
 
   /**
-   * Lower the elimination threshold when candidates barely differ.
-   *
-   * We analyze a limited number of candidate pairs to find distinguishing
-   * examples. If the fewest distinguishing examples available for any
-   * candidate is lower than the current threshold, we reduce the threshold to
-   * avoid stalemates where no candidate can accumulate enough negative votes.
+   * Set elimination threshold for each candidate based on pairwise distinguishing words.
+   * 
+   * For each candidate, the threshold is the SMALLEST number of distinguishing words
+   * between it and ANY other candidate, capped at the default threshold.
    */
   private async autoAdjustThreshold(candidatePatterns: string[]): Promise<void> {
     if (candidatePatterns.length < 2) {
       return;
     }
 
-    const maxPairsToAnalyze = 6;
-    const distinguishingExamples = new Map<string, Set<string>>();
-    candidatePatterns.forEach(pattern => distinguishingExamples.set(pattern, new Set<string>()));
+    const defaultThreshold = this.thresholdVotes;
+    const minDistinguishing = new Map<string, number>();
+    
+    // Initialize with default threshold
+    candidatePatterns.forEach(pattern => minDistinguishing.set(pattern, defaultThreshold));
 
-    let analyzedPairs = 0;
-
+    // Compare all pairs
     for (let i = 0; i < candidatePatterns.length; i++) {
       for (let j = i + 1; j < candidatePatterns.length; j++) {
-        if (analyzedPairs >= maxPairsToAnalyze) {
-          break;
-        }
-
         try {
-          const analysis = await this.analyzer.analyzeRelationship(
+          const countANotB = await this.analyzer.countWordsInANotInB(
             candidatePatterns[i],
             candidatePatterns[j]
           );
-          analyzedPairs++;
+          const countBNotA = await this.analyzer.countWordsInANotInB(
+            candidatePatterns[j],
+            candidatePatterns[i]
+          );
 
-          const examples = analysis.examples;
-          if (examples) {
-            examples.onlyInA?.forEach(word => distinguishingExamples.get(candidatePatterns[i])?.add(word));
-            examples.onlyInB?.forEach(word => distinguishingExamples.get(candidatePatterns[j])?.add(word));
-          }
+          // Convert bigint to number, capping at default threshold
+          const countA = countANotB !== undefined 
+            ? Math.min(Number(countANotB), defaultThreshold)
+            : defaultThreshold;
+          const countB = countBNotA !== undefined 
+            ? Math.min(Number(countBNotA), defaultThreshold)
+            : defaultThreshold;
+
+          // Update minimum for each candidate
+          const currentMinA = minDistinguishing.get(candidatePatterns[i])!;
+          const currentMinB = minDistinguishing.get(candidatePatterns[j])!;
+          minDistinguishing.set(candidatePatterns[i], Math.min(currentMinA, countA));
+          minDistinguishing.set(candidatePatterns[j], Math.min(currentMinB, countB));
         } catch (error) {
-          logger.warn(`Could not analyze candidate pair '${candidatePatterns[i]}' vs '${candidatePatterns[j]}': ${error}`);
+          logger.warn(`Could not count distinguishing words for '${candidatePatterns[i]}' vs '${candidatePatterns[j]}': ${error}`);
         }
       }
-
-      if (analyzedPairs >= maxPairsToAnalyze) {
-        break;
-      }
     }
 
-    const counts = Array.from(distinguishingExamples.values())
-      .map(set => set.size)
-      .filter(size => size > 0);
-
-    if (counts.length === 0) {
-      logger.info('Elimination threshold unchanged (no distinguishing evidence discovered).');
-      return;
-    }
-
-    const minDistinguishing = Math.min(...counts);
-    const initialThreshold = this.thresholdVotes;
-    // Only lower the global threshold when distinguishing evidence is truly scarce (e.g., only a single example
-    // separates two patterns). This avoids overreacting to limited samples when patterns have abundant differences.
-    const shouldLower = minDistinguishing < initialThreshold && minDistinguishing <= 1;
-    const recommendedGlobal = shouldLower ? Math.max(1, minDistinguishing) : initialThreshold;
-
-    if (recommendedGlobal < this.thresholdVotes) {
-      logger.info(
-        `Auto-adjusted elimination threshold from ${this.thresholdVotes} to ${recommendedGlobal} based on limited distinguishing examples.`
-      );
-      this.thresholdVotes = recommendedGlobal;
-    } else {
-      logger.info('Elimination threshold unchanged after candidate analysis.');
-    }
-
-    // Allow candidates with abundant distinguishing evidence to require more proof before elimination, but never
-    // exceed the user-configured threshold. Only raise when the global threshold was lowered.
+    // Set threshold for each candidate (minimum 1)
+    let globalMin = defaultThreshold;
     this.candidates.forEach(candidate => {
-      const distinguishingCount = distinguishingExamples.get(candidate.pattern)?.size ?? 0;
-      const canRaise = this.thresholdVotes < initialThreshold && distinguishingCount > this.thresholdVotes;
-      const raisedThreshold = canRaise
-        ? Math.min(distinguishingCount, initialThreshold)
-        : this.thresholdVotes;
-      candidate.eliminationThreshold = raisedThreshold;
-
-      if (raisedThreshold > this.thresholdVotes) {
-        logger.info(
-          `Raised elimination threshold for '${candidate.pattern}' to ${raisedThreshold} (had ${distinguishingCount} distinguishing examples).`
-        );
+      const threshold = Math.max(1, minDistinguishing.get(candidate.pattern) ?? defaultThreshold);
+      candidate.eliminationThreshold = threshold;
+      globalMin = Math.min(globalMin, threshold);
+      
+      if (threshold < defaultThreshold) {
+        logger.info(`Set threshold for '${candidate.pattern}' to ${threshold} (min distinguishing words with any other candidate)`);
       }
     });
+    
+    // Update global threshold to the minimum across all candidates
+    if (globalMin < this.thresholdVotes) {
+      logger.info(`Updated global threshold from ${this.thresholdVotes} to ${globalMin}`);
+      this.thresholdVotes = globalMin;
+    }
   }
 }
