@@ -9,29 +9,16 @@ async function getRB() {
 }
 
 /**
- * Represents the relationship between two regular expressions
+ * Check if an error is a CacheOverflowError
  */
-export enum RegexRelationship {
-  A_IN_B = 'A_IN_B',
-  B_IN_A = 'B_IN_A',
-  EQUIVALENT = 'EQUIVALENT',
-  DISJOINT = 'DISJOINT',
-  INTERSECTING = 'INTERSECTING'
+function isCacheOverflowError(error: unknown): boolean {
+  // Check by name since we might not have loaded the class yet
+  return error instanceof Error && error.name === 'CacheOverflowError';
 }
 
 export interface WordGenerationResult {
   word: string;
   explanation?: string;
-}
-
-export interface RelationshipResult {
-  relationship: RegexRelationship;
-  explanation: string;
-  examples?: {
-    inBoth?: string[];
-    onlyInA?: string[];
-    onlyInB?: string[];
-  };
 }
 
 export interface WordPairResult {
@@ -80,196 +67,212 @@ export class RegexAnalyzer {
   }
 
   /**
-   * Create a quick fingerprint of a regex by sampling a few words.
-   * Used for cheap deduplication buckets before expensive checks.
-   */
-  async sampleSignature(regex: string, sampleCount = 8): Promise<string> {
-    const samples = await this.generateMultipleWords(regex, sampleCount);
-    return samples.sort().join('|');
-  }
-
-  /**
-   * 1. Generate a word matching a regex (excluding seen words)
-   */
-
-  /**
-   * 2. Analyze relationship between two regexes using automata
-   */
-  async analyzeRelationship(regexA: string, regexB: string): Promise<RelationshipResult> {
-    try {
-      const rbA = await createRb(regexA);
-      const rbB = await createRb(regexB);
-      
-      // Use regex-utils predicates
-      const isEquiv = rbA.isEquivalent(new RegExp(`^${regexB}$`));
-      const aSubsetB = rbA.isSubsetOf(new RegExp(`^${regexB}$`));
-      const bSubsetA = rbB.isSubsetOf(new RegExp(`^${regexA}$`));
-      const isDisjoint = rbA.isDisjointFrom(new RegExp(`^${regexB}$`));
-      
-      // Collect examples using set operations
-      const inBoth: string[] = [];
-      const onlyInA: string[] = [];
-      const onlyInB: string[] = [];
-
-      const trySample = (gen: Iterator<string>, limit: number, bucket: string[]) => {
-        for (let i = 0; i < limit; i++) {
-          const next = gen.next();
-          if (next.done) {break;}
-          bucket.push(next.value);
-        }
-      };
-
-      try {
-        const intersection = rbA.and(new RegExp(`^${regexB}$`));
-        trySample(intersection.sample(), 5, inBoth);
-      } catch {
-        // ignore if set operation unsupported
-      }
-
-      try {
-        const onlyA = rbA.without(new RegExp(`^${regexB}$`));
-        trySample(onlyA.sample(), 5, onlyInA);
-      } catch {
-        // ignore if set operation unsupported
-      }
-
-      try {
-        const onlyB = rbB.without(new RegExp(`^${regexA}$`));
-        trySample(onlyB.sample(), 5, onlyInB);
-      } catch {
-        // ignore if set operation unsupported
-      }
-      
-      let relationship: RegexRelationship;
-      let explanation: string;
-      
-      if (isEquiv) {
-        relationship = RegexRelationship.EQUIVALENT;
-        explanation = 'Regexes are equivalent (match the same strings)';
-      } else if (aSubsetB) {
-        relationship = RegexRelationship.A_IN_B;
-        explanation = 'A is a subset of B';
-      } else if (bSubsetA) {
-        relationship = RegexRelationship.B_IN_A;
-        explanation = 'B is a subset of A';
-      } else if (isDisjoint) {
-        relationship = RegexRelationship.DISJOINT;
-        explanation = 'Regexes are disjoint (no overlap)';
-      } else {
-        relationship = RegexRelationship.INTERSECTING;
-        explanation = 'Regexes intersect but neither is a subset';
-      }
-      
-      return {
-        relationship,
-        explanation,
-        examples: { 
-          inBoth: inBoth.slice(0, 3), 
-          onlyInA: onlyInA.slice(0, 3), 
-          onlyInB: onlyInB.slice(0, 3) 
-        }
-      };
-    } catch (error) {
-      throw new Error(`Failed to analyze: ${error}`);
-    }
-  }
-
-  /**
    * 3. Generate a word IN and a word NOT IN a regex
+   * 
+   * This method includes a timeout to prevent hanging on complex regexes.
+   * Uses enumerate() for fair enumeration instead of random sampling.
    */
   async generateWordPair(regex: string, excludedWords: string[] = []): Promise<WordPairResult> {
-    try {
-      const rb = await createRb(regex);
-      const re = new RegExp(`^${regex}$`);
-
-      // Word that matches
-      const genIn = rb.sample();
-      let wordIn = '';
-      for (let i = 0; i < this.maxAttempts; i++) {
-        const next = genIn.next();
-        if (next.done) {break;}
-        if (!excludedWords.includes(next.value)) {
-          wordIn = next.value;
-          break;
-        }
-      }
-      if (!wordIn) {
-        throw new Error('Could not generate word matching regex');
-      }
-      
-      // Word that doesn't match (using complement)
-      let wordNotIn = '';
+    const timeoutMs = 5000; // 5 seconds timeout
+    
+    let timeoutId: NodeJS.Timeout | undefined;
+    let partialWordIn = ''; // Track partial result for timeout case
+    
+    const generationPromise = (async () => {
       try {
-        const complement = rb.not();
-        const gen = complement.sample();
-        for (let i = 0; i < 10; i++) {
-          const next = gen.next();
-          if (!next.done) {
-            const word = next.value;
-            if (!excludedWords.includes(word) && word !== wordIn) {
-              wordNotIn = word;
+        const rb = await createRb(regex);
+        const re = new RegExp(`^${regex}$`);
+
+        // Word that matches - use enumerate() for fair enumeration
+        const genIn = rb.enumerate();
+        let wordIn = '';
+        for (let i = 0; i < this.maxAttempts; i++) {
+          const next = genIn.next();
+          if (next.done) {break;}
+          if (!excludedWords.includes(next.value)) {
+            wordIn = next.value;
+            partialWordIn = wordIn; // Store partial result
+            break;
+          }
+        }
+        if (!wordIn) {
+          throw new Error('Could not generate word matching regex');
+        }
+        
+        // Word that doesn't match (using complement)
+        let wordNotIn = '';
+        try {
+          const complement = rb.not();
+          const gen = complement.enumerate(); // Use enumerate here too
+          for (let i = 0; i < 10; i++) {
+            const next = gen.next();
+            if (!next.done) {
+              const word = next.value;
+              if (!excludedWords.includes(word) && word !== wordIn) {
+                wordNotIn = word;
+                break;
+              }
+            }
+          }
+        } catch {
+          // Fallback: simple mutations
+          const strategies = [
+            () => wordIn + 'X',
+            () => 'X' + wordIn,
+            () => wordIn.slice(0, -1),
+            () => wordIn.toUpperCase() !== wordIn ? wordIn.toUpperCase() : wordIn.toLowerCase(),
+          ];
+          
+          for (const strategy of strategies) {
+            const candidate = strategy();
+            if (!re.test(candidate) && !excludedWords.includes(candidate)) {
+              wordNotIn = candidate;
               break;
             }
           }
         }
-      } catch {
-        // Fallback: simple mutations
-        const strategies = [
-          () => wordIn + 'X',
-          () => 'X' + wordIn,
-          () => wordIn.slice(0, -1),
-          () => wordIn.toUpperCase() !== wordIn ? wordIn.toUpperCase() : wordIn.toLowerCase(),
-        ];
         
-        for (const strategy of strategies) {
-          const candidate = strategy();
-          if (!re.test(candidate) && !excludedWords.includes(candidate)) {
-            wordNotIn = candidate;
-            break;
+        if (!wordNotIn) {
+          wordNotIn = '!!!invalid!!!';
+        }
+        
+        return {
+          wordIn,
+          wordNotIn,
+          explanation: `'${wordIn}' matches, '${wordNotIn}' doesn't`
+        };
+      } catch (error) {
+        if (isCacheOverflowError(error)) {
+          logger.warn(`Regex too complex for word pair generation: '${regex}' - cache overflow`);
+          // Use partial result if available
+          if (partialWordIn) {
+            return {
+              wordIn: partialWordIn,
+              wordNotIn: partialWordIn + 'X',
+              explanation: 'Regex too complex - using partial results'
+            };
           }
+          // Otherwise use fallback
+          return {
+            wordIn: 'test',
+            wordNotIn: 'invalid',
+            explanation: 'Regex too complex - using fallback words'
+          };
+        }
+        throw new Error(`Failed to generate word pair: ${error}`);
+      } finally {
+        // Clear timeout when generation completes
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
         }
       }
-      
-      if (!wordNotIn) {
-        wordNotIn = '!!!invalid!!!';
-      }
-      
-      return {
-        wordIn,
-        wordNotIn,
-        explanation: `'${wordIn}' matches, '${wordNotIn}' doesn't`
-      };
-    } catch (error) {
-      throw new Error(`Failed to generate word pair: ${error}`);
+    })();
+    
+    const timeoutPromise = new Promise<WordPairResult>((resolve) => {
+      timeoutId = setTimeout(() => {
+        logger.warn(`Word pair generation timed out after ${timeoutMs}ms for regex: '${regex}' - using partial results`);
+        // Use partial result if available
+        if (partialWordIn) {
+          resolve({
+            wordIn: partialWordIn,
+            wordNotIn: partialWordIn + 'X',
+            explanation: 'Timeout - using partial enumeration results'
+          });
+        } else {
+          resolve({
+            wordIn: 'test',
+            wordNotIn: 'invalid',
+            explanation: 'Timeout - regex too complex for word generation'
+          });
+        }
+      }, timeoutMs);
+    });
+    
+    // Race between generation and timeout
+    const result = await Promise.race([generationPromise, timeoutPromise]);
+    
+    // Clean up timeout if it hasn't fired yet
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
     }
+    
+    return result;
   }
 
   /**
    * Generate multiple unique words matching a regex
-   * Uses @gruhn/regex-utils .sample() iterator with filtering
+   * Uses @gruhn/regex-utils .enumerate() iterator for fair enumeration
+   * 
+   * This method includes a timeout to prevent hanging on complex regexes.
+   * If the timeout is exceeded, returns any words generated so far.
    */
-  async generateMultipleWords(regex: string, count: number, excludedWords: string[] = []): Promise<string[]> {
-    try {
-      const rb = await createRb(regex);
-      const words: string[] = [];
-      const seen = new Set<string>(excludedWords);
-      
-      const sampler = rb.sample();
-      for (let i = 0; i < this.maxAttempts && words.length < count; i++) {
-        const next = sampler.next();
-        if (next.done) {break;}
+  async generateMultipleWords(regex: string, count: number, excludedWords: string[] = [], cancellationToken?: { isCancellationRequested: boolean }): Promise<string[]> {
+    // Wrap in a timeout to prevent hanging
+    const timeoutMs = 5000; // 5 seconds timeout for word generation
+    
+    let timeoutId: NodeJS.Timeout | undefined;
+    let partialWords: string[] = []; // Track partial results for timeout case
+    
+    const generationPromise = (async () => {
+      try {
+        const rb = await createRb(regex);
+        const words: string[] = [];
+        const seen = new Set<string>(excludedWords);
         
-        const word = next.value;
-        if (!seen.has(word)) {
-          words.push(word);
-          seen.add(word);
+        // Use enumerate() for fair enumeration instead of random sample()
+        const enumerator = rb.enumerate();
+        for (let i = 0; i < this.maxAttempts && words.length < count; i++) {
+          // Check for cancellation every few iterations to avoid hanging
+          if (cancellationToken?.isCancellationRequested) {
+            throw new Error('Word generation cancelled by user');
+          }
+          
+          const next = enumerator.next();
+          if (next.done) {break;}
+          
+          const word = next.value;
+          if (!seen.has(word)) {
+            words.push(word);
+            seen.add(word);
+            partialWords = [...words]; // Update partial results
+          }
+        }
+        
+        return words;
+      } catch (error) {
+        // Check for cancellation - look for our cancellation message
+        if (error instanceof Error && error.message.includes('cancelled')) {
+          throw error; // Re-throw cancellation errors
+        }
+        if (isCacheOverflowError(error)) {
+          logger.warn(`Regex too complex for word generation: '${regex}' - cache overflow`);
+          return partialWords.length > 0 ? partialWords : []; // Return partial results if available
+        }
+        throw new Error(`Failed to generate words for '${regex}': ${error}`);
+      } finally {
+        // Clear timeout when generation completes
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
         }
       }
-      
-      return words;
-    } catch (error) {
-      throw new Error(`Failed to generate words for '${regex}': ${error}`);
+    })();
+    
+    const timeoutPromise = new Promise<string[]>((resolve) => {
+      timeoutId = setTimeout(() => {
+        logger.warn(`Word generation timed out after ${timeoutMs}ms for regex: '${regex}' - returning ${partialWords.length} partial results`);
+        resolve(partialWords); // Return partial results instead of empty array
+      }, timeoutMs);
+    });
+    
+    // Race between generation and timeout
+    const result = await Promise.race([generationPromise, timeoutPromise]);
+    
+    // Clean up timeout if it hasn't fired yet
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
     }
+    
+    return result;
   }
 
   /**
@@ -338,52 +341,22 @@ export class RegexAnalyzer {
   }
 
   /**
-   * Lightweight heuristic check: sample strings and compare
-   * Returns true if regexes MIGHT be equivalent (need full analysis)
-   * Returns false if definitely different (skip expensive analysis)
-   */
-  async quickSampleCheck(regexA: string, regexB: string, sampleCount = 20): Promise<boolean> {
-    try {
-      // Check if both regexes are valid
-      if (!this.isValidRegex(regexA) || !this.isValidRegex(regexB)) {
-        return false; // Invalid regexes are not equivalent
-      }
-
-      const reA = new RegExp(`^${regexA}$`);
-      const reB = new RegExp(`^${regexB}$`);
-      
-      // Generate samples from A and check if B accepts them all
-      const samplesA = await this.generateMultipleWords(regexA, sampleCount);
-      for (const word of samplesA) {
-        if (!reB.test(word)) {
-          return false; // Found a word in A but not B - definitely not equivalent
-        }
-      }
-      
-      // Generate samples from B and check if A accepts them all
-      const samplesB = await this.generateMultipleWords(regexB, sampleCount);
-      for (const word of samplesB) {
-        if (!reA.test(word)) {
-          return false; // Found a word in B but not A - definitely not equivalent
-        }
-      }
-      
-      // All samples matched both ways - might be equivalent (need full check)
-      return true;
-    } catch (error) {
-      // On error, assume might be equivalent (do full analysis)
-      return true;
-    }
-  }
-
-  /**
    * Direct equivalence check using @gruhn/regex-utils (RB) without extra set operations.
    */
   async areEquivalent(regexA: string, regexB: string): Promise<boolean> {
-    const rbA = await createRb(regexA);
-    return rbA.isEquivalent(new RegExp(`^${regexB}$`));
+    try {
+      const rbA = await createRb(regexA);
+      return rbA.isEquivalent(new RegExp(`^${regexB}$`));
+    } catch (error) {
+      if (isCacheOverflowError(error)) {
+        logger.warn(`Regex too complex for equivalence check: '${regexA}' vs '${regexB}' - cache overflow`);
+        // For complex regexes that overflow the cache, conservatively assume they're not equivalent
+        // This prevents hanging and allows the deduplication to continue
+        return false;
+      }
+      throw error;
+    }
   }
-
 
   /**
    * Generate two distinguishing words from candidates
@@ -416,146 +389,189 @@ export class RegexAnalyzer {
     }
 
     try {
-      const sampleFromDifference = async (a: string, b: string): Promise<string | null> => {
-        try {
-          const diff = (await createRb(a)).without(new RegExp(`^${b}$`)).sample();
-          for (let i = 0; i < 10; i++) {
-            const next = diff.next();
-            if (!next.done) {return next.value;}
-          }
-        } catch {
-          return null;
-        }
-        return null;
+      const excluded = new Set(excludedWords);
+      logger.info(
+        `generateTwoDistinguishingWords start: ${candidateRegexes.length} candidates, ${excluded.size} excluded`
+      );
+      const startTime = Date.now();
+      const minElapsedMs = 500; // ensure we search for at least this long unless exhausted
+      const maxElapsedMs = 5000; // absolute cap to avoid runaway
+      const withTimeout = async <T>(promise: Promise<T>, ms: number, label: string): Promise<T | null> => {
+        return await Promise.race([
+          promise,
+          new Promise<null>(resolve => setTimeout(() => {
+            logger.warn(`${label} timed out after ${ms}ms`);
+            resolve(null);
+          }, ms))
+        ]);
       };
-
-      const candidateWords: string[] = [];
-
-      // Limit pairwise analysis to first few pairs for performance
-      const LIMIT = 5;
-      for (let i = 0; i < candidateRegexes.length && i < LIMIT; i++) {
-        for (let j = i + 1; j < candidateRegexes.length && j < LIMIT; j++) {
-          const a = candidateRegexes[i];
-          const b = candidateRegexes[j];
-          const fromA = await sampleFromDifference(a, b);
-          const fromB = await sampleFromDifference(b, a);
-          if (fromA) {candidateWords.push(fromA);}
-          if (fromB) {candidateWords.push(fromB);}
-        }
-      }
-      
-      // Remove duplicates and excluded words (preserve order)
-      const seenWords = new Set<string>();
-      const uniqueWords = candidateWords
-        .filter(w => !excludedWords.includes(w))
-        .filter(w => {
-          if (seenWords.has(w)) {return false;}
-          seenWords.add(w);
-          return true;
-        });
-      
-      // If we don't have enough words from pairwise differences, supplement with sampling
-      let noProgressCount = 0;
-      const MAX_NO_PROGRESS = 3; // Stop after 3 failed attempts to generate new words
-      
-      while (uniqueWords.length < 4 && uniqueWords.length < candidateRegexes.length * 2) {
-        const beforeLength = uniqueWords.length;
-        const regex = candidateRegexes[uniqueWords.length % candidateRegexes.length];
-        const words = await this.generateMultipleWords(regex, 2, Array.from(seenWords));
-        for (const w of words) {
-          if (!seenWords.has(w) && !excludedWords.includes(w)) {
-            uniqueWords.push(w);
-            seenWords.add(w);
-          }
-        }
-        
-        // Detect if we're stuck (no new words added)
-        if (uniqueWords.length === beforeLength) {
-          noProgressCount++;
-          if (noProgressCount >= MAX_NO_PROGRESS) {
-            break; // Give up trying to generate more words
-          }
-        } else {
-          noProgressCount = 0; // Reset on progress
-        }
-      }
-      
-      // Ensure we have at least 2 words - add fallbacks that are maximally different
-      if (uniqueWords.length < 2) {
-        const fallbacks = ['abc', '123', 'xyz', '000', 'test', '999'];
-        for (const fallback of fallbacks) {
-          if (!seenWords.has(fallback) && !excludedWords.includes(fallback)) {
-            uniqueWords.push(fallback);
-            seenWords.add(fallback);
-            if (uniqueWords.length >= 2) {break;}
-          }
-        }
-      }
-
       const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
 
-      // Score words by how well they split the candidate set
-      const wordScores: Array<{word: string; score: number; balance: number}> = [];
-      for (const word of uniqueWords) {
-        const matches = regexObjects.map(re => re.test(word));
-        const trueCount = matches.filter(Boolean).length;
-        const falseCount = matches.length - trueCount;
-        const balance = Math.abs(trueCount - falseCount);
-        const score = Math.min(trueCount, falseCount);
-        wordScores.push({ word, score, balance });
+      // Helper: sample from source \ other, respecting exclusions.
+      const sampleDifference = async (source: string, other: string, count: number): Promise<string[]> => {
+        const results: string[] = [];
+        const seen = new Set<string>();
+        const otherRe = new RegExp(`^${other}$`);
+        try {
+          const diff = (await createRb(source)).without(new RegExp(`^${other}$`)).sample();
+          for (let i = 0; i < count * 3; i++) { // allow extra attempts
+            const next = diff.next();
+            if (next.done) {break;}
+            const candidate = next.value;
+            if (excluded.has(candidate) || seen.has(candidate)) {continue;}
+            results.push(candidate);
+            seen.add(candidate);
+            if (results.length >= count) {break;}
+          }
+        } catch {
+          // ignore and fall back
+        }
+
+        if (results.length < count) {
+          try {
+            const extras = await this.generateMultipleWords(source, count * 3, Array.from(excluded));
+            for (const w of extras) {
+              if (seen.has(w) || excluded.has(w)) {continue;}
+              if (!otherRe.test(w)) {
+                results.push(w);
+                seen.add(w);
+                if (results.length >= count) {break;}
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        return results;
+      };
+
+      const pool = new Set<string>();
+      const desiredPoolSize = Math.max(6, candidateRegexes.length * 2);
+
+      // 1) Gather from pairwise differences
+      for (let i = 0; i < candidateRegexes.length; i++) {
+        for (let j = i + 1; j < candidateRegexes.length; j++) {
+          const a = candidateRegexes[i];
+          const b = candidateRegexes[j];
+          const fromA = await withTimeout(sampleDifference(a, b, 2), 300, `sampleDifference ${a} \\ ${b}`);
+          const fromB = await withTimeout(sampleDifference(b, a, 2), 300, `sampleDifference ${b} \\ ${a}`);
+          fromA?.forEach(w => pool.add(w));
+          fromB?.forEach(w => pool.add(w));
+        }
+      }
+      logger.info(
+        `generateTwoDistinguishingWords pairwise stage pool size: ${pool.size}, elapsed ${Date.now() - startTime}ms`
+      );
+
+      // 2) Enumerate from candidates until we reach both target size AND minimum elapsed time (or hit max cap)
+      const blockedBase = Array.from(excluded);
+      let pass = 0;
+      while ((pool.size < desiredPoolSize || (Date.now() - startTime) < minElapsedMs) &&
+             (Date.now() - startTime) < maxElapsedMs) {
+        let addedThisPass = 0;
+        for (const regex of candidateRegexes) {
+          if ((pool.size >= desiredPoolSize) && (Date.now() - startTime) >= minElapsedMs) {break;}
+          try {
+            const samples = await this.generateMultipleWords(regex, 6, [...blockedBase, ...pool]);
+            samples.forEach(s => {
+              if (!excluded.has(s)) {
+                const before = pool.size;
+                pool.add(s);
+                if (pool.size > before) {addedThisPass++;}
+              }
+            });
+          } catch {
+            // ignore and continue
+          }
+        }
+        pass++;
+        logger.info(
+          `generateTwoDistinguishingWords sampling pass ${pass}: pool ${pool.size}, elapsed ${Date.now() - startTime}ms`
+        );
+        if (addedThisPass === 0 && (Date.now() - startTime) >= minElapsedMs) {
+          break; // no progress after minimum time
+        }
+      }
+      logger.info(
+        `generateTwoDistinguishingWords final pool size before scoring: ${pool.size}, elapsed ${Date.now() - startTime}ms`
+      );
+
+      // Keep only words that match at least one candidate and aren’t excluded
+      const poolArray = Array.from(pool).filter(w => !excluded.has(w) && regexObjects.some(re => re.test(w)));
+
+      logger.info(
+        `generateTwoDistinguishingWords pool size after filtering: ${poolArray.length} (initial pool ${pool.size})`
+      );
+
+      if (poolArray.length < 2) {
+        throw new Error('Exhausted word space: could not find two candidate-matching words after sampling all candidates.');
       }
 
-      wordScores.sort((a, b) => {
-        const byScore = b.score - a.score;
-        if (byScore !== 0) {return byScore;}
-        const byBalance = a.balance - b.balance;
-        if (byBalance !== 0) {return byBalance;}
-        const byLength = a.word.length - b.word.length;
-        if (byLength !== 0) {return byLength;}
-        return a.word.localeCompare(b.word);
-      });
+      // Score every pair for worst-case survivors and expected survivors
+      const totalCandidates = regexObjects.length;
+      let bestPair: [string, string] | null = null;
+      let bestScore: { worst: number; expected: number; length: number } | null = null;
+      let fallbackPair: [string, string] | null = null;
+      let fallbackScore: { worst: number; expected: number; length: number } | null = null;
 
-      const chosenWords: string[] = [];
-      
-      // Try to pick words with different match patterns for maximum information gain
-      for (const candidate of wordScores) {
-        if (chosenWords.includes(candidate.word)) {continue;}
-        
-        if (chosenWords.length === 0) {
-          // Always take the highest scoring word first
-          chosenWords.push(candidate.word);
-        } else {
-          // For the second word, prefer one with a different match pattern
-          const firstWord = chosenWords[0];
-          const matches1 = regexObjects.map(re => re.test(firstWord));
-          const matches2 = regexObjects.map(re => re.test(candidate.word));
-          
-          // Check if this word has a different match pattern
-          const hasDifference = matches1.some((m, i) => m !== matches2[i]);
-          
+      for (let i = 0; i < poolArray.length; i++) {
+        for (let j = i + 1; j < poolArray.length; j++) {
+          const w1 = poolArray[i];
+          const w2 = poolArray[j];
+          const m1 = regexObjects.map(re => re.test(w1));
+          const m2 = regexObjects.map(re => re.test(w2));
+
+          const survivorsAA = m1.filter((m, idx) => m && m2[idx]).length;
+          const survivorsAR = m1.filter((m, idx) => m && !m2[idx]).length;
+          const survivorsRA = m1.filter((m, idx) => !m && m2[idx]).length;
+          const survivorsRR = totalCandidates - (survivorsAA + survivorsAR + survivorsRA);
+
+          const worst = Math.max(survivorsAA, survivorsAR, survivorsRA, survivorsRR);
+          const expected = (survivorsAA + survivorsAR + survivorsRA + survivorsRR) / 4;
+          const length = w1.length + w2.length;
+
+          const hasDifference = m1.some((m, idx) => m !== m2[idx]);
+          const score = { worst, expected, length };
+
           if (hasDifference) {
-            chosenWords.push(candidate.word);
-            break; // Found a good second word
+            if (!bestScore ||
+                score.worst < bestScore.worst ||
+                (score.worst === bestScore.worst && score.expected < bestScore.expected) ||
+                (score.worst === bestScore.worst && score.expected === bestScore.expected && score.length < bestScore.length)
+            ) {
+              bestScore = score;
+              bestPair = [w1, w2];
+            }
           }
-        }
-      }
-      
-      // If we couldn't find a word with different pattern, just take the next best
-      if (chosenWords.length < 2) {
-        for (const candidate of wordScores) {
-          if (!chosenWords.includes(candidate.word)) {
-            chosenWords.push(candidate.word);
-            if (chosenWords.length >= 2) {break;}
+
+          // Track a fallback even when match patterns are identical
+          if (!fallbackScore ||
+              score.worst < fallbackScore.worst ||
+              (score.worst === fallbackScore.worst && score.expected < fallbackScore.expected) ||
+              (score.worst === fallbackScore.worst && score.expected === fallbackScore.expected && score.length < fallbackScore.length)
+          ) {
+            fallbackScore = score;
+            fallbackPair = [w1, w2];
           }
         }
       }
 
-      const [word1, word2] = chosenWords.length >= 2
-        ? chosenWords.slice(0, 2)
-        : ['abc', '123'];
+      if (!bestPair) {
+        // Fall back to any best-scoring pair even if match vectors are identical
+        if (!fallbackPair) {
+          throw new Error('Exhausted word space: unable to select two distinguishing words that match at least one active candidate.');
+        }
+        bestPair = fallbackPair;
+      }
+
+      const [word1, word2] = bestPair;
+
+      logger.info(
+        `generateTwoDistinguishingWords selected pair: "${word1}" vs "${word2}" from pool ${poolArray.length}`
+      );
 
       // CRITICAL: Validate that at least one word matches at least one candidate
-      // This prevents infinite loops when generateMultipleWords produces garbage
       const word1Matches = regexObjects.some(re => re.test(word1));
       const word2Matches = regexObjects.some(re => re.test(word2));
       
@@ -573,6 +589,29 @@ export class RegexAnalyzer {
       };
     } catch (error) {
       throw new Error(`Failed to generate two distinguishing words: ${error}`);
+    }
+  }
+
+
+
+
+  /** 
+   * Gets the number of words in the language of regexA that are not in the language of regexB.
+   * Note: This is a potentially expensive operation and may not terminate for complex regexes.
+   */
+  async countWordsInANotInB(regexA: string, regexB: string, maxCount: number = 1000): Promise<bigint | undefined> {
+    try {
+      const rbA = await createRb(regexA);
+      const rbB = await createRb(regexB);
+      const difference = rbA.without(new RegExp(`^${regexB}$`));
+
+      const size = difference.size();
+      return size;
+    } catch (error) {
+      if (isCacheOverflowError(error)) {
+        logger.warn(`Regex too complex for counting words in A not in B: '${regexA}' vs '${regexB}' - cache overflow`);
+        return undefined;
+      }
     }
   }
 }
