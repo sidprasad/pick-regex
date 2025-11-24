@@ -390,6 +390,9 @@ export class RegexAnalyzer {
 
     try {
       const excluded = new Set(excludedWords);
+      logger.info(
+        `generateTwoDistinguishingWords start: ${candidateRegexes.length} candidates, ${excluded.size} excluded`
+      );
       const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
 
       // Helper: sample from source \ other, respecting exclusions.
@@ -460,6 +463,10 @@ export class RegexAnalyzer {
       // Keep only words that match at least one candidate and aren’t excluded
       const poolArray = Array.from(pool).filter(w => !excluded.has(w) && regexObjects.some(re => re.test(w)));
 
+      logger.info(
+        `generateTwoDistinguishingWords pool size after filtering: ${poolArray.length} (initial pool ${pool.size})`
+      );
+
       if (poolArray.length < 2) {
         throw new Error('Exhausted word space: could not find two candidate-matching words after sampling all candidates.');
       }
@@ -522,6 +529,10 @@ export class RegexAnalyzer {
       }
 
       const [word1, word2] = bestPair;
+
+      logger.info(
+        `generateTwoDistinguishingWords selected pair: "${word1}" vs "${word2}" from pool ${poolArray.length}`
+      );
 
       // CRITICAL: Validate that at least one word matches at least one candidate
       const word1Matches = regexObjects.some(re => re.test(word1));
