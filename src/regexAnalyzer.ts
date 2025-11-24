@@ -393,6 +393,18 @@ export class RegexAnalyzer {
       logger.info(
         `generateTwoDistinguishingWords start: ${candidateRegexes.length} candidates, ${excluded.size} excluded`
       );
+      const startTime = Date.now();
+      const minElapsedMs = 500; // ensure we search for at least this long unless exhausted
+      const maxElapsedMs = 5000; // absolute cap to avoid runaway
+      const withTimeout = async <T>(promise: Promise<T>, ms: number, label: string): Promise<T | null> => {
+        return await Promise.race([
+          promise,
+          new Promise<null>(resolve => setTimeout(() => {
+            logger.warn(`${label} timed out after ${ms}ms`);
+            resolve(null);
+          }, ms))
+        ]);
+      };
       const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
 
       // Helper: sample from source \ other, respecting exclusions.
@@ -435,30 +447,55 @@ export class RegexAnalyzer {
       };
 
       const pool = new Set<string>();
+      const desiredPoolSize = Math.max(6, candidateRegexes.length * 2);
 
       // 1) Gather from pairwise differences
       for (let i = 0; i < candidateRegexes.length; i++) {
         for (let j = i + 1; j < candidateRegexes.length; j++) {
           const a = candidateRegexes[i];
           const b = candidateRegexes[j];
-          const fromA = await sampleDifference(a, b, 4);
-          const fromB = await sampleDifference(b, a, 4);
-          fromA.forEach(w => pool.add(w));
-          fromB.forEach(w => pool.add(w));
+          const fromA = await withTimeout(sampleDifference(a, b, 2), 300, `sampleDifference ${a} \\ ${b}`);
+          const fromB = await withTimeout(sampleDifference(b, a, 2), 300, `sampleDifference ${b} \\ ${a}`);
+          fromA?.forEach(w => pool.add(w));
+          fromB?.forEach(w => pool.add(w));
         }
       }
+      logger.info(
+        `generateTwoDistinguishingWords pairwise stage pool size: ${pool.size}, elapsed ${Date.now() - startTime}ms`
+      );
 
-      // 2) If still short, enumerate from each candidate directly
-      if (pool.size < 10) {
+      // 2) Enumerate from candidates until we reach both target size AND minimum elapsed time (or hit max cap)
+      const blockedBase = Array.from(excluded);
+      let pass = 0;
+      while ((pool.size < desiredPoolSize || (Date.now() - startTime) < minElapsedMs) &&
+             (Date.now() - startTime) < maxElapsedMs) {
+        let addedThisPass = 0;
         for (const regex of candidateRegexes) {
+          if ((pool.size >= desiredPoolSize) && (Date.now() - startTime) >= minElapsedMs) {break;}
           try {
-            const samples = await this.generateMultipleWords(regex, 6, Array.from(excluded));
-            samples.forEach(s => pool.add(s));
+            const samples = await this.generateMultipleWords(regex, 6, [...blockedBase, ...pool]);
+            samples.forEach(s => {
+              if (!excluded.has(s)) {
+                const before = pool.size;
+                pool.add(s);
+                if (pool.size > before) {addedThisPass++;}
+              }
+            });
           } catch {
             // ignore and continue
           }
         }
+        pass++;
+        logger.info(
+          `generateTwoDistinguishingWords sampling pass ${pass}: pool ${pool.size}, elapsed ${Date.now() - startTime}ms`
+        );
+        if (addedThisPass === 0 && (Date.now() - startTime) >= minElapsedMs) {
+          break; // no progress after minimum time
+        }
       }
+      logger.info(
+        `generateTwoDistinguishingWords final pool size before scoring: ${pool.size}, elapsed ${Date.now() - startTime}ms`
+      );
 
       // Keep only words that match at least one candidate and aren’t excluded
       const poolArray = Array.from(pool).filter(w => !excluded.has(w) && regexObjects.some(re => re.test(w)));

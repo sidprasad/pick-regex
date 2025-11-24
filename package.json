@@ -4,7 +4,7 @@
   "description": "Generate a REGEX from an LLM, then refine it by human classification.",
   "publisher": "SiddharthaPrasad",
   "license": "MIT",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/sidprasad/pick-regex"
@@ -99,7 +99,7 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test",
-    "test:analyzer": "npm run compile && mocha --ui tdd out/test/regexAnalyzer.test.js"
+    "test:analyzer": "npm run compile && mocha --ui tdd --timeout 8000 out/test/regexAnalyzer.test.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
