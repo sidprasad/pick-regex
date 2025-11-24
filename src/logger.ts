@@ -1,16 +1,25 @@
-import * as vscode from 'vscode';
+import type * as vscodeType from 'vscode';
+
+// vscode is unavailable in plain node test runs; fall back to a console-only logger.
+let vscode: typeof import('vscode') | undefined;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  vscode = require('vscode');
+} catch {
+  vscode = undefined;
+}
 
 /**
  * Simple wrapper around VS Code's OutputChannel to provide a consistent
  * logging interface across the extension.
  */
 class Logger {
-        private channel: vscode.OutputChannel | undefined;
+        private channel: (vscodeType.OutputChannel | undefined);
         private readonly logBuffer: string[] = [];
         private readonly maxLogLines = 500;
 
-        initialize(context: vscode.ExtensionContext, name = 'PICK Regex Builder'): void {
-                if (this.channel) {
+        initialize(context: vscodeType.ExtensionContext | { subscriptions: any[] }, name = 'PICK Regex Builder'): void {
+                if (this.channel || !vscode) {
                         return;
                 }
 
@@ -68,7 +77,7 @@ class Logger {
 export const logger = new Logger();
 
 export function initializeLogging(
-        context: vscode.ExtensionContext,
+        context: vscodeType.ExtensionContext | { subscriptions: any[] },
         channelName?: string
 ): Logger {
         logger.initialize(context, channelName);

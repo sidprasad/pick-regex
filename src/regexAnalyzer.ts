@@ -580,6 +580,8 @@ export class RegexAnalyzer {
       const totalCandidates = regexObjects.length;
       let bestPair: [string, string] | null = null;
       let bestScore: { worst: number; expected: number; length: number } | null = null;
+      let fallbackPair: [string, string] | null = null;
+      let fallbackScore: { worst: number; expected: number; length: number } | null = null;
 
       for (let i = 0; i < poolArray.length; i++) {
         for (let j = i + 1; j < poolArray.length; j++) {
@@ -597,20 +599,38 @@ export class RegexAnalyzer {
           const expected = (survivorsAA + survivorsAR + survivorsRA + survivorsRR) / 4;
           const length = w1.length + w2.length;
 
+          const hasDifference = m1.some((m, idx) => m !== m2[idx]);
           const score = { worst, expected, length };
-          if (!bestScore ||
-              score.worst < bestScore.worst ||
-              (score.worst === bestScore.worst && score.expected < bestScore.expected) ||
-              (score.worst === bestScore.worst && score.expected === bestScore.expected && score.length < bestScore.length)
+
+          if (hasDifference) {
+            if (!bestScore ||
+                score.worst < bestScore.worst ||
+                (score.worst === bestScore.worst && score.expected < bestScore.expected) ||
+                (score.worst === bestScore.worst && score.expected === bestScore.expected && score.length < bestScore.length)
+            ) {
+              bestScore = score;
+              bestPair = [w1, w2];
+            }
+          }
+
+          // Track a fallback even when match patterns are identical
+          if (!fallbackScore ||
+              score.worst < fallbackScore.worst ||
+              (score.worst === fallbackScore.worst && score.expected < fallbackScore.expected) ||
+              (score.worst === fallbackScore.worst && score.expected === fallbackScore.expected && score.length < fallbackScore.length)
           ) {
-            bestScore = score;
-            bestPair = [w1, w2];
+            fallbackScore = score;
+            fallbackPair = [w1, w2];
           }
         }
       }
 
       if (!bestPair) {
-        throw new Error('Exhausted word space: unable to select two distinguishing words that match at least one active candidate.');
+        // Fall back to any best-scoring pair even if match vectors are identical
+        if (!fallbackPair) {
+          throw new Error('Exhausted word space: unable to select two distinguishing words that match at least one active candidate.');
+        }
+        bestPair = fallbackPair;
       }
 
       const [word1, word2] = bestPair;

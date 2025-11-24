@@ -99,7 +99,7 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test",
-    "test:analyzer": "npm run compile && mocha out/test/regexAnalyzer.test.js"
+    "test:analyzer": "npm run compile && mocha --ui tdd out/test/regexAnalyzer.test.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
