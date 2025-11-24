@@ -396,6 +396,8 @@ export class RegexAnalyzer {
       const startTime = Date.now();
       const minElapsedMs = 500; // ensure we search for at least this long unless exhausted
       const maxElapsedMs = 5000; // absolute cap to avoid runaway
+      // Bound every expensive automata call by the remaining global budget so a single call
+      // cannot stall the whole loop. If it times out, we skip that branch and keep going.
       const withTimeout = async <T>(promise: Promise<T>, label: string): Promise<T | null> => {
         const elapsed = Date.now() - startTime;
         const remaining = Math.max(200, maxElapsedMs - elapsed);
@@ -456,7 +458,7 @@ export class RegexAnalyzer {
       const pool = new Set<string>();
       const desiredPoolSize = Math.max(6, candidateRegexes.length * 2);
 
-      // 1) Gather from pairwise differences
+      // 1) Gather from pairwise differences (each call bounded by remaining budget)
       for (let i = 0; i < candidateRegexes.length; i++) {
         for (let j = i + 1; j < candidateRegexes.length; j++) {
           const elapsed = Date.now() - startTime;
@@ -474,6 +476,7 @@ export class RegexAnalyzer {
       );
 
       // 2) Enumerate from candidates until we reach both target size AND minimum elapsed time (or hit max cap)
+      //    Each generateMultipleWords is bounded by the remaining budget; on timeout we skip and continue.
       const blockedBase = Array.from(excluded);
       let pass = 0;
       while ((pool.size < desiredPoolSize || (Date.now() - startTime) < minElapsedMs) &&
