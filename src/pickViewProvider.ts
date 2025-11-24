@@ -5,6 +5,7 @@ import { PickController, PickState, WordPair, WordClassification } from './pickC
 import { generateRegexFromDescription } from './regexService';
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
+import { openIssueReport } from './issueReporter';
 
 export class PickViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'pick.pickView';
@@ -66,6 +67,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'cancel':
           this.handleCancel();
+          break;
+        case 'reportIssue':
+          try {
+            await openIssueReport();
+            this.sendMessage({ type: 'info', message: 'Issue template copied to clipboard. Paste it into GitHub.' });
+          } catch (error) {
+            logger.error(error, 'Failed to open issue report');
+            this.sendMessage({ type: 'error', message: 'Failed to open issue report' });
+          }
           break;
       }
     });
