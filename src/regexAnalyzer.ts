@@ -16,30 +16,9 @@ function isCacheOverflowError(error: unknown): boolean {
   return error instanceof Error && error.name === 'CacheOverflowError';
 }
 
-/**
- * Represents the relationship between two regular expressions
- */
-export enum RegexRelationship {
-  A_IN_B = 'A_IN_B',
-  B_IN_A = 'B_IN_A',
-  EQUIVALENT = 'EQUIVALENT',
-  DISJOINT = 'DISJOINT',
-  INTERSECTING = 'INTERSECTING'
-}
-
 export interface WordGenerationResult {
   word: string;
   explanation?: string;
-}
-
-export interface RelationshipResult {
-  relationship: RegexRelationship;
-  explanation: string;
-  examples?: {
-    inBoth?: string[];
-    onlyInA?: string[];
-    onlyInB?: string[];
-  };
 }
 
 export interface WordPairResult {
@@ -85,97 +64,6 @@ export class RegexAnalyzer {
     const alternationWeight = ((pattern.match(/\|/g) || []).length) * 8;
     const groupWeight = ((pattern.match(/\(/g) || []).length) * 3;
     return lengthWeight + quantifierWeight + alternationWeight + groupWeight;
-  }
-
-  /**
-   * 2. Analyze relationship between two regexes using automata
-   */
-  async analyzeRelationship(regexA: string, regexB: string): Promise<RelationshipResult> {
-    try {
-      const rbA = await createRb(regexA);
-      const rbB = await createRb(regexB);
-      
-      // Use regex-utils predicates
-      const isEquiv = rbA.isEquivalent(new RegExp(`^${regexB}$`));
-      const aSubsetB = rbA.isSubsetOf(new RegExp(`^${regexB}$`));
-      const bSubsetA = rbB.isSubsetOf(new RegExp(`^${regexA}$`));
-      const isDisjoint = rbA.isDisjointFrom(new RegExp(`^${regexB}$`));
-      
-      // Collect examples using set operations
-      const inBoth: string[] = [];
-      const onlyInA: string[] = [];
-      const onlyInB: string[] = [];
-
-      const trySample = (gen: Iterator<string>, limit: number, bucket: string[]) => {
-        for (let i = 0; i < limit; i++) {
-          const next = gen.next();
-          if (next.done) {break;}
-          bucket.push(next.value);
-        }
-      };
-
-      try {
-        const intersection = rbA.and(new RegExp(`^${regexB}$`));
-        trySample(intersection.sample(), 5, inBoth);
-      } catch {
-        // ignore if set operation unsupported
-      }
-
-      try {
-        const onlyA = rbA.without(new RegExp(`^${regexB}$`));
-        trySample(onlyA.sample(), 5, onlyInA);
-      } catch {
-        // ignore if set operation unsupported
-      }
-
-      try {
-        const onlyB = rbB.without(new RegExp(`^${regexA}$`));
-        trySample(onlyB.sample(), 5, onlyInB);
-      } catch {
-        // ignore if set operation unsupported
-      }
-      
-      let relationship: RegexRelationship;
-      let explanation: string;
-      
-      if (isEquiv) {
-        relationship = RegexRelationship.EQUIVALENT;
-        explanation = 'Regexes are equivalent (match the same strings)';
-      } else if (aSubsetB) {
-        relationship = RegexRelationship.A_IN_B;
-        explanation = 'A is a subset of B';
-      } else if (bSubsetA) {
-        relationship = RegexRelationship.B_IN_A;
-        explanation = 'B is a subset of A';
-      } else if (isDisjoint) {
-        relationship = RegexRelationship.DISJOINT;
-        explanation = 'Regexes are disjoint (no overlap)';
-      } else {
-        relationship = RegexRelationship.INTERSECTING;
-        explanation = 'Regexes intersect but neither is a subset';
-      }
-      
-      return {
-        relationship,
-        explanation,
-        examples: { 
-          inBoth: inBoth.slice(0, 3), 
-          onlyInA: onlyInA.slice(0, 3), 
-          onlyInB: onlyInB.slice(0, 3) 
-        }
-      };
-    } catch (error) {
-      if (isCacheOverflowError(error)) {
-        logger.warn(`Regex too complex for relationship analysis: '${regexA}' vs '${regexB}' - cache overflow`);
-        // For complex regexes, return a conservative INTERSECTING relationship
-        return {
-          relationship: RegexRelationship.INTERSECTING,
-          explanation: 'Regexes are too complex to analyze (cache overflow)',
-          examples: { inBoth: [], onlyInA: [], onlyInB: [] }
-        };
-      }
-      throw new Error(`Failed to analyze: ${error}`);
-    }
   }
 
   /**

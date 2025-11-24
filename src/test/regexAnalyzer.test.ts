@@ -1,109 +1,11 @@
 import * as assert from 'assert';
-import { createRegexAnalyzer, RegexAnalyzer, RegexRelationship } from '../regexAnalyzer';
+import { createRegexAnalyzer, RegexAnalyzer } from '../regexAnalyzer';
 
 suite('RegexAnalyzer Test Suite', () => {
   let analyzer: ReturnType<typeof createRegexAnalyzer>;
 
   setup(() => {
     analyzer = createRegexAnalyzer();
-  });
-
-  suite('analyzeRelationship', () => {
-    test('Should detect equivalent regexes (identical patterns)', async () => {
-      const regex1 = 'a+';
-      const regex2 = 'a+';
-      
-      const result = await analyzer.analyzeRelationship(regex1, regex2);
-      assert.strictEqual(result.relationship, RegexRelationship.EQUIVALENT);
-      assert.ok(result.explanation);
-    });
-
-    test('Should detect equivalent regexes (semantically same)', async () => {
-      const regex1 = 'abc';
-      const regex2 = 'abc';
-      
-      const result = await analyzer.analyzeRelationship(regex1, regex2);
-      assert.strictEqual(result.relationship, RegexRelationship.EQUIVALENT);
-    });
-
-    test('Should handle word boundary and lookbehind patterns (may fail automata analysis)', async () => {
-      // These regexes all match just "a" but use different syntax
-      // Word boundaries and lookarounds are not supported by regex-utils automata
-      const testCases = [
-        { a: '^a$', b: 'a', shouldMatch: true },
-        { a: 'a', b: '[a]', shouldMatch: true },
-        { a: '^a$', b: '[a]', shouldMatch: true },
-      ];
-
-      for (const testCase of testCases) {
-        try {
-          const result = await analyzer.analyzeRelationship(testCase.a, testCase.b);
-          if (testCase.shouldMatch) {
-            assert.strictEqual(result.relationship, RegexRelationship.EQUIVALENT,
-              `${testCase.a} and ${testCase.b} should be equivalent`);
-          }
-        } catch (error) {
-          // If automata analysis fails, that's expected for unsupported syntax
-          // The pickViewProvider should handle this with fallback sampling
-          if (!String(error).includes('UnsupportedSyntaxError')) {
-            throw error;
-          }
-        }
-      }
-    });
-
-    test('Should detect disjoint regexes (letters vs numbers)', async () => {
-      const regex1 = '[a-z]+';
-      const regex2 = '[0-9]+';
-      
-      const result = await analyzer.analyzeRelationship(regex1, regex2);
-      assert.strictEqual(result.relationship, RegexRelationship.DISJOINT);
-      assert.ok(result.explanation.includes('disjoint'));
-    });
-
-    test('Should detect A_IN_B subset relationship', async () => {
-      const regex1 = 'abc';
-      const regex2 = '[a-z]+';
-      
-      const result = await analyzer.analyzeRelationship(regex1, regex2);
-      assert.strictEqual(result.relationship, RegexRelationship.A_IN_B);
-      assert.ok(result.explanation.includes('subset'));
-    });
-
-    test('Should detect B_IN_A subset relationship', async () => {
-      const regex1 = '[a-z]+';
-      const regex2 = 'abc';
-      
-      const result = await analyzer.analyzeRelationship(regex1, regex2);
-      assert.strictEqual(result.relationship, RegexRelationship.B_IN_A);
-    });
-
-    test('Should detect intersecting regexes', async () => {
-      const regex1 = '[a-z]+';
-      const regex2 = '[a-m]+';
-      
-      const result = await analyzer.analyzeRelationship(regex1, regex2);
-      // [a-m]+ is subset of [a-z]+
-      assert.strictEqual(result.relationship, RegexRelationship.B_IN_A);
-    });
-
-    test('Should provide examples in result', async () => {
-      const regex1 = '[a-z]+';
-      const regex2 = '[0-9]+';
-      
-      const result = await analyzer.analyzeRelationship(regex1, regex2);
-      assert.ok(result.examples);
-      assert.ok(Array.isArray(result.examples.onlyInA));
-      assert.ok(Array.isArray(result.examples.onlyInB));
-    });
-
-    test('Should handle complex patterns', async () => {
-      const regex1 = '[0-9]{1,3}';
-      const regex2 = '[0-9]{2,4}';
-      
-      const result = await analyzer.analyzeRelationship(regex1, regex2);
-      assert.strictEqual(result.relationship, RegexRelationship.INTERSECTING);
-    });
   });
 
   suite('generateWordPair', () => {

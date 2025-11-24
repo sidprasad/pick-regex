@@ -4,7 +4,7 @@ import * as path from 'path';
 import { PickController, PickState, WordPair, WordClassification } from './pickController';
 import { generateRegexFromDescription } from './regexService';
 import { logger } from './logger';
-import { createRegexAnalyzer, RegexRelationship } from './regexAnalyzer';
+import { createRegexAnalyzer } from './regexAnalyzer';
 
 export class PickViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'pick.pickView';

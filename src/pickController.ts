@@ -1,4 +1,4 @@
-import { createRegexAnalyzer, RegexAnalyzer, RegexRelationship } from './regexAnalyzer';
+import { createRegexAnalyzer, RegexAnalyzer } from './regexAnalyzer';
 import * as vscode from 'vscode';
 import { logger } from './logger';
 
