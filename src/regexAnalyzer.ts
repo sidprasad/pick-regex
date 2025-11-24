@@ -396,19 +396,26 @@ export class RegexAnalyzer {
       const startTime = Date.now();
       const minElapsedMs = 500; // ensure we search for at least this long unless exhausted
       const maxElapsedMs = 5000; // absolute cap to avoid runaway
-      const withTimeout = async <T>(promise: Promise<T>, ms: number, label: string): Promise<T | null> => {
+      const withTimeout = async <T>(promise: Promise<T>, label: string): Promise<T | null> => {
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(200, maxElapsedMs - elapsed);
         return await Promise.race([
           promise,
           new Promise<null>(resolve => setTimeout(() => {
-            logger.warn(`${label} timed out after ${ms}ms`);
+            logger.warn(`${label} timed out after ${remaining}ms`);
             resolve(null);
-          }, ms))
+          }, remaining))
         ]);
       };
       const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
 
       // Helper: sample from source \ other, respecting exclusions.
       const sampleDifference = async (source: string, other: string, count: number): Promise<string[]> => {
+        // Skip expensive set ops for complex patterns; rely on sampling instead.
+        const complexityCap = 40;
+        if (this.estimateComplexity(source) > complexityCap || this.estimateComplexity(other) > complexityCap) {
+          return [];
+        }
         const results: string[] = [];
         const seen = new Set<string>();
         const otherRe = new RegExp(`^${other}$`);
@@ -452,10 +459,12 @@ export class RegexAnalyzer {
       // 1) Gather from pairwise differences
       for (let i = 0; i < candidateRegexes.length; i++) {
         for (let j = i + 1; j < candidateRegexes.length; j++) {
+          const elapsed = Date.now() - startTime;
+          if (elapsed > maxElapsedMs) {break;}
           const a = candidateRegexes[i];
           const b = candidateRegexes[j];
-          const fromA = await withTimeout(sampleDifference(a, b, 2), 300, `sampleDifference ${a} \\ ${b}`);
-          const fromB = await withTimeout(sampleDifference(b, a, 2), 300, `sampleDifference ${b} \\ ${a}`);
+          const fromA = await withTimeout(sampleDifference(a, b, 2), `sampleDifference ${a} \\ ${b}`);
+          const fromB = await withTimeout(sampleDifference(b, a, 2), `sampleDifference ${b} \\ ${a}`);
           fromA?.forEach(w => pool.add(w));
           fromB?.forEach(w => pool.add(w));
         }
@@ -471,9 +480,15 @@ export class RegexAnalyzer {
              (Date.now() - startTime) < maxElapsedMs) {
         let addedThisPass = 0;
         for (const regex of candidateRegexes) {
-          if ((pool.size >= desiredPoolSize) && (Date.now() - startTime) >= minElapsedMs) {break;}
+          const elapsed = Date.now() - startTime;
+          if (elapsed > maxElapsedMs) {break;}
+          if ((pool.size >= desiredPoolSize) && elapsed >= minElapsedMs) {break;}
           try {
-            const samples = await this.generateMultipleWords(regex, 6, [...blockedBase, ...pool]);
+            const samples = await withTimeout(
+              this.generateMultipleWords(regex, 6, [...blockedBase, ...pool]),
+              `generateMultipleWords ${regex}`
+            );
+            if (!samples) {continue;}
             samples.forEach(s => {
               if (!excluded.has(s)) {
                 const before = pool.size;

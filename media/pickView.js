@@ -30,6 +30,7 @@
         const displayOptionsMenu = document.getElementById('displayOptionsMenu');
         const currentPromptDisplay = document.getElementById('currentPromptDisplay');
         const finalPromptDisplay = document.getElementById('finalPromptDisplay');
+        const reportIssueBtn = document.getElementById('reportIssueBtn');
 
         // Additional UI Elements
         const promptInput = document.getElementById('promptInput');
@@ -41,6 +42,11 @@
         if (statusCancelBtn) {
             statusCancelBtn.addEventListener('click', function() {
                 vscode.postMessage({ type: 'cancel' });
+            });
+        }
+        if (reportIssueBtn) {
+            reportIssueBtn.addEventListener('click', () => {
+                vscode.postMessage({ type: 'reportIssue' });
             });
         }
         
