@@ -205,18 +205,8 @@
                 return null;
             }
 
-            const section = document.createElement('div');
-            section.className = 'equivalent-section';
-
-            const toggle = document.createElement('button');
-            toggle.className = 'btn secondary equivalent-toggle';
-            toggle.type = 'button';
-
             const list = document.createElement('div');
             list.className = 'equivalent-list hidden';
-
-            const labelForCount = equivalents.length === 1 ? 'equivalent regex' : 'equivalent regexes';
-            toggle.textContent = 'Show ' + equivalents.length + ' ' + labelForCount;
 
             equivalents.forEach(function(eq) {
                 const item = document.createElement('div');
@@ -225,22 +215,38 @@
                 list.appendChild(item);
             });
 
+            const toggle = document.createElement('button');
+            toggle.className = 'icon-btn small equivalent-toggle';
+            toggle.type = 'button';
+            toggle.setAttribute('aria-expanded', 'false');
+
+            const labelForCount = equivalents.length === 1 ? 'equivalent regex' : 'equivalent regexes';
+
+            function renderToggle(expanded) {
+                const icon = expanded
+                    ? '<path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+                    : '<path d="M12 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                        '<path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+
+                toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    icon +
+                    '</svg>' +
+                    '<span class="equivalent-count">' + equivalents.length + '</span>';
+            }
+
+            toggle.setAttribute('title', 'Show ' + equivalents.length + ' ' + labelForCount);
+            renderToggle(false);
+
             toggle.onclick = function() {
                 const hidden = list.classList.toggle('hidden');
-                toggle.textContent = hidden
-                    ? 'Show ' + equivalents.length + ' ' + labelForCount
-                    : 'Hide ' + equivalents.length + ' ' + labelForCount;
+                const expanded = !hidden;
+                toggle.setAttribute('aria-expanded', expanded.toString());
+                toggle.setAttribute('title', (hidden ? 'Show ' : 'Hide ') + equivalents.length + ' ' + labelForCount);
+                toggle.classList.toggle('expanded', expanded);
+                renderToggle(expanded);
             };
 
-            const note = document.createElement('div');
-            note.className = 'equivalent-note';
-            note.textContent = 'The model generated multiple equivalent options. Expand to see them and pick the one you prefer.';
-
-            section.appendChild(note);
-            section.appendChild(toggle);
-            section.appendChild(list);
-
-            return section;
+            return { toggle: toggle, list: list };
         }
 
         // Event Listeners
@@ -564,7 +570,8 @@
 
                 const equivalents = createEquivalentSection(c.equivalents);
                 if (equivalents) {
-                    div.appendChild(equivalents);
+                    votesContainer.appendChild(equivalents.toggle);
+                    div.appendChild(equivalents.list);
                 }
 
                 candidatesList.appendChild(div);
@@ -658,7 +665,8 @@
 
                 const equivalents = createEquivalentSection(c.equivalents);
                 if (equivalents) {
-                    div.appendChild(equivalents);
+                    votesDiv.appendChild(equivalents.toggle);
+                    div.appendChild(equivalents.list);
                 }
                 candidatesList.appendChild(div);
             });
