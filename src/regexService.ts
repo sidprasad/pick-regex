@@ -11,6 +11,30 @@ export interface RegexGenerationResult {
   candidates: RegexCandidate[];
 }
 
+const defaultPromptTemplate = [
+  'You are a regex-generation assistant for JavaScript.',
+  'Given a natural-language description of a text pattern, generate 3–5 candidate regular expressions.',
+  'Return ONLY a single JSON object with this shape:',
+  '{',
+  '  "candidates": [',
+  '    {"regex": "<REGEX>", "explanation": "<WHY THIS PATTERN>", "confidence": 0.0}',
+  '  ]',
+  '}',
+  '',
+  'Output rules:',
+  '- Output must be valid JSON. No backticks, comments, or extra text.',
+  '- "candidates" must contain 3–5 items.',
+  '- Each item must have: regex (pattern body only, no /.../ or flags), explanation, confidence in [0,1].',
+  '- Make candidates diverse: different interpretations or specificity levels.',
+  '',
+  'Regex rules (JavaScript, ECMA-262):',
+  '- Allowed: literals, concatenation, ., \\w, \\d, \\s, character classes [...], [^...], groups (...), (?:...), quantifiers *, +, ?, {m}, {m,}, {m,n}, alternation |, anchors ^ and $, lookahead (?=...) and (?!...).',
+  '- Disallowed: inline flags (?i, ?m, ?s, etc.), possessive quantifiers (*+, ++, ?+), atomic groups (?>...), word boundaries (\\b, \\B), lookbehind (?<=..., ?<!...), backreferences (\\1, \\2, ...), Unicode properties (\\p{...}, \\P{...}), named groups (?<name>...).',
+  '- If a disallowed feature would be ideal, approximate it using only allowed syntax and mention the limitation in the explanation.',
+  '',
+  'Description: {description}'
+].join('\n');
+
 /**
  * Attempt to rewrite common invalid regex patterns to valid JavaScript syntax
  * Returns the rewritten pattern and a boolean indicating if rewriting was attempted
@@ -79,6 +103,7 @@ export async function generateRegexFromDescription(
   const config = vscode.workspace.getConfiguration('pick');
   const vendor = config.get<string>('llm.vendor', 'copilot');
   const family = config.get<string>('llm.family', 'gpt-4o');
+  const promptTemplate = config.get<string>('llm.promptTemplate', defaultPromptTemplate);
 
   const models = await vscode.lm.selectChatModels({
     vendor: vendor as 'copilot' | 'openai' | 'anthropic',
@@ -91,33 +116,13 @@ export async function generateRegexFromDescription(
 
   const model = models[0];
 
+  const prompt = promptTemplate.includes('{description}')
+    ? promptTemplate.replace('{description}', description)
+    : `${promptTemplate}\nDescription: ${description}`;
+
   // Build prompt: ask for multiple candidate regexes with explanations and confidence scores
   const messages: vscode.LanguageModelChatMessage[] = [
-    vscode.LanguageModelChatMessage.User(
-    [
-      "You are a regex-generation assistant for JavaScript.",
-      "Given a natural-language description of a text pattern, generate 3–5 candidate regular expressions.",
-      "Return ONLY a single JSON object with this shape:",
-      "{",
-      "  \"candidates\": [",
-      "    {\"regex\": \"<REGEX>\", \"explanation\": \"<WHY THIS PATTERN>\", \"confidence\": 0.0}",
-      "  ]",
-      "}",
-      "",
-      "Output rules:",
-      "- Output must be valid JSON. No backticks, comments, or extra text.",
-      "- \"candidates\" must contain 3–5 items.",
-      "- Each item must have: regex (pattern body only, no /.../ or flags), explanation, confidence in [0,1].",
-      "- Make candidates diverse: different interpretations or specificity levels.",
-      "",
-      "Regex rules (JavaScript, ECMA-262):",
-      "- Allowed: literals, concatenation, ., \\\\w, \\\\d, \\\\s, character classes [...], [^...], groups (...), (?:...), quantifiers *, +, ?, {m}, {m,}, {m,n}, alternation |, anchors ^ and $, lookahead (?=...) and (?!...).",
-      "- Disallowed: inline flags (?i, ?m, ?s, etc.), possessive quantifiers (*+, ++, ?+), atomic groups (?>...), word boundaries (\\\\b, \\\\B), lookbehind (?<=..., ?<!...), backreferences (\\\\1, \\\\2, ...), Unicode properties (\\\\p{...}, \\\\P{...}), named groups (?<name>...).",
-      "- If a disallowed feature would be ideal, approximate it using only allowed syntax and mention the limitation in the explanation.",
-      "",
-      `Description: ${description}`,
-    ].join('\n')
-    )
+    vscode.LanguageModelChatMessage.User(prompt)
   ];
 
   const response = await model.sendRequest(messages, {}, token);

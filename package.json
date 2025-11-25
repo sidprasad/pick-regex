@@ -85,6 +85,11 @@
           "type": "string",
           "default": "gpt-4o",
           "description": "LLM model family to use (e.g., gpt-4o, claude-3-5-sonnet, o1-preview)"
+        },
+        "pick.llm.promptTemplate": {
+          "type": "string",
+          "default": "You are a regex-generation assistant for JavaScript.\nGiven a natural-language description of a text pattern, generate 3–5 candidate regular expressions.\nReturn ONLY a single JSON object with this shape:\n{\n  \"candidates\": [\n    {\"regex\": \"<REGEX>\", \"explanation\": \"<WHY THIS PATTERN>\", \"confidence\": 0.0}\n  ]\n}\n\nOutput rules:\n- Output must be valid JSON. No backticks, comments, or extra text.\n- \"candidates\" must contain 3–5 items.\n- Each item must have: regex (pattern body only, no /.../ or flags), explanation, confidence in [0,1].\n- Make candidates diverse: different interpretations or specificity levels.\n\nRegex rules (JavaScript, ECMA-262):\n- Allowed: literals, concatenation, ., \\w, \\d, \\s, character classes [...], [^...], groups (...), (?:...), quantifiers *, +, ?, {m}, {m,}, {m,n}, alternation |, anchors ^ and $, lookahead (?=...) and (?!...).\n- Disallowed: inline flags (?i, ?m, ?s, etc.), possessive quantifiers (*+, ++, ?+), atomic groups (?>...), word boundaries (\\b, \\B), lookbehind (?<=..., ?<!...), backreferences (\\1, \\2, ...), Unicode properties (\\p{...}, \\P{...}), named groups (?<name>...).\n- If a disallowed feature would be ideal, approximate it using only allowed syntax and mention the limitation in the explanation.\n\nDescription: {description}",
+          "description": "Prompt template sent to the LLM when generating regex candidates. Use {description} to insert the user's description; if omitted, the description is appended automatically."
         }
       }
     }
