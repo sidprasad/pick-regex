@@ -72,9 +72,9 @@
             const html = '<div class="prompt-label">Your Description</div>' +
                 '<div class="prompt-text" style="display: flex; justify-content: space-between; align-items: center;">' +
                 '<span>' + prompt + '</span>' +
-                '<button onclick="editPrompt()" class="icon-btn" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Edit and refine prompt">' +
+                '<button onclick="editPrompt()" class="icon-btn" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Revise and refine prompt">' +
                 '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 21v-3l12-12 3 3L6 21H3zM19.5 7.5l-3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-                '<span class="btn-label">Edit</span>' +
+                '<span class="btn-label">Revise</span>' +
                 '</button>' +
                 '</div>';
             if (currentPromptDisplay) {
@@ -87,7 +87,7 @@
 
         function editPrompt() {
             const currentPrompt = promptInput.value;
-            const editHtml = '<div class="prompt-label">Edit Your Description</div>' +
+            const editHtml = '<div class="prompt-label">Revise Your Description</div>' +
                 '<div style="display: flex; gap: 8px; align-items: center;">' +
                 '<input type="text" id="editPromptInput" value="' + currentPrompt + '" ' +
                 'style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;" ' +
@@ -198,6 +198,55 @@
             }
 
             return '<span class="regex-syntax">' + result + '</span>';
+        }
+
+        function createEquivalentSection(equivalents) {
+            if (!equivalents || equivalents.length === 0) {
+                return null;
+            }
+
+            const list = document.createElement('div');
+            list.className = 'equivalent-list hidden';
+
+            equivalents.forEach(function(eq) {
+                const item = document.createElement('div');
+                item.className = 'equivalent-pattern';
+                item.innerHTML = highlightRegex(eq);
+                list.appendChild(item);
+            });
+
+            const toggle = document.createElement('button');
+            toggle.className = 'icon-btn small equivalent-toggle';
+            toggle.type = 'button';
+            toggle.setAttribute('aria-expanded', 'false');
+
+            const labelForCount = equivalents.length === 1 ? 'equivalent regex' : 'equivalent regexes';
+
+            function renderToggle(expanded) {
+                const icon = expanded
+                    ? '<path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+                    : '<path d="M12 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                        '<path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+
+                toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    icon +
+                    '</svg>' +
+                    '<span class="equivalent-count">' + equivalents.length + '</span>';
+            }
+
+            toggle.setAttribute('title', 'Show ' + equivalents.length + ' ' + labelForCount);
+            renderToggle(false);
+
+            toggle.onclick = function() {
+                const hidden = list.classList.toggle('hidden');
+                const expanded = !hidden;
+                toggle.setAttribute('aria-expanded', expanded.toString());
+                toggle.setAttribute('title', (hidden ? 'Show ' : 'Hide ') + equivalents.length + ' ' + labelForCount);
+                toggle.classList.toggle('expanded', expanded);
+                renderToggle(expanded);
+            };
+
+            return { toggle: toggle, list: list };
         }
 
         // Event Listeners
@@ -479,17 +528,52 @@
             candidates.forEach(function(c) {
                 const div = document.createElement('div');
                 div.className = 'candidate-item ' + (c.eliminated ? 'eliminated' : 'active');
-                div.innerHTML = '<span class="candidate-pattern">' + highlightRegex(c.pattern) + '</span>' +
-                    '<div class="candidate-votes" style="display:flex; gap:8px; align-items:center;">' +
-                    '<button class="btn copy" data-pattern="' + encodeURIComponent(c.pattern) + '" onclick="copyRegex(decodeURIComponent(this.getAttribute(\'data-pattern\')))" title="Copy regex">' +
-                    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+
+                const header = document.createElement('div');
+                header.className = 'candidate-header';
+
+                const patternSpan = document.createElement('span');
+                patternSpan.className = 'candidate-pattern';
+                patternSpan.innerHTML = highlightRegex(c.pattern);
+
+                const votesContainer = document.createElement('div');
+                votesContainer.className = 'candidate-votes';
+                votesContainer.style.cssText = 'display:flex; gap:8px; align-items:center;';
+
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'btn copy';
+                copyBtn.setAttribute('data-pattern', encodeURIComponent(c.pattern));
+                copyBtn.setAttribute('title', 'Copy regex');
+                copyBtn.onclick = function() { copyRegex(decodeURIComponent(this.getAttribute('data-pattern'))); };
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
                     '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
                     '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
-                    '</svg>' +
-                    '</button>' +
-                    '<span class="badge" style="background: #4caf50;">✓ ' + c.positiveVotes + '</span>' +
-                    '<span class="badge" style="background: #f44336;">✗ ' + c.negativeVotes + '</span>' +
-                    '</div>';
+                    '</svg>';
+
+                const posBadge = document.createElement('span');
+                posBadge.className = 'badge';
+                posBadge.style.background = '#4caf50';
+                posBadge.textContent = '✓ ' + c.positiveVotes;
+
+                const negBadge = document.createElement('span');
+                negBadge.className = 'badge';
+                negBadge.style.background = '#f44336';
+                negBadge.textContent = '✗ ' + c.negativeVotes;
+
+                votesContainer.appendChild(copyBtn);
+                votesContainer.appendChild(posBadge);
+                votesContainer.appendChild(negBadge);
+
+                header.appendChild(patternSpan);
+                header.appendChild(votesContainer);
+                div.appendChild(header);
+
+                const equivalents = createEquivalentSection(c.equivalents);
+                if (equivalents) {
+                    votesContainer.appendChild(equivalents.toggle);
+                    div.appendChild(equivalents.list);
+                }
+
                 candidatesList.appendChild(div);
             });
         }
@@ -532,19 +616,22 @@
                 const isWinner = c.pattern === winnerRegex;
                 const div = document.createElement('div');
                 div.className = 'candidate-item ' + (c.eliminated ? 'eliminated' : 'active');
-                
+
                 if (isWinner) {
                     div.style.cssText = 'border: 2px solid var(--pick-accept-color); background: var(--vscode-list-activeSelectionBackground);';
                 }
-                
+
+                const header = document.createElement('div');
+                header.className = 'candidate-header';
+
                 const patternSpan = document.createElement('span');
                 patternSpan.className = 'candidate-pattern';
                 patternSpan.innerHTML = highlightRegex(c.pattern);
-                
+
                 const votesDiv = document.createElement('div');
                 votesDiv.className = 'candidate-votes';
                 votesDiv.style.cssText = 'display:flex; gap:8px; align-items:center;';
-                
+
                 const copyBtn = document.createElement('button');
                 copyBtn.className = 'btn copy';
                 copyBtn.setAttribute('data-pattern', encodeURIComponent(c.pattern));
@@ -567,13 +654,20 @@
                 negVoteBadge.className = 'badge';
                 negVoteBadge.style.background = '#f44336';
                 negVoteBadge.textContent = '✗ ' + c.negativeVotes;
-                
+
                 votesDiv.appendChild(copyBtn);
                 votesDiv.appendChild(posVoteBadge);
                 votesDiv.appendChild(negVoteBadge);
-                
-                div.appendChild(patternSpan);
-                div.appendChild(votesDiv);
+
+                header.appendChild(patternSpan);
+                header.appendChild(votesDiv);
+                div.appendChild(header);
+
+                const equivalents = createEquivalentSection(c.equivalents);
+                if (equivalents) {
+                    votesDiv.appendChild(equivalents.toggle);
+                    div.appendChild(equivalents.list);
+                }
                 candidatesList.appendChild(div);
             });
         }
@@ -730,7 +824,7 @@
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
 
-            // Display the current prompt with edit button
+            // Display the current prompt with revise button
             const currentPrompt = promptInput.value;
             if (currentPrompt) {
                 updatePromptDisplay(currentPrompt);

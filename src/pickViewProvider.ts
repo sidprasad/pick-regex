@@ -171,13 +171,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       // Filter out equivalent/duplicate regexes
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
       let uniqueCandidates: string[] = [];
+      let equivalenceMap: Map<string, string[]> = new Map();
       try {
-        uniqueCandidates = await this.filterEquivalentRegexes(validCandidates);
+        const deduped = await this.filterEquivalentRegexes(validCandidates);
+        uniqueCandidates = deduped.uniqueRegexes;
+        equivalenceMap = deduped.equivalenceMap;
       } catch (error) {
         const errMsg = String(error);
         if (this.cancellationTokenSource?.token.isCancellationRequested || errMsg.includes('cancelled')) {
           logger.info('Duplicate filtering cancelled by user.');
-          this.sendMessage({ 
+          this.sendMessage({
             type: 'cancelled', 
             message: 'Operation cancelled by user.' 
           });
@@ -198,9 +201,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
       // Inform user if duplicates were removed
       if (uniqueCandidates.length < candidates.length) {
-        this.sendMessage({ 
-          type: 'status', 
-          message: `Removed ${candidates.length - uniqueCandidates.length} duplicate regex(es). Proceeding with ${uniqueCandidates.length} unique candidate(s).` 
+        this.sendMessage({
+          type: 'status',
+          message: `Removed ${candidates.length - uniqueCandidates.length} duplicate regex(es). Proceeding with ${uniqueCandidates.length} unique candidate(s).`
         });
       }
 
@@ -223,7 +226,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       // Initialize controller with unique candidates
-      await this.controller.generateCandidates(prompt, uniqueCandidates);
+      await this.controller.generateCandidates(prompt, uniqueCandidates, equivalenceMap);
       
       // Check cancellation before sending results
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -560,13 +563,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       // Filter out equivalent/duplicate regexes
       this.sendMessage({ type: 'status', message: 'Filtering duplicate regexes...' });
       let uniqueCandidates: string[] = [];
+      let equivalenceMap: Map<string, string[]> = new Map();
       try {
-        uniqueCandidates = await this.filterEquivalentRegexes(validCandidates);
+        const deduped = await this.filterEquivalentRegexes(validCandidates);
+        uniqueCandidates = deduped.uniqueRegexes;
+        equivalenceMap = deduped.equivalenceMap;
       } catch (error) {
         const errMsg = String(error);
         if (this.cancellationTokenSource?.token.isCancellationRequested || errMsg.includes('cancelled')) {
           logger.info('Duplicate filtering cancelled by user (refinement).');
-          this.sendMessage({ 
+          this.sendMessage({
             type: 'cancelled', 
             message: 'Operation cancelled by user.' 
           });
@@ -587,9 +593,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
       // Inform user if duplicates were removed
       if (uniqueCandidates.length < candidates.length) {
-        this.sendMessage({ 
-          type: 'status', 
-          message: `Removed ${candidates.length - uniqueCandidates.length} duplicate regex(es). Proceeding with ${uniqueCandidates.length} unique candidate(s). Preserving ${sessionData.wordHistory.length} existing classifications.` 
+        this.sendMessage({
+          type: 'status',
+          message: `Removed ${candidates.length - uniqueCandidates.length} duplicate regex(es). Proceeding with ${uniqueCandidates.length} unique candidate(s). Preserving ${sessionData.wordHistory.length} existing classifications.`
         });
       }
 
@@ -612,7 +618,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       // Refine candidates with preserved classifications
-      await this.controller.refineCandidates(prompt, uniqueCandidates);
+      await this.controller.refineCandidates(prompt, uniqueCandidates, equivalenceMap);
       
       // Check cancellation before sending results
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -715,11 +721,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   /**
    * Filter out equivalent/duplicate regexes
    */
-  private async filterEquivalentRegexes(regexes: string[]): Promise<string[]> {
+  private async filterEquivalentRegexes(regexes: string[]): Promise<{ uniqueRegexes: string[]; equivalenceMap: Map<string, string[]>; }> {
     // PASS 1: Fast exact string deduplication (preserving order)
     const seen = new Set<string>();
     const exactUnique: string[] = [];
+    const duplicateBuckets = new Map<string, Set<string>>();
+
     for (const regex of regexes) {
+      const bucket = duplicateBuckets.get(regex) ?? new Set<string>();
+      bucket.add(regex);
+      duplicateBuckets.set(regex, bucket);
+
       if (!seen.has(regex)) {
         seen.add(regex);
         exactUnique.push(regex);
@@ -729,24 +741,39 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     logger.info(`After exact deduplication: ${exactUnique.length}/${regexes.length} unique regexes`);
     
     if (exactUnique.length <= 1) {
-      return exactUnique;
+      if (exactUnique.length === 1) {
+        const duplicates = duplicateBuckets.get(exactUnique[0]) ?? new Set<string>();
+        duplicates.delete(exactUnique[0]);
+        return {
+          uniqueRegexes: exactUnique,
+          equivalenceMap: new Map<string, string[]>([[exactUnique[0], Array.from(duplicates)]])
+        };
+      }
+      return {
+        uniqueRegexes: exactUnique,
+        equivalenceMap: new Map<string, string[]>()
+      };
     }
 
     // PASS 2: Semantic equivalence using direct automata analysis (RB)
     // Skip sampling-based approaches and go straight to RB.isEquivalent for faster, more reliable deduplication
     const unique: string[] = [];
+    const equivalenceMap = new Map<string, Set<string>>();
     let automataAnalysisFailures = 0;
-    
+
     for (let i = 0; i < exactUnique.length; i++) {
       const regex = exactUnique[i];
-      
+      const duplicates = duplicateBuckets.get(regex) ?? new Set<string>();
+      duplicates.delete(regex);
+
       // Check cancellation
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
         throw new Error('Filtering cancelled by user');
       }
-      
+
       let isEquivalent = false;
-      
+      let equivalentTo: string | undefined;
+
       for (const uniqueRegex of unique) {
         // Check cancellation before each comparison
         if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -757,10 +784,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         try {
           logger.info(`Equivalence check: comparing "${regex}" vs "${uniqueRegex}"...`);
           const equivalent = await this.checkEquivalenceWithTimeout(regex, uniqueRegex, 8000, this.cancellationTokenSource?.token);
-          
+
           if (equivalent) {
             logger.info(`Found equivalent: "${regex}" === "${uniqueRegex}"`);
             isEquivalent = true;
+            equivalentTo = uniqueRegex;
             break;
           }
         } catch (error) {
@@ -774,21 +802,33 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           automataAnalysisFailures++;
         }
       }
-      
+
       if (!isEquivalent) {
         unique.push(regex);
+        equivalenceMap.set(regex, new Set<string>(duplicates));
         logger.info(`Keeping unique regex: "${regex}" (${unique.length} total)`);
+      } else if (equivalentTo) {
+        const group = equivalenceMap.get(equivalentTo) ?? new Set<string>();
+        duplicates.forEach(d => group.add(d));
+        group.add(regex);
+        equivalenceMap.set(equivalentTo, group);
       }
     }
-    
+
     // Show warning if automata analysis failed for some regexes
     if (automataAnalysisFailures > 0) {
       const message = `Unexpected automata analysis failures (${automataAnalysisFailures}). Some regexes may not have been properly deduplicated.`;
       logger.warn(message);
     }
-    
+
     logger.info(`Final: ${unique.length}/${regexes.length} semantically unique regexes`);
-    return unique;
+    const finalMap = new Map<string, string[]>();
+    for (const regex of unique) {
+      const equivalents = equivalenceMap.get(regex);
+      finalMap.set(regex, equivalents ? Array.from(equivalents) : []);
+    }
+
+    return { uniqueRegexes: unique, equivalenceMap: finalMap };
   }
 
   private sendMessage(message: any) {

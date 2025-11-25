@@ -8,6 +8,7 @@ interface CandidateRegex {
   positiveVotes: number;
   eliminated: boolean;
   eliminationThreshold: number;
+  equivalents: string[];
 }
 
 export interface WordPair {
@@ -67,7 +68,7 @@ export class PickController {
   /**
    * Start the process with a user prompt
    */
-  async generateCandidates(prompt: string, candidatePatterns: string[]): Promise<void> {
+  async generateCandidates(prompt: string, candidatePatterns: string[], equivalenceMap: Map<string, string[]> = new Map()): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Generating candidates for prompt: ${prompt}`);
     this.currentPrompt = prompt;
@@ -78,7 +79,8 @@ export class PickController {
       negativeVotes: 0,
       positiveVotes: 0,
       eliminated: false,
-      eliminationThreshold: this.thresholdVotes
+      eliminationThreshold: this.thresholdVotes,
+      equivalents: equivalenceMap.get(pattern) ?? []
     }));
     logger.info(`Initialized ${this.candidates.length} candidate regexes.`);
 
@@ -94,7 +96,7 @@ export class PickController {
    * Refine the current prompt with new candidates while preserving existing classifications
    * This allows users to iterate on their prompt without losing their work
    */
-  async refineCandidates(newPrompt: string, newCandidatePatterns: string[]): Promise<void> {
+  async refineCandidates(newPrompt: string, newCandidatePatterns: string[], equivalenceMap: Map<string, string[]> = new Map()): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Refining candidates with new prompt: ${newPrompt}`);
     logger.info(`Preserving ${this.wordHistory.length} existing classifications`);
@@ -106,7 +108,8 @@ export class PickController {
       negativeVotes: 0,
       positiveVotes: 0,
       eliminated: false,
-      eliminationThreshold: this.thresholdVotes
+      eliminationThreshold: this.thresholdVotes,
+      equivalents: equivalenceMap.get(pattern) ?? []
     }));
     logger.info(`Initialized ${this.candidates.length} new candidate regexes.`);
 
@@ -547,6 +550,7 @@ export class PickController {
       positiveVotes: number;
       eliminated: boolean;
       eliminationThreshold: number;
+      equivalents: string[];
     }>;
     wordHistory: WordClassificationRecord[];
   } {
@@ -561,7 +565,8 @@ export class PickController {
         negativeVotes: c.negativeVotes,
         positiveVotes: c.positiveVotes,
         eliminated: c.eliminated,
-        eliminationThreshold: c.eliminationThreshold
+        eliminationThreshold: c.eliminationThreshold,
+        equivalents: c.equivalents
       })),
       wordHistory: this.getWordHistory()
     };

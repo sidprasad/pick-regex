@@ -31,7 +31,7 @@ PICK is currently implemented as an extension to Visual Studio Code (VSC).
    - Downvote: the string does not match the pattern you want
    - Unsure: skip
 7. Continue until PICK terminates or you are satisfied with the regex(es).
-8. Copy or insert the final regex, if any. Otherwise refine your query. If you find yourself in this situation, don't start over! Instead, *edit* the existing description. When you do this, PICK will preserve all the classification work you've done and automatically apply it to the new candidate regexes.
+8. Copy or insert the final regex, if any. Otherwise refine your query. If you find yourself in this situation, don't start over! Instead, *revise* the existing description. When you do this, PICK will preserve all the classification work you've done and automatically apply it to the new candidate regexes.
 
 ---
 
