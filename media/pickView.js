@@ -72,9 +72,9 @@
             const html = '<div class="prompt-label">Your Description</div>' +
                 '<div class="prompt-text" style="display: flex; justify-content: space-between; align-items: center;">' +
                 '<span>' + prompt + '</span>' +
-                '<button onclick="editPrompt()" class="icon-btn" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Edit and refine prompt">' +
+                '<button onclick="editPrompt()" class="icon-btn" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Revise and refine prompt">' +
                 '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 21v-3l12-12 3 3L6 21H3zM19.5 7.5l-3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-                '<span class="btn-label">Edit</span>' +
+                '<span class="btn-label">Revise</span>' +
                 '</button>' +
                 '</div>';
             if (currentPromptDisplay) {
@@ -87,7 +87,7 @@
 
         function editPrompt() {
             const currentPrompt = promptInput.value;
-            const editHtml = '<div class="prompt-label">Edit Your Description</div>' +
+            const editHtml = '<div class="prompt-label">Revise Your Description</div>' +
                 '<div style="display: flex; gap: 8px; align-items: center;">' +
                 '<input type="text" id="editPromptInput" value="' + currentPrompt + '" ' +
                 'style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;" ' +
@@ -824,7 +824,7 @@
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
 
-            // Display the current prompt with edit button
+            // Display the current prompt with revise button
             const currentPrompt = promptInput.value;
             if (currentPrompt) {
                 updatePromptDisplay(currentPrompt);
