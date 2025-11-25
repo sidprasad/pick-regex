@@ -316,8 +316,17 @@
             border-radius: 6px;
             font-family: monospace;
             display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 6px;
+        }
+
+        .candidate-header {
+            display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
+            width: 100%;
         }
 
         .candidate-pattern {
@@ -337,6 +346,43 @@
             /* remove heavy left accent to avoid a sidebar effect */
             border-left: none;
             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
+        }
+
+        .equivalent-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+        }
+
+        .equivalent-note {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .equivalent-toggle {
+            align-self: flex-start;
+            padding: 4px 8px;
+            border: 1px solid var(--vscode-button-border);
+            background: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+            border-radius: 4px;
+        }
+
+        .equivalent-list {
+            background: var(--vscode-textCodeBlock-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .equivalent-pattern {
+            font-family: monospace;
+            white-space: nowrap;
+            overflow-x: auto;
         }
 
         .badge {

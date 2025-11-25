@@ -200,6 +200,49 @@
             return '<span class="regex-syntax">' + result + '</span>';
         }
 
+        function createEquivalentSection(equivalents) {
+            if (!equivalents || equivalents.length === 0) {
+                return null;
+            }
+
+            const section = document.createElement('div');
+            section.className = 'equivalent-section';
+
+            const toggle = document.createElement('button');
+            toggle.className = 'btn secondary equivalent-toggle';
+            toggle.type = 'button';
+
+            const list = document.createElement('div');
+            list.className = 'equivalent-list hidden';
+
+            const labelForCount = equivalents.length === 1 ? 'equivalent regex' : 'equivalent regexes';
+            toggle.textContent = 'Show ' + equivalents.length + ' ' + labelForCount;
+
+            equivalents.forEach(function(eq) {
+                const item = document.createElement('div');
+                item.className = 'equivalent-pattern';
+                item.innerHTML = highlightRegex(eq);
+                list.appendChild(item);
+            });
+
+            toggle.onclick = function() {
+                const hidden = list.classList.toggle('hidden');
+                toggle.textContent = hidden
+                    ? 'Show ' + equivalents.length + ' ' + labelForCount
+                    : 'Hide ' + equivalents.length + ' ' + labelForCount;
+            };
+
+            const note = document.createElement('div');
+            note.className = 'equivalent-note';
+            note.textContent = 'The model generated multiple equivalent options. Expand to see them and pick the one you prefer.';
+
+            section.appendChild(note);
+            section.appendChild(toggle);
+            section.appendChild(list);
+
+            return section;
+        }
+
         // Event Listeners
         generateBtn.addEventListener('click', function() {
             const prompt = promptInput.value.trim();
@@ -479,17 +522,51 @@
             candidates.forEach(function(c) {
                 const div = document.createElement('div');
                 div.className = 'candidate-item ' + (c.eliminated ? 'eliminated' : 'active');
-                div.innerHTML = '<span class="candidate-pattern">' + highlightRegex(c.pattern) + '</span>' +
-                    '<div class="candidate-votes" style="display:flex; gap:8px; align-items:center;">' +
-                    '<button class="btn copy" data-pattern="' + encodeURIComponent(c.pattern) + '" onclick="copyRegex(decodeURIComponent(this.getAttribute(\'data-pattern\')))" title="Copy regex">' +
-                    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+
+                const header = document.createElement('div');
+                header.className = 'candidate-header';
+
+                const patternSpan = document.createElement('span');
+                patternSpan.className = 'candidate-pattern';
+                patternSpan.innerHTML = highlightRegex(c.pattern);
+
+                const votesContainer = document.createElement('div');
+                votesContainer.className = 'candidate-votes';
+                votesContainer.style.cssText = 'display:flex; gap:8px; align-items:center;';
+
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'btn copy';
+                copyBtn.setAttribute('data-pattern', encodeURIComponent(c.pattern));
+                copyBtn.setAttribute('title', 'Copy regex');
+                copyBtn.onclick = function() { copyRegex(decodeURIComponent(this.getAttribute('data-pattern'))); };
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
                     '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
                     '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
-                    '</svg>' +
-                    '</button>' +
-                    '<span class="badge" style="background: #4caf50;">✓ ' + c.positiveVotes + '</span>' +
-                    '<span class="badge" style="background: #f44336;">✗ ' + c.negativeVotes + '</span>' +
-                    '</div>';
+                    '</svg>';
+
+                const posBadge = document.createElement('span');
+                posBadge.className = 'badge';
+                posBadge.style.background = '#4caf50';
+                posBadge.textContent = '✓ ' + c.positiveVotes;
+
+                const negBadge = document.createElement('span');
+                negBadge.className = 'badge';
+                negBadge.style.background = '#f44336';
+                negBadge.textContent = '✗ ' + c.negativeVotes;
+
+                votesContainer.appendChild(copyBtn);
+                votesContainer.appendChild(posBadge);
+                votesContainer.appendChild(negBadge);
+
+                header.appendChild(patternSpan);
+                header.appendChild(votesContainer);
+                div.appendChild(header);
+
+                const equivalents = createEquivalentSection(c.equivalents);
+                if (equivalents) {
+                    div.appendChild(equivalents);
+                }
+
                 candidatesList.appendChild(div);
             });
         }
@@ -532,19 +609,22 @@
                 const isWinner = c.pattern === winnerRegex;
                 const div = document.createElement('div');
                 div.className = 'candidate-item ' + (c.eliminated ? 'eliminated' : 'active');
-                
+
                 if (isWinner) {
                     div.style.cssText = 'border: 2px solid var(--pick-accept-color); background: var(--vscode-list-activeSelectionBackground);';
                 }
-                
+
+                const header = document.createElement('div');
+                header.className = 'candidate-header';
+
                 const patternSpan = document.createElement('span');
                 patternSpan.className = 'candidate-pattern';
                 patternSpan.innerHTML = highlightRegex(c.pattern);
-                
+
                 const votesDiv = document.createElement('div');
                 votesDiv.className = 'candidate-votes';
                 votesDiv.style.cssText = 'display:flex; gap:8px; align-items:center;';
-                
+
                 const copyBtn = document.createElement('button');
                 copyBtn.className = 'btn copy';
                 copyBtn.setAttribute('data-pattern', encodeURIComponent(c.pattern));
@@ -567,13 +647,19 @@
                 negVoteBadge.className = 'badge';
                 negVoteBadge.style.background = '#f44336';
                 negVoteBadge.textContent = '✗ ' + c.negativeVotes;
-                
+
                 votesDiv.appendChild(copyBtn);
                 votesDiv.appendChild(posVoteBadge);
                 votesDiv.appendChild(negVoteBadge);
-                
-                div.appendChild(patternSpan);
-                div.appendChild(votesDiv);
+
+                header.appendChild(patternSpan);
+                header.appendChild(votesDiv);
+                div.appendChild(header);
+
+                const equivalents = createEquivalentSection(c.equivalents);
+                if (equivalents) {
+                    div.appendChild(equivalents);
+                }
                 candidatesList.appendChild(div);
             });
         }
