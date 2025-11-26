@@ -64,6 +64,19 @@ All settings appear under the `pick` section in VS Code Settings.
 
 ---
 
+## Disclaimer
+
+PICK is offered on an as-is basis, without warranty, express or implied.
+You agree to use PICK at your own risk.
+
+Note that the correct functioning of PICK is dependent on many tools
+beyond our control: the quality of your prompt, the correctness of your
+choices, the training of the LLM, the correctness of the regex engine,
+and so on. Therefore, you should manually review all outputs before
+using them.
+
+---
+
 ## Reporting Problems or Making Suggestions
 
 | Before you report…                      | …please note                                                                                 |
