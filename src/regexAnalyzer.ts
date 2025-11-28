@@ -412,6 +412,7 @@ export class RegexAnalyzer {
       const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
 
       // Helper: sample from source \ other, respecting exclusions.
+      // Uses set difference sampling which is efficient even when patterns agree on many words.
       const sampleDifference = async (source: string, other: string, count: number): Promise<string[]> => {
         // Skip expensive set ops for complex patterns; rely on sampling instead.
         const complexityCap = 40;
@@ -420,7 +421,6 @@ export class RegexAnalyzer {
         }
         const results: string[] = [];
         const seen = new Set<string>();
-        const otherRe = new RegExp(`^${other}$`);
         try {
           const diff = (await createRb(source)).without(new RegExp(`^${other}$`)).sample();
           for (let i = 0; i < count * 3; i++) { // allow extra attempts
@@ -433,25 +433,44 @@ export class RegexAnalyzer {
             if (results.length >= count) {break;}
           }
         } catch {
-          // ignore and fall back
+          // ignore - difference sampling failed, rely on other methods
         }
 
-        if (results.length < count) {
-          try {
-            const extras = await this.generateMultipleWords(source, count * 3, Array.from(excluded));
-            for (const w of extras) {
-              if (seen.has(w) || excluded.has(w)) {continue;}
-              if (!otherRe.test(w)) {
-                results.push(w);
-                seen.add(w);
-                if (results.length >= count) {break;}
-              }
-            }
-          } catch {
-            // ignore
+        // NOTE: Removed fallback to generateMultipleWords because it uses enumerate()
+        // which is slow when patterns agree on many short words (the core issue this fixes).
+        // The pairwise difference sampling above is more targeted and efficient.
+
+        return results;
+      };
+
+      // Helper: sample words directly from a regex using enumerate().
+      // enumerate() works well for both bounded and unbounded patterns.
+      // For bounded patterns like [a-z]{1,64}, enumerate() is fast.
+      // For unbounded patterns, we limit iterations to avoid slow enumeration.
+      const sampleFromRegex = async (pattern: string, count: number): Promise<string[]> => {
+        const complexityCap = 40;
+        if (this.estimateComplexity(pattern) > complexityCap) {
+          return [];
+        }
+        const results: string[] = [];
+        const seen = new Set<string>();
+        try {
+          const rb = await createRb(pattern);
+          const enumerator = rb.enumerate();
+          // Limit iterations for unbounded patterns to avoid slow enumeration
+          const maxIterations = count * 5;
+          for (let i = 0; i < maxIterations; i++) {
+            const next = enumerator.next();
+            if (next.done) {break;}
+            const candidate = next.value;
+            if (excluded.has(candidate) || seen.has(candidate)) {continue;}
+            results.push(candidate);
+            seen.add(candidate);
+            if (results.length >= count) {break;}
           }
+        } catch {
+          // ignore
         }
-
         return results;
       };
 
@@ -459,14 +478,16 @@ export class RegexAnalyzer {
       const desiredPoolSize = Math.max(6, candidateRegexes.length * 2);
 
       // 1) Gather from pairwise differences (each call bounded by remaining budget)
+      //    Request more samples (4 instead of 2) to fill the pool faster and avoid
+      //    falling back to enumerate() which is slow when patterns agree on many words.
       for (let i = 0; i < candidateRegexes.length; i++) {
         for (let j = i + 1; j < candidateRegexes.length; j++) {
           const elapsed = Date.now() - startTime;
           if (elapsed > maxElapsedMs) {break;}
           const a = candidateRegexes[i];
           const b = candidateRegexes[j];
-          const fromA = await withTimeout(sampleDifference(a, b, 2), `sampleDifference ${a} \\ ${b}`);
-          const fromB = await withTimeout(sampleDifference(b, a, 2), `sampleDifference ${b} \\ ${a}`);
+          const fromA = await withTimeout(sampleDifference(a, b, 4), `sampleDifference ${a} \\ ${b}`);
+          const fromB = await withTimeout(sampleDifference(b, a, 4), `sampleDifference ${b} \\ ${a}`);
           fromA?.forEach(w => pool.add(w));
           fromB?.forEach(w => pool.add(w));
         }
@@ -475,11 +496,54 @@ export class RegexAnalyzer {
         `generateTwoDistinguishingWords pairwise stage pool size: ${pool.size}, elapsed ${Date.now() - startTime}ms`
       );
 
-      // 2) Enumerate from candidates until we reach both target size AND minimum elapsed time (or hit max cap)
-      //    Each generateMultipleWords is bounded by the remaining budget; on timeout we skip and continue.
+      // 1b) Also sample directly from each candidate to get words from intersections.
+      //     This is important when one pattern is a subset of another (e.g., [a-z]+ vs [a-z]{1,64})
+      //     because the pairwise differences only give words from the larger set.
+      for (const regex of candidateRegexes) {
+        const elapsed = Date.now() - startTime;
+        if (elapsed > maxElapsedMs) {break;}
+        const samples = await withTimeout(
+          sampleFromRegex(regex, 3),
+          `sampleFromRegex ${regex}`
+        );
+        samples?.forEach(w => pool.add(w));
+      }
+      logger.info(
+        `generateTwoDistinguishingWords after direct sampling pool size: ${pool.size}, elapsed ${Date.now() - startTime}ms`
+      );
+
+      // Helper: check if current pool has sufficient distinguishing power
+      // Returns true if we have at least 2 words that can distinguish candidates
+      const hasDistinguishingPair = (): boolean => {
+        const poolWords = Array.from(pool).filter(w => !excluded.has(w) && regexObjects.some(re => re.test(w)));
+        if (poolWords.length < 2) {return false;}
+        
+        // Check if any pair of words has different match vectors
+        for (let i = 0; i < Math.min(poolWords.length, 10); i++) {
+          for (let j = i + 1; j < Math.min(poolWords.length, 10); j++) {
+            const m1 = regexObjects.map(re => re.test(poolWords[i]));
+            const m2 = regexObjects.map(re => re.test(poolWords[j]));
+            if (m1.some((m, idx) => m !== m2[idx])) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+
+      // 2) Enumerate from candidates if needed.
+      //    Skip this step if pairwise difference sampling already found distinguishing words,
+      //    since enumerate() is slow when patterns agree on many short words.
       const blockedBase = Array.from(excluded);
       let pass = 0;
-      while ((pool.size < desiredPoolSize || (Date.now() - startTime) < minElapsedMs) &&
+      const skipEnumerateIfDistinguishing = hasDistinguishingPair() && pool.size >= 2;
+      if (skipEnumerateIfDistinguishing) {
+        logger.info(
+          `generateTwoDistinguishingWords: skipping enumerate() since pairwise sampling found distinguishing words`
+        );
+      }
+      while (!skipEnumerateIfDistinguishing &&
+             (pool.size < desiredPoolSize || (Date.now() - startTime) < minElapsedMs) &&
              (Date.now() - startTime) < maxElapsedMs) {
         let addedThisPass = 0;
         for (const regex of candidateRegexes) {

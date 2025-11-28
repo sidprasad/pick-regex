@@ -311,6 +311,45 @@ suite('RegexAnalyzer Test Suite', () => {
       assert.ok(result.words[0].length < 10, 'First word should be reasonably short');
       assert.ok(result.words[1].length < 10, 'Second word should be reasonably short');
     });
+
+    test('Should efficiently handle subset relationship like [a-z]+ vs [a-z]{1,64}', async () => {
+      // This is the issue scenario: [a-z]+ and [a-z]{1,64} agree on all words of length 1-64.
+      // The algorithm should efficiently find distinguishing words using set difference sampling.
+      const candidates = ['[a-z]+', '[a-z]{1,64}'];
+      
+      const startTime = Date.now();
+      const result = await analyzer.generateTwoDistinguishingWords(candidates);
+      const elapsed = Date.now() - startTime;
+      
+      // Should complete quickly (under 1 second) instead of timing out
+      assert.ok(elapsed < 1000, `Should complete in under 1 second, took ${elapsed}ms`);
+      
+      // Should return valid distinguishing words
+      assert.strictEqual(result.words.length, 2);
+      assert.notStrictEqual(result.words[0], result.words[1]);
+      
+      // Check that words have different match vectors
+      const re1 = new RegExp(`^${candidates[0]}$`);
+      const re2 = new RegExp(`^${candidates[1]}$`);
+      const matches1 = [re1.test(result.words[0]), re2.test(result.words[0])];
+      const matches2 = [re1.test(result.words[1]), re2.test(result.words[1])];
+      
+      const hasDifference = matches1[0] !== matches2[0] || matches1[1] !== matches2[1];
+      assert.ok(hasDifference, 
+        `Words should have different match patterns. ` +
+        `Word1 "${result.words[0].substring(0, 20)}..." matches: ${matches1}, ` +
+        `Word2 "${result.words[1].substring(0, 20)}..." matches: ${matches2}`
+      );
+      
+      // One word should be in the difference [a-z]+ \ [a-z]{1,64} (length >= 65)
+      // and the other should be in the intersection (length 1-64)
+      const hasLongWord = result.words.some(w => w.length >= 65);
+      const hasShortWord = result.words.some(w => w.length <= 64);
+      assert.ok(hasLongWord && hasShortWord, 
+        `Should have one word in difference (len>=65) and one in intersection (len<=64). ` +
+        `Got lengths: ${result.words.map(w => w.length)}`
+      );
+    });
   });
 
   suite('Helper methods', () => {
