@@ -32,12 +32,20 @@
         const finalPromptDisplay = document.getElementById('finalPromptDisplay');
         const reportIssueBtn = document.getElementById('reportIssueBtn');
 
+        // Model selector elements
+        const modelSelect = document.getElementById('modelSelect');
+        const modelSelectorRow = document.getElementById('modelSelectorRow');
+
         // Additional UI Elements
         const promptInput = document.getElementById('promptInput');
         const generateBtn = document.getElementById('generateBtn');
         const resetBtn = document.getElementById('resetBtn');
         const startFreshBtn = document.getElementById('startFreshBtn');
         const cancelBtn = inlineCancelBtn;
+        
+        // Track available models
+        let availableModels = [];
+        let selectedModelId = '';
         
         if (statusCancelBtn) {
             statusCancelBtn.addEventListener('click', function() {
@@ -47,6 +55,13 @@
         if (reportIssueBtn) {
             reportIssueBtn.addEventListener('click', () => {
                 vscode.postMessage({ type: 'reportIssue' });
+            });
+        }
+        
+        // Handle model selection change
+        if (modelSelect) {
+            modelSelect.addEventListener('change', function() {
+                selectedModelId = modelSelect.value;
             });
         }
         
@@ -66,6 +81,37 @@
 
         // Initialize body data attribute
         document.body.setAttribute('data-literal-mode', literalMode.toString());
+
+        /**
+         * Update the model selector dropdown with available models
+         */
+        function updateModelSelector(models) {
+            availableModels = models;
+            if (!modelSelect) return;
+            
+            modelSelect.innerHTML = '';
+            
+            if (models.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No models available';
+                modelSelect.appendChild(option);
+                modelSelect.disabled = true;
+                return;
+            }
+            
+            modelSelect.disabled = false;
+            models.forEach(function(model, index) {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                if (index === 0) {
+                    option.selected = true;
+                    selectedModelId = model.id;
+                }
+                modelSelect.appendChild(option);
+            });
+        }
 
         // Helper function to update prompt display
         function updatePromptDisplay(prompt) {
@@ -125,7 +171,7 @@
             if (newPrompt) {
                 promptInput.value = newPrompt;
                 updatePromptDisplay(newPrompt);
-                vscode.postMessage({ type: 'refineCandidates', prompt: newPrompt });
+                vscode.postMessage({ type: 'refineCandidates', prompt: newPrompt, modelId: selectedModelId });
                 showSection('loading');
             }
         }
@@ -156,6 +202,19 @@
                 .replace(/\\/g, '⧹')
                 .replace(/"/g, '"')
                 .replace(/'/g, "'");
+        }
+
+        /**
+         * Escape HTML special characters to prevent XSS
+         */
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         function highlightRegex(pattern) {
@@ -254,7 +313,7 @@
             const prompt = promptInput.value.trim();
             if (prompt) {
                 updatePromptDisplay(prompt);
-                vscode.postMessage({ type: 'generateCandidates', prompt: prompt });
+                vscode.postMessage({ type: 'generateCandidates', prompt: prompt, modelId: selectedModelId });
                 showSection('loading');
             }
         });
@@ -365,6 +424,18 @@
                 case 'warning':
                     showWarning(message.message);
                     break;
+                case 'permissionRequired':
+                    showPermissionRequired(message.message);
+                    break;
+                case 'noModelsAvailable':
+                    showNoModelsAvailable(message.message);
+                    updateModelSelector([]);
+                    break;
+                case 'modelsAvailable':
+                    // Clear any previous model availability errors and populate selector
+                    errorSection.classList.add('hidden');
+                    updateModelSelector(message.models);
+                    break;
                 case 'candidatesGenerated':
                     inlineCancelBtn.classList.add('hidden');
                     statusCancelBtn.classList.add('hidden');
@@ -463,6 +534,50 @@
 
         function showError(message) {
             errorSection.textContent = message;
+            errorSection.classList.remove('hidden');
+        }
+
+        function showPermissionRequired(message) {
+            showSection('prompt');
+            statusBar.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+            generateBtn.classList.remove('hidden');
+            
+            // Show a prominent permission required message (escape message to prevent XSS)
+            errorSection.innerHTML = '<div style="display: flex; flex-direction: column; gap: 12px;">' +
+                '<div style="display: flex; align-items: center; gap: 8px;">' +
+                '<span style="font-size: 24px;">🔐</span>' +
+                '<strong>Permission Required</strong>' +
+                '</div>' +
+                '<p style="margin: 0;">' + escapeHtml(message) + '</p>' +
+                '<p style="margin: 0; font-size: 12px; opacity: 0.8;">' +
+                'When you click the generate button again, a permission dialog should appear. ' +
+                'Please click "Allow" to grant PICK access to language models.' +
+                '</p>' +
+                '</div>';
+            errorSection.classList.remove('hidden');
+        }
+
+        function showNoModelsAvailable(message) {
+            showSection('prompt');
+            statusBar.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+            generateBtn.classList.remove('hidden');
+            
+            // Show a prominent no models message (escape message to prevent XSS)
+            errorSection.innerHTML = '<div style="display: flex; flex-direction: column; gap: 12px;">' +
+                '<div style="display: flex; align-items: center; gap: 8px;">' +
+                '<span style="font-size: 24px;">⚠️</span>' +
+                '<strong>No Language Models Available</strong>' +
+                '</div>' +
+                '<p style="margin: 0;">' + escapeHtml(message) + '</p>' +
+                '<p style="margin: 0; font-size: 12px; opacity: 0.8;">' +
+                'To use PICK, you need a language model extension installed and enabled. ' +
+                'We recommend installing the GitHub Copilot extension.' +
+                '</p>' +
+                '</div>';
             errorSection.classList.remove('hidden');
         }
 
