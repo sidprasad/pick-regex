@@ -42,8 +42,6 @@ PICK is currently implemented as an extension to Visual Studio Code (VSC).
 
 ## Demo
 
-<!-- TODO: Add GIF/screenshot demonstrating PICK in action -->
-
 Here's what using PICK looks like:
 
 1. **Enter a description** — Type what kind of pattern you need (e.g., "email addresses" or "US phone numbers")
