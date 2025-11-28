@@ -457,8 +457,10 @@ export class RegexAnalyzer {
         try {
           const rb = await createRb(pattern);
           const enumerator = rb.enumerate();
-          // Limit iterations for unbounded patterns to avoid slow enumeration
-          const maxIterations = count * 5;
+          // Allow extra iterations in case some are excluded or duplicates.
+          // Multiplier of 5 provides reasonable slack for filtered results.
+          const iterationMultiplier = 5;
+          const maxIterations = count * iterationMultiplier;
           for (let i = 0; i < maxIterations; i++) {
             const next = enumerator.next();
             if (next.done) {break;}
@@ -518,9 +520,13 @@ export class RegexAnalyzer {
         const poolWords = Array.from(pool).filter(w => !excluded.has(w) && regexObjects.some(re => re.test(w)));
         if (poolWords.length < 2) {return false;}
         
+        // Limit pair checking to avoid O(n^2) explosion for large pools.
+        // 10 words gives us 45 pairs to check, which is sufficient to detect
+        // distinguishing power without excessive computation.
+        const maxWordsToCheck = 10;
         // Check if any pair of words has different match vectors
-        for (let i = 0; i < Math.min(poolWords.length, 10); i++) {
-          for (let j = i + 1; j < Math.min(poolWords.length, 10); j++) {
+        for (let i = 0; i < Math.min(poolWords.length, maxWordsToCheck); i++) {
+          for (let j = i + 1; j < Math.min(poolWords.length, maxWordsToCheck); j++) {
             const m1 = regexObjects.map(re => re.test(poolWords[i]));
             const m2 = regexObjects.map(re => re.test(poolWords[j]));
             if (m1.some((m, idx) => m !== m2[idx])) {
