@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PickController, PickState, WordPair, WordClassification } from './pickController';
-import { generateRegexFromDescription } from './regexService';
+import { PickController, PickState, WordClassification } from './pickController';
+import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, getAvailableChatModels } from './regexService';
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
 import { openIssueReport } from './issueReporter';
@@ -31,6 +31,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     };
 
     webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
+
+    // Check for available language models when view is loaded
+    this.checkAvailableModels();
 
     // Handle messages from the webview
     webviewView.webview.onDidReceiveMessage(async (data) => {
@@ -68,6 +71,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'cancel':
           this.handleCancel();
           break;
+        case 'checkModels':
+          await this.checkAvailableModels();
+          break;
         case 'reportIssue':
           try {
             await openIssueReport();
@@ -79,6 +85,32 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           break;
       }
     });
+  }
+
+  /**
+   * Check if language models are available and notify the webview
+   */
+  private async checkAvailableModels() {
+    try {
+      const models = await getAvailableChatModels();
+      
+      if (models.length === 0) {
+        logger.warn('No language models available on startup');
+        this.sendMessage({
+          type: 'noModelsAvailable',
+          message: 'No language models available. Please ensure you have a language model extension installed (e.g., GitHub Copilot) and that you are signed in.'
+        });
+      } else {
+        logger.info(`Found ${models.length} available language model(s): ${models.map(m => m.name).join(', ')}`);
+        this.sendMessage({
+          type: 'modelsAvailable',
+          models: models
+        });
+      }
+    } catch (error) {
+      logger.warn(`Failed to check available models: ${error}`);
+      // Don't show an error here - the user will see it when they try to generate
+    }
   }
 
   private async handleGenerateCandidates(prompt: string) {
@@ -112,6 +144,26 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           });
           return;
         }
+        
+        // Handle specific error types
+        if (error instanceof PermissionRequiredError) {
+          logger.error(error, 'Permission required for language model access');
+          this.sendMessage({ 
+            type: 'permissionRequired', 
+            message: error.message 
+          });
+          return;
+        }
+        
+        if (error instanceof NoModelsAvailableError) {
+          logger.error(error, 'No language models available');
+          this.sendMessage({ 
+            type: 'noModelsAvailable', 
+            message: error.message 
+          });
+          return;
+        }
+        
         logger.error(error, 'Failed to generate candidate regexes');
         this.sendMessage({ 
           type: 'error', 
@@ -504,6 +556,26 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           });
           return;
         }
+        
+        // Handle specific error types
+        if (error instanceof PermissionRequiredError) {
+          logger.error(error, 'Permission required for language model access');
+          this.sendMessage({ 
+            type: 'permissionRequired', 
+            message: error.message 
+          });
+          return;
+        }
+        
+        if (error instanceof NoModelsAvailableError) {
+          logger.error(error, 'No language models available');
+          this.sendMessage({ 
+            type: 'noModelsAvailable', 
+            message: error.message 
+          });
+          return;
+        }
+        
         logger.error(error, 'Failed to generate candidate regexes during refinement');
         this.sendMessage({ 
           type: 'error', 

@@ -12,6 +12,79 @@ export interface RegexGenerationResult {
 }
 
 /**
+ * Represents an available LLM chat model
+ */
+export interface AvailableChatModel {
+  id: string;
+  name: string;
+  vendor: string;
+  family: string;
+}
+
+/**
+ * Error thrown when user has not granted permission to use language models
+ */
+export class PermissionRequiredError extends Error {
+  constructor(message: string = 'Permission required to use language models. Please approve the permission request when prompted.') {
+    super(message);
+    this.name = 'PermissionRequiredError';
+  }
+}
+
+/**
+ * Error thrown when no language models are available
+ */
+export class NoModelsAvailableError extends Error {
+  constructor(message: string = 'No language models available. Please ensure you have a language model extension installed (e.g., GitHub Copilot).') {
+    super(message);
+    this.name = 'NoModelsAvailableError';
+  }
+}
+
+/**
+ * Get all available chat models from VS Code
+ * @returns Array of available chat models
+ */
+export async function getAvailableChatModels(): Promise<AvailableChatModel[]> {
+  try {
+    // Get all available chat models without filtering
+    const models = await vscode.lm.selectChatModels({});
+    
+    return models.map(model => ({
+      id: model.id,
+      name: model.name,
+      vendor: model.vendor,
+      family: model.family
+    }));
+  } catch (error) {
+    logger.warn(`Failed to get available chat models: ${error}`);
+    return [];
+  }
+}
+
+/**
+ * Get unique vendors from available models
+ * @returns Array of unique vendor names
+ */
+export async function getAvailableVendors(): Promise<string[]> {
+  const models = await getAvailableChatModels();
+  const vendors = new Set(models.map(m => m.vendor));
+  return Array.from(vendors).sort();
+}
+
+/**
+ * Get unique model families from available models, optionally filtered by vendor
+ * @param vendor Optional vendor to filter by
+ * @returns Array of unique family names
+ */
+export async function getAvailableFamilies(vendor?: string): Promise<string[]> {
+  const models = await getAvailableChatModels();
+  const filtered = vendor ? models.filter(m => m.vendor === vendor) : models;
+  const families = new Set(filtered.map(m => m.family));
+  return Array.from(families).sort();
+}
+
+/**
  * Attempt to rewrite common invalid regex patterns to valid JavaScript syntax
  * Returns the rewritten pattern and a boolean indicating if rewriting was attempted
  */
@@ -80,16 +153,37 @@ export async function generateRegexFromDescription(
   const vendor = config.get<string>('llm.vendor', 'copilot');
   const family = config.get<string>('llm.family', 'gpt-4o');
 
-  const models = await vscode.lm.selectChatModels({
-    vendor: vendor as 'copilot' | 'openai' | 'anthropic',
+  // First, try to get models with specific vendor and family
+  let models = await vscode.lm.selectChatModels({
+    vendor: vendor,
     family: family
   });
 
+  // If no models found with specific configuration, try with just vendor
+  if (models.length === 0 && vendor) {
+    logger.info(`No models found for vendor="${vendor}" and family="${family}", trying vendor only...`);
+    models = await vscode.lm.selectChatModels({
+      vendor: vendor
+    });
+  }
+
+  // If still no models, try to get any available model
   if (models.length === 0) {
-    throw new Error('No language models available via vscode.lm');
+    logger.info('No models found with configured vendor, getting any available model...');
+    models = await vscode.lm.selectChatModels({});
+  }
+
+  if (models.length === 0) {
+    throw new NoModelsAvailableError();
   }
 
   const model = models[0];
+  logger.info(`Using model: ${model.name} (vendor: ${model.vendor}, family: ${model.family})`);
+
+  // Log if we're using a different model than configured
+  if (model.vendor !== vendor || model.family !== family) {
+    logger.warn(`Configured model (vendor: ${vendor}, family: ${family}) not available. Using: ${model.name} instead.`);
+  }
 
   // Build prompt: ask for multiple candidate regexes with explanations and confidence scores
   const messages: vscode.LanguageModelChatMessage[] = [
@@ -120,7 +214,30 @@ export async function generateRegexFromDescription(
     )
   ];
 
-  const response = await model.sendRequest(messages, {}, token);
+  let response;
+  try {
+    response = await model.sendRequest(messages, {}, token);
+  } catch (error: unknown) {
+    // Handle permission/authorization errors
+    if (error instanceof vscode.LanguageModelError) {
+      const errorCode = error.code;
+      // Check for permission-related errors
+      // Common error codes: 'NoPermissions', 'Blocked', etc.
+      if (errorCode === 'NoPermissions' || 
+          errorCode === vscode.LanguageModelError.NoPermissions.toString() ||
+          error.message.toLowerCase().includes('permission') ||
+          error.message.toLowerCase().includes('not allowed')) {
+        logger.error(error, 'Permission denied for language model access');
+        throw new PermissionRequiredError(
+          'You must grant permission for PICK to use language models. ' +
+          'A permission dialog should appear - please click "Allow" to continue. ' +
+          'If no dialog appears, you may need to sign in to your language model provider.'
+        );
+      }
+    }
+    // Re-throw other errors
+    throw error;
+  }
 
   let fullText = '';
   for await (const chunk of response.stream) {

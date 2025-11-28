@@ -221,4 +221,64 @@ suite('Regex Service Test Suite', () => {
       });
     });
   });
+
+  suite('Error Classes', () => {
+    // Note: We import directly at module level which works with TypeScript
+    // These tests verify the error classes are properly structured
+    test('PermissionRequiredError should have correct structure', () => {
+      // Test that the error classes are exported and constructible
+      // Using require to avoid module resolution issues in tests
+      const regexService = require('../regexService');
+      
+      const error = new regexService.PermissionRequiredError();
+      assert.strictEqual(error.name, 'PermissionRequiredError');
+      assert.ok(error.message.includes('Permission required'));
+      assert.ok(error instanceof Error);
+      
+      const customError = new regexService.PermissionRequiredError('Custom permission message');
+      assert.strictEqual(customError.message, 'Custom permission message');
+    });
+
+    test('NoModelsAvailableError should have correct structure', () => {
+      const regexService = require('../regexService');
+      
+      const error = new regexService.NoModelsAvailableError();
+      assert.strictEqual(error.name, 'NoModelsAvailableError');
+      assert.ok(error.message.includes('No language models available'));
+      assert.ok(error instanceof Error);
+      
+      const customError = new regexService.NoModelsAvailableError('Custom no models message');
+      assert.strictEqual(customError.message, 'Custom no models message');
+    });
+  });
+
+  suite('Model Discovery Functions', () => {
+    test('getAvailableChatModels should return an array', async () => {
+      const regexService = require('../regexService');
+      
+      // This test may return empty array in test environment but shouldn't throw
+      const result = await regexService.getAvailableChatModels();
+      assert.ok(Array.isArray(result), 'Result should be an array');
+    });
+
+    test('getAvailableVendors should return an array of strings', async () => {
+      const regexService = require('../regexService');
+      
+      const result = await regexService.getAvailableVendors();
+      assert.ok(Array.isArray(result), 'Result should be an array');
+      result.forEach((vendor: string) => {
+        assert.strictEqual(typeof vendor, 'string', 'Each vendor should be a string');
+      });
+    });
+
+    test('getAvailableFamilies should return an array of strings', async () => {
+      const regexService = require('../regexService');
+      
+      const result = await regexService.getAvailableFamilies();
+      assert.ok(Array.isArray(result), 'Result should be an array');
+      result.forEach((family: string) => {
+        assert.strictEqual(typeof family, 'string', 'Each family should be a string');
+      });
+    });
+  });
 });
