@@ -351,7 +351,7 @@ suite('RegexAnalyzer Test Suite', () => {
       assert.strictEqual(analyzer.verifyMatch('abc123', regex), false);
     });
 
-    test('Should verify match correctly', () => {
+    test('Should verify match correctly 2', () => {
       assert.strictEqual(analyzer.isValidRegex('[a-z]+'), true);
       assert.strictEqual(analyzer.isValidRegex('\\d{3}'), true);
       assert.strictEqual(analyzer.isValidRegex('^a$'), true);
