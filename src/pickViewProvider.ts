@@ -39,10 +39,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.type) {
         case 'generateCandidates':
-          await this.handleGenerateCandidates(data.prompt);
+          await this.handleGenerateCandidates(data.prompt, data.modelId);
           break;
         case 'refineCandidates':
-          await this.handleRefineCandidates(data.prompt);
+          await this.handleRefineCandidates(data.prompt, data.modelId);
           break;
         case 'classifyWord':
           this.handleClassifyWord(data.word, data.classification);
@@ -113,7 +113,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleGenerateCandidates(prompt: string) {
+  private async handleGenerateCandidates(prompt: string, modelId?: string) {
     try {
       this.sendMessage({ type: 'status', message: 'Generating candidate regexes...' });
 
@@ -126,7 +126,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       
       let candidates: string[] = [];
       try {
-        const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token);
+        const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId);
         candidates = result.candidates.map(c => c.regex);
         logger.info(`Generated ${candidates.length} candidates from LLM`);
         
@@ -522,7 +522,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleRefineCandidates(prompt: string) {
+  private async handleRefineCandidates(prompt: string, modelId?: string) {
     try {
       this.sendMessage({ type: 'status', message: 'Refining with new candidates...' });
 
@@ -538,7 +538,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       
       let candidates: string[] = [];
       try {
-        const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token);
+        const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId);
         candidates = result.candidates.map(c => c.regex);
         logger.info(`Generated ${candidates.length} candidates from LLM for refinement`);
         

@@ -146,16 +146,26 @@ function tryRewriteToJavaScript(pattern: string): { rewritten: string; wasRewrit
 
 export async function generateRegexFromDescription(
   description: string,
-  token: vscode.CancellationToken
+  token: vscode.CancellationToken,
+  modelId?: string
 ): Promise<RegexGenerationResult> {
-  // Get any available language model - VS Code handles the model selection
+  // Get available language models
   const models = await vscode.lm.selectChatModels({});
 
   if (models.length === 0) {
     throw new NoModelsAvailableError();
   }
 
-  const model = models[0];
+  // If a specific model ID is provided, try to use that model
+  let model = models[0];
+  if (modelId) {
+    const selectedModel = models.find(m => m.id === modelId);
+    if (selectedModel) {
+      model = selectedModel;
+    } else {
+      logger.warn(`Requested model "${modelId}" not found, using default: ${model.name}`);
+    }
+  }
   logger.info(`Using model: ${model.name} (vendor: ${model.vendor}, family: ${model.family})`);
 
   // Build prompt: ask for multiple candidate regexes with explanations and confidence scores

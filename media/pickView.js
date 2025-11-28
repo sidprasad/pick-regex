@@ -32,12 +32,20 @@
         const finalPromptDisplay = document.getElementById('finalPromptDisplay');
         const reportIssueBtn = document.getElementById('reportIssueBtn');
 
+        // Model selector elements
+        const modelSelect = document.getElementById('modelSelect');
+        const modelSelectorRow = document.getElementById('modelSelectorRow');
+
         // Additional UI Elements
         const promptInput = document.getElementById('promptInput');
         const generateBtn = document.getElementById('generateBtn');
         const resetBtn = document.getElementById('resetBtn');
         const startFreshBtn = document.getElementById('startFreshBtn');
         const cancelBtn = inlineCancelBtn;
+        
+        // Track available models
+        let availableModels = [];
+        let selectedModelId = '';
         
         if (statusCancelBtn) {
             statusCancelBtn.addEventListener('click', function() {
@@ -47,6 +55,13 @@
         if (reportIssueBtn) {
             reportIssueBtn.addEventListener('click', () => {
                 vscode.postMessage({ type: 'reportIssue' });
+            });
+        }
+        
+        // Handle model selection change
+        if (modelSelect) {
+            modelSelect.addEventListener('change', function() {
+                selectedModelId = modelSelect.value;
             });
         }
         
@@ -66,6 +81,37 @@
 
         // Initialize body data attribute
         document.body.setAttribute('data-literal-mode', literalMode.toString());
+
+        /**
+         * Update the model selector dropdown with available models
+         */
+        function updateModelSelector(models) {
+            availableModels = models;
+            if (!modelSelect) return;
+            
+            modelSelect.innerHTML = '';
+            
+            if (models.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No models available';
+                modelSelect.appendChild(option);
+                modelSelect.disabled = true;
+                return;
+            }
+            
+            modelSelect.disabled = false;
+            models.forEach(function(model, index) {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                if (index === 0) {
+                    option.selected = true;
+                    selectedModelId = model.id;
+                }
+                modelSelect.appendChild(option);
+            });
+        }
 
         // Helper function to update prompt display
         function updatePromptDisplay(prompt) {
@@ -125,7 +171,7 @@
             if (newPrompt) {
                 promptInput.value = newPrompt;
                 updatePromptDisplay(newPrompt);
-                vscode.postMessage({ type: 'refineCandidates', prompt: newPrompt });
+                vscode.postMessage({ type: 'refineCandidates', prompt: newPrompt, modelId: selectedModelId });
                 showSection('loading');
             }
         }
@@ -267,7 +313,7 @@
             const prompt = promptInput.value.trim();
             if (prompt) {
                 updatePromptDisplay(prompt);
-                vscode.postMessage({ type: 'generateCandidates', prompt: prompt });
+                vscode.postMessage({ type: 'generateCandidates', prompt: prompt, modelId: selectedModelId });
                 showSection('loading');
             }
         });
@@ -383,10 +429,12 @@
                     break;
                 case 'noModelsAvailable':
                     showNoModelsAvailable(message.message);
+                    updateModelSelector([]);
                     break;
                 case 'modelsAvailable':
-                    // Clear any previous model availability errors
+                    // Clear any previous model availability errors and populate selector
                     errorSection.classList.add('hidden');
+                    updateModelSelector(message.models);
                     break;
                 case 'candidatesGenerated':
                     inlineCancelBtn.classList.add('hidden');
