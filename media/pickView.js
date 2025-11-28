@@ -158,6 +158,19 @@
                 .replace(/'/g, "'");
         }
 
+        /**
+         * Escape HTML special characters to prevent XSS
+         */
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         function highlightRegex(pattern) {
             if (!pattern) {
                 return '';
@@ -483,13 +496,13 @@
             statusCancelBtn.classList.add('hidden');
             generateBtn.classList.remove('hidden');
             
-            // Show a prominent permission required message
+            // Show a prominent permission required message (escape message to prevent XSS)
             errorSection.innerHTML = '<div style="display: flex; flex-direction: column; gap: 12px;">' +
                 '<div style="display: flex; align-items: center; gap: 8px;">' +
                 '<span style="font-size: 24px;">🔐</span>' +
                 '<strong>Permission Required</strong>' +
                 '</div>' +
-                '<p style="margin: 0;">' + message + '</p>' +
+                '<p style="margin: 0;">' + escapeHtml(message) + '</p>' +
                 '<p style="margin: 0; font-size: 12px; opacity: 0.8;">' +
                 'When you click the generate button again, a permission dialog should appear. ' +
                 'Please click "Allow" to grant PICK access to language models.' +
@@ -505,13 +518,13 @@
             statusCancelBtn.classList.add('hidden');
             generateBtn.classList.remove('hidden');
             
-            // Show a prominent no models message
+            // Show a prominent no models message (escape message to prevent XSS)
             errorSection.innerHTML = '<div style="display: flex; flex-direction: column; gap: 12px;">' +
                 '<div style="display: flex; align-items: center; gap: 8px;">' +
                 '<span style="font-size: 24px;">⚠️</span>' +
                 '<strong>No Language Models Available</strong>' +
                 '</div>' +
-                '<p style="margin: 0;">' + message + '</p>' +
+                '<p style="margin: 0;">' + escapeHtml(message) + '</p>' +
                 '<p style="margin: 0; font-size: 12px; opacity: 0.8;">' +
                 'To use PICK, you need a language model extension installed and enabled. ' +
                 'We recommend installing the GitHub Copilot extension.' +

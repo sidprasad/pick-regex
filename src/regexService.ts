@@ -222,9 +222,9 @@ export async function generateRegexFromDescription(
     if (error instanceof vscode.LanguageModelError) {
       const errorCode = error.code;
       // Check for permission-related errors
-      // Common error codes: 'NoPermissions', 'Blocked', etc.
+      // LanguageModelError codes are strings like 'NoPermissions', 'Blocked', etc.
       if (errorCode === 'NoPermissions' || 
-          errorCode === vscode.LanguageModelError.NoPermissions.toString() ||
+          errorCode === 'Blocked' ||
           error.message.toLowerCase().includes('permission') ||
           error.message.toLowerCase().includes('not allowed')) {
         logger.error(error, 'Permission denied for language model access');
