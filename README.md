@@ -1,5 +1,9 @@
 # PICK — Regex builder for VS Code
 
+[![CI](https://github.com/sidprasad/pick-regex/actions/workflows/ci.yml/badge.svg)](https://github.com/sidprasad/pick-regex/actions/workflows/ci.yml)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/SiddharthaPrasad.pick-regex?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.pick-regex)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 PICK (Pairwise Iterative-Choice Knockout) is an algorithm that enables you to make smart use of generative AI (GenAI) to generate regular expressions.
 
 Normally, a programmer asks GenAI to generate a regex, maybe stares hard at the output, and then, left without much of a choice, pastes it into code. The regex generated may be what makes most sense based on the GenAI's training set, but may not match your specific needs. How would you know?
@@ -33,6 +37,19 @@ PICK is currently implemented as an extension to Visual Studio Code (VSC).
    - Unsure: skip
 8. Continue until PICK terminates or you are satisfied with the regex(es).
 9. Copy or insert the final regex, if any. Otherwise refine your query. If you find yourself in this situation, don't start over! Instead, *revise* the existing description. When you do this, PICK will preserve all the classification work you've done and automatically apply it to the new candidate regexes.
+
+---
+
+## Demo
+
+<!-- TODO: Add GIF/screenshot demonstrating PICK in action -->
+
+Here's what using PICK looks like:
+
+1. **Enter a description** — Type what kind of pattern you need (e.g., "email addresses" or "US phone numbers")
+2. **Review candidates** — PICK generates multiple regex candidates and shows you example strings
+3. **Vote on examples** — Upvote strings that match your intent, downvote ones that don't
+4. **Get your regex** — PICK narrows down to the best regex based on your feedback
 
 ---
 
