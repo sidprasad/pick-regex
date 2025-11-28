@@ -148,30 +148,8 @@ export async function generateRegexFromDescription(
   description: string,
   token: vscode.CancellationToken
 ): Promise<RegexGenerationResult> {
-  // Read configuration
-  const config = vscode.workspace.getConfiguration('pick');
-  const vendor = config.get<string>('llm.vendor', 'copilot');
-  const family = config.get<string>('llm.family', 'gpt-4o');
-
-  // First, try to get models with specific vendor and family
-  let models = await vscode.lm.selectChatModels({
-    vendor: vendor,
-    family: family
-  });
-
-  // If no models found with specific configuration, try with just vendor
-  if (models.length === 0 && vendor) {
-    logger.info(`No models found for vendor="${vendor}" and family="${family}", trying vendor only...`);
-    models = await vscode.lm.selectChatModels({
-      vendor: vendor
-    });
-  }
-
-  // If still no models, try to get any available model
-  if (models.length === 0) {
-    logger.info('No models found with configured vendor, getting any available model...');
-    models = await vscode.lm.selectChatModels({});
-  }
+  // Get any available language model - VS Code handles the model selection
+  const models = await vscode.lm.selectChatModels({});
 
   if (models.length === 0) {
     throw new NoModelsAvailableError();
@@ -179,11 +157,6 @@ export async function generateRegexFromDescription(
 
   const model = models[0];
   logger.info(`Using model: ${model.name} (vendor: ${model.vendor}, family: ${model.family})`);
-
-  // Log if we're using a different model than configured
-  if (model.vendor !== vendor || model.family !== family) {
-    logger.warn(`Configured model (vendor: ${vendor}, family: ${family}) not available. Using: ${model.name} instead.`);
-  }
 
   // Build prompt: ask for multiple candidate regexes with explanations and confidence scores
   const messages: vscode.LanguageModelChatMessage[] = [

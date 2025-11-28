@@ -74,17 +74,6 @@
           "default": 2,
           "minimum": 1,
           "description": "Number of negative votes required to eliminate a candidate regex"
-        },
-        "pick.llm.vendor": {
-          "type": "string",
-          "default": "copilot",
-          "enum": ["copilot", "openai", "anthropic"],
-          "description": "LLM vendor to use for generating candidate regexes"
-        },
-        "pick.llm.family": {
-          "type": "string",
-          "default": "gpt-4o",
-          "description": "LLM model family to use (e.g., gpt-4o, claude-3-5-sonnet, o1-preview)"
         }
       }
     }
