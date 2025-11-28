@@ -78,7 +78,11 @@
         "pick.llm.vendor": {
           "type": "string",
           "default": "copilot",
-          "enum": ["copilot", "openai", "anthropic"],
+          "enum": [
+            "copilot",
+            "openai",
+            "anthropic"
+          ],
           "description": "LLM vendor to use for generating candidate regexes"
         },
         "pick.llm.family": {
@@ -102,6 +106,7 @@
     "test:analyzer": "npm run compile && mocha --ui tdd --timeout 8000 out/test/regexAnalyzer.test.js"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^0.1.83",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.95.0",
@@ -109,6 +114,7 @@
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.1",
     "mocha": "^10.7.3",
+    "sharp": "^0.34.5",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.3",
     "vsce": "^2.9.0"
