@@ -3,6 +3,7 @@
   "displayName": "PICK: Regex Builder",
   "description": "Generate a REGEX from an LLM, then refine it by human classification.",
   "publisher": "SiddharthaPrasad",
+  "icon": "images/icon.png",
   "license": "MIT",
   "version": "0.1.4",
   "repository": {
