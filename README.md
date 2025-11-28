@@ -22,16 +22,17 @@ In short: You will be shown a pair of strings. For each one, you vote (or mark y
 PICK is currently implemented as an extension to Visual Studio Code (VSC).
 
 1. Install the “PICK: Regex Builder” extension from the VSC Marketplace.
-2. Go to the Activity Bar and choose the extension's View.
-3. The first time you use PICK, VSC will ask you to allow the extension to use Language Models. **You must grant this permission for PICK to work.**
-4. Describe the pattern for which you want an regex (e.g., “IPv4 addresses”). In our experience, short, precise descriptions produce better LLM results than long, complicated ones. But if you are too concise, you leave open too many interpretations, so make sure you provide enough detail.
-5. Click the button to generate candidate regexes.
-6. Classify the presented example strings:
+2. Ensure you have a language model extension installed (e.g., GitHub Copilot) and are signed in.
+3. Go to the Activity Bar and choose the extension's View.
+4. The first time you use PICK, VS Code will ask you to allow the extension to use Language Models. **You must click "Allow" for PICK to work.** If no models are detected, PICK will show a helpful message explaining what to do.
+5. Describe the pattern for which you want an regex (e.g., “IPv4 addresses”). In our experience, short, precise descriptions produce better LLM results than long, complicated ones. But if you are too concise, you leave open too many interpretations, so make sure you provide enough detail.
+6. Click the button to generate candidate regexes.
+7. Classify the presented example strings:
    - Upvote: the string matches the pattern you want
    - Downvote: the string does not match the pattern you want
    - Unsure: skip
-7. Continue until PICK terminates or you are satisfied with the regex(es).
-8. Copy or insert the final regex, if any. Otherwise refine your query. If you find yourself in this situation, don't start over! Instead, *revise* the existing description. When you do this, PICK will preserve all the classification work you've done and automatically apply it to the new candidate regexes.
+8. Continue until PICK terminates or you are satisfied with the regex(es).
+9. Copy or insert the final regex, if any. Otherwise refine your query. If you find yourself in this situation, don't start over! Instead, *revise* the existing description. When you do this, PICK will preserve all the classification work you've done and automatically apply it to the new candidate regexes.
 
 ---
 
@@ -77,11 +78,23 @@ using them.
 
 ---
 
+## Prerequisites
+
+PICK requires a language model extension to be installed and enabled in VS Code. We recommend:
+
+- **GitHub Copilot**: Install from the VS Code Marketplace and sign in with your GitHub account.
+
+When you first use PICK, VS Code will prompt you to grant permission for the extension to use Language Models. **You must click "Allow" for PICK to work.** If you accidentally dismiss this prompt, PICK will show a clear error message explaining how to proceed.
+
+---
+
 ## Reporting Problems or Making Suggestions
 
 | Before you report…                      | …please note                                                                                 |
 | --------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Candidate generation fails              | The LLM permission popup may not yet have been approved.                                     |
+| No language models available            | Install a language model extension like GitHub Copilot and ensure you are signed in.          |
+| Permission required error               | Click "Allow" when VS Code prompts you to grant PICK access to Language Models.              |
+| Candidate generation fails              | Check if you have an active internet connection and the LLM service is available.            |
 | Timeouts                                | Extremely complex regexes may exceed analysis limits; simplify the prompt.                   |
 | Cancel does not stop a task             | Cancellation is iffy. Please reload the PICK view or restart the Extension Development Host. |
 
