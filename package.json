@@ -75,6 +75,11 @@
           "default": 2,
           "minimum": 1,
           "description": "Number of negative votes required to eliminate a candidate regex"
+        },
+        "pick.surveyPromptEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable the survey prompt after using PICK multiple times"
         }
       }
     }

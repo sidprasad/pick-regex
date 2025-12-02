@@ -1,0 +1,100 @@
+import * as vscode from 'vscode';
+import { logger } from './logger';
+
+/**
+ * Manages survey prompt logic for collecting user feedback after N uses
+ */
+export class SurveyPrompt {
+  private static readonly USAGE_COUNT_KEY = 'pick.usageCount';
+  private static readonly SURVEY_DISMISSED_KEY = 'pick.surveyDismissed';
+  private static readonly USAGE_THRESHOLD = 3;
+  // TODO: Replace with actual survey URL when available
+  // For now, we'll use the GitHub repository as a fallback
+  private static readonly SURVEY_URL = 'https://github.com/sidprasad/pick-regex/discussions';
+  private static readonly MARKETPLACE_URL = 'https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.pick-regex&ssr=false#review-details';
+  
+  constructor(private context: vscode.ExtensionContext) {}
+
+  /**
+   * Increment usage count and potentially show survey prompt
+   */
+  async incrementUsageAndCheckPrompt(): Promise<void> {
+    // Check if survey prompt is enabled in configuration
+    const config = vscode.workspace.getConfiguration('pick');
+    const surveyEnabled = config.get<boolean>('surveyPromptEnabled', true);
+    
+    if (!surveyEnabled) {
+      logger.info('Survey prompt is disabled in configuration');
+      return;
+    }
+
+    // Check if user has already dismissed the survey
+    const dismissed = this.context.globalState.get<boolean>(SurveyPrompt.SURVEY_DISMISSED_KEY, false);
+    if (dismissed) {
+      return;
+    }
+
+    // Get current usage count
+    const usageCount = this.context.globalState.get<number>(SurveyPrompt.USAGE_COUNT_KEY, 0);
+    const newCount = usageCount + 1;
+    
+    // Update usage count
+    await this.context.globalState.update(SurveyPrompt.USAGE_COUNT_KEY, newCount);
+    logger.info(`PICK usage count: ${newCount}`);
+
+    // Show prompt after threshold is reached
+    if (newCount === SurveyPrompt.USAGE_THRESHOLD) {
+      await this.showSurveyPrompt();
+    }
+  }
+
+  /**
+   * Show the survey prompt to the user
+   */
+  private async showSurveyPrompt(): Promise<void> {
+    const message = 'PICK is a research tool. It helps us justify it to our funders if we collect user feedback. We would appreciate it if you filled out this short survey or gave us a rating on the store.';
+    
+    const surveyOption = 'Share Feedback';
+    const rateOption = 'Rate on Marketplace';
+    const dismissOption = 'Dismiss';
+    const dontAskOption = "Don't Ask Again";
+
+    const choice = await vscode.window.showInformationMessage(
+      message,
+      surveyOption,
+      rateOption,
+      dismissOption,
+      dontAskOption
+    );
+
+    if (choice === surveyOption) {
+      // Open survey in browser
+      logger.info('User chose to share feedback');
+      await vscode.env.openExternal(vscode.Uri.parse(SurveyPrompt.SURVEY_URL));
+      // Mark as dismissed so we don't show it again
+      await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
+    } else if (choice === rateOption) {
+      // Open marketplace page in browser
+      logger.info('User chose to rate on marketplace');
+      await vscode.env.openExternal(vscode.Uri.parse(SurveyPrompt.MARKETPLACE_URL));
+      // Mark as dismissed so we don't show it again
+      await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
+    } else if (choice === dontAskOption) {
+      // Mark as dismissed permanently
+      logger.info('User chose not to be asked again');
+      await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
+    } else {
+      // User dismissed or clicked Dismiss - we can ask again later
+      logger.info('User dismissed survey prompt');
+    }
+  }
+
+  /**
+   * Reset usage tracking (for testing purposes)
+   */
+  async resetUsageTracking(): Promise<void> {
+    await this.context.globalState.update(SurveyPrompt.USAGE_COUNT_KEY, 0);
+    await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, false);
+    logger.info('Reset usage tracking');
+  }
+}

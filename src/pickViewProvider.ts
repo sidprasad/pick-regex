@@ -6,6 +6,7 @@ import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailabl
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
 import { openIssueReport } from './issueReporter';
+import { SurveyPrompt } from './surveyPrompt';
 
 export class PickViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'pick.pickView';
@@ -14,7 +15,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private analyzer = createRegexAnalyzer();
   private cancellationTokenSource?: vscode.CancellationTokenSource;
 
-  constructor(private readonly extensionUri: vscode.Uri) {
+  constructor(
+    private readonly extensionUri: vscode.Uri,
+    private readonly surveyPrompt: SurveyPrompt
+  ) {
     this.controller = new PickController();
   }
 
@@ -500,6 +504,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           wordsIn,
           wordsOut
         });
+        
+        // Track usage completion and potentially show survey prompt
+        await this.surveyPrompt.incrementUsageAndCheckPrompt();
+        
         return;
       }
       
@@ -513,6 +521,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         wordsOut,
         status
       });
+      
+      // Track usage completion and potentially show survey prompt
+      await this.surveyPrompt.incrementUsageAndCheckPrompt();
     } catch (error) {
       logger.error(error, 'Error showing final results');
       this.sendMessage({
