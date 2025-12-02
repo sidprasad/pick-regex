@@ -57,6 +57,9 @@ All settings appear under the `pick` section in VS Code Settings.
 - `pick.eliminationThreshold` (number, default: 2)  
   Number of negative votes required to eliminate a candidate.
 
+- `pick.surveyPromptEnabled` (boolean, default: true)  
+  Enable or disable the feedback survey prompt that appears after using PICK multiple times.
+
 ---
 
 ## Disclaimer
