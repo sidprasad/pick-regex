@@ -8,31 +8,28 @@ export class SurveyPrompt {
   private static readonly USAGE_COUNT_KEY = 'pick.usageCount';
   private static readonly SURVEY_DISMISSED_KEY = 'pick.surveyDismissed';
   private static readonly USAGE_THRESHOLD = 3;
-  // TODO: Replace with actual survey URL when available
-  // For now, we'll use the GitHub repository as a fallback
   private static readonly SURVEY_URL = 'https://brown.co1.qualtrics.com/jfe/form/SV_a90QURkTTwI9eHY';
   private static readonly MARKETPLACE_URL = 'https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.pick-regex&ssr=false#review-details';
   
   constructor(private context: vscode.ExtensionContext) {}
 
   /**
-   * Increment usage count and check if survey should be shown
-   * Returns true if survey should be displayed
+   * Increment usage count and potentially show survey prompt
    */
-  async incrementUsageAndCheckPrompt(): Promise<boolean> {
+  async incrementUsageAndCheckPrompt(): Promise<void> {
     // Check if survey prompt is enabled in configuration
     const config = vscode.workspace.getConfiguration('pick');
     const surveyEnabled = config.get<boolean>('surveyPromptEnabled', true);
     
     if (!surveyEnabled) {
       logger.info('Survey prompt is disabled in configuration');
-      return false;
+      return;
     }
 
     // Check if user has already dismissed the survey
     const dismissed = this.context.globalState.get<boolean>(SurveyPrompt.SURVEY_DISMISSED_KEY, false);
     if (dismissed) {
-      return false;
+      return;
     }
 
     // Get current usage count
@@ -43,50 +40,51 @@ export class SurveyPrompt {
     await this.context.globalState.update(SurveyPrompt.USAGE_COUNT_KEY, newCount);
     logger.info(`PICK usage count: ${newCount}`);
 
-    // Check if we should show the survey
-    if (newCount >= SurveyPrompt.USAGE_THRESHOLD) {
-      return true;
+    // Show prompt after threshold is reached (exactly at 3rd use)
+    if (newCount === SurveyPrompt.USAGE_THRESHOLD) {
+      await this.showSurveyPrompt();
     }
+  }
+
+  /**
+   * Show the survey prompt to the user using VS Code's standard information message
+   */
+  private async showSurveyPrompt(): Promise<void> {
+    const message = 'PICK is a research tool. It helps us justify it to our funders if we collect user feedback. Would you help by sharing feedback or rating us?';
     
-    return false;
-  }
+    const surveyOption = 'Share Feedback';
+    const rateOption = 'Rate Extension';
+    const dismissOption = 'Dismiss';
+    const dontAskOption = "Don't Ask Again";
 
-  /**
-   * Get survey and marketplace URLs
-   */
-  getSurveyUrls(): { surveyUrl: string; marketplaceUrl: string } {
-    return {
-      surveyUrl: SurveyPrompt.SURVEY_URL,
-      marketplaceUrl: SurveyPrompt.MARKETPLACE_URL
-    };
-  }
+    const choice = await vscode.window.showInformationMessage(
+      message,
+      surveyOption,
+      rateOption,
+      dismissOption,
+      dontAskOption
+    );
 
-  /**
-   * Mark survey as dismissed
-   */
-  async dismissSurvey(): Promise<void> {
-    await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
-    logger.info('Survey dismissed permanently');
-  }
-
-  /**
-   * Check if survey should be shown (without incrementing)
-   */
-  shouldShowSurvey(): boolean {
-    const config = vscode.workspace.getConfiguration('pick');
-    const surveyEnabled = config.get<boolean>('surveyPromptEnabled', true);
-    
-    if (!surveyEnabled) {
-      return false;
+    if (choice === surveyOption) {
+      // Open survey in browser
+      logger.info('User chose to share feedback');
+      await vscode.env.openExternal(vscode.Uri.parse(SurveyPrompt.SURVEY_URL));
+      // Mark as dismissed so we don't show it again
+      await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
+    } else if (choice === rateOption) {
+      // Open marketplace page in browser
+      logger.info('User chose to rate on marketplace');
+      await vscode.env.openExternal(vscode.Uri.parse(SurveyPrompt.MARKETPLACE_URL));
+      // Mark as dismissed so we don't show it again
+      await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
+    } else if (choice === dontAskOption) {
+      // Mark as dismissed permanently
+      logger.info('User chose not to be asked again');
+      await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
+    } else {
+      // User dismissed or clicked Dismiss - we can ask again later
+      logger.info('User dismissed survey prompt');
     }
-
-    const dismissed = this.context.globalState.get<boolean>(SurveyPrompt.SURVEY_DISMISSED_KEY, false);
-    if (dismissed) {
-      return false;
-    }
-
-    const usageCount = this.context.globalState.get<number>(SurveyPrompt.USAGE_COUNT_KEY, 0);
-    return usageCount >= SurveyPrompt.USAGE_THRESHOLD;
   }
 
   /**

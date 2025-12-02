@@ -40,7 +40,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     this.checkAvailableModels();
 
     // Handle messages from the webview
-    webviewView.webview.onDidReceiveMessage(async (data) => {
+     webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.type) {
         case 'generateCandidates':
           await this.handleGenerateCandidates(data.prompt, data.modelId);
@@ -86,12 +86,6 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
             logger.error(error, 'Failed to open issue report');
             this.sendMessage({ type: 'error', message: 'Failed to open issue report' });
           }
-          break;
-        case 'dismissSurvey':
-          await this.handleDismissSurvey();
-          break;
-        case 'openSurveyUrl':
-          await this.handleOpenSurveyUrl(data.url);
           break;
       }
     });
@@ -501,10 +495,6 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         .filter(record => record.classification === 'reject')
         .map(record => record.word);
       
-      // Check if survey should be shown and get URLs
-      const showSurvey = await this.surveyPrompt.incrementUsageAndCheckPrompt();
-      const surveyUrls = showSurvey ? this.surveyPrompt.getSurveyUrls() : undefined;
-      
       if (finalRegex === null) {
         // All candidates were eliminated - none are correct
         this.sendMessage({
@@ -512,10 +502,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           message: 'No candidate regexes match your requirements.',
           candidateDetails: this.controller.getStatus().candidateDetails,
           wordsIn,
-          wordsOut,
-          showSurvey,
-          surveyUrls
+          wordsOut
         });
+        
+        // Track usage completion and potentially show survey prompt
+        await this.surveyPrompt.incrementUsageAndCheckPrompt();
         
         return;
       }
@@ -528,10 +519,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         regex: finalRegex,
         wordsIn,
         wordsOut,
-        status,
-        showSurvey,
-        surveyUrls
+        status
       });
+      
+      // Track usage completion and potentially show survey prompt
+      await this.surveyPrompt.incrementUsageAndCheckPrompt();
     } catch (error) {
       logger.error(error, 'Error showing final results');
       this.sendMessage({
@@ -753,24 +745,6 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     this.controller.reset(preserveClassifications);
     logger.info(`Reset requested from webview (preserveClassifications: ${preserveClassifications}).`);
     this.sendMessage({ type: 'reset', preserveClassifications });
-  }
-
-  private async handleDismissSurvey() {
-    await this.surveyPrompt.dismissSurvey();
-    logger.info('Survey dismissed from webview');
-    this.sendMessage({ type: 'surveyDismissed' });
-  }
-
-  private async handleOpenSurveyUrl(urlType: string) {
-    const urls = this.surveyPrompt.getSurveyUrls();
-    const url = urlType === 'survey' ? urls.surveyUrl : urls.marketplaceUrl;
-    
-    try {
-      await vscode.env.openExternal(vscode.Uri.parse(url));
-      logger.info(`Opened ${urlType} URL: ${url}`);
-    } catch (error) {
-      logger.error(error, `Failed to open ${urlType} URL`);
-    }
   }
 
   private handleCancel() {
