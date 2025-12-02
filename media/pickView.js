@@ -492,8 +492,8 @@
                     break;
                 case 'finalResult':
                     showFinalResultWithContext(message.regex, message.wordsIn, message.wordsOut, message.status);
-                    if (message.showSurvey && message.surveyUrls) {
-                        showSurveyBanner(message.surveyUrls);
+                    if (message.showSurvey) {
+                        showSurveyBanner();
                     }
                     break;
                 case 'copied':
@@ -504,8 +504,8 @@
                     break;
                 case 'noRegexFound':
                     showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut);
-                    if (message.showSurvey && message.surveyUrls) {
-                        showSurveyBanner(message.surveyUrls);
+                    if (message.showSurvey) {
+                        showSurveyBanner();
                     }
                     break;
                 case 'insufficientWords':
@@ -516,6 +516,9 @@
                     break;
                 case 'cancelled':
                     handleCancelled(message.message);
+                    break;
+                case 'surveyDismissed':
+                    // Survey was successfully dismissed - no UI action needed
                     break;
             }
         });
@@ -1070,7 +1073,7 @@
             }, 2000);
         }
 
-        function showSurveyBanner(urls) {
+        function showSurveyBanner() {
             if (surveyBanner) {
                 surveyBanner.classList.remove('hidden');
                 // Scroll to top to make banner visible
