@@ -38,10 +38,6 @@
         const surveyRateBtn = document.getElementById('surveyRateBtn');
         const surveyDismissBtn = document.getElementById('surveyDismissBtn');
 
-        // Survey URLs (will be set when survey is shown)
-        let surveyUrl = '';
-        let marketplaceUrl = '';
-
         // Model selector elements
         const modelSelect = document.getElementById('modelSelect');
         const modelSelectorRow = document.getElementById('modelSelectorRow');
@@ -71,16 +67,12 @@
         // Survey banner event listeners
         if (surveyFeedbackBtn) {
             surveyFeedbackBtn.addEventListener('click', () => {
-                if (surveyUrl) {
-                    window.open(surveyUrl, '_blank');
-                }
+                vscode.postMessage({ type: 'openSurveyUrl', url: 'survey' });
             });
         }
         if (surveyRateBtn) {
             surveyRateBtn.addEventListener('click', () => {
-                if (marketplaceUrl) {
-                    window.open(marketplaceUrl, '_blank');
-                }
+                vscode.postMessage({ type: 'openSurveyUrl', url: 'marketplace' });
             });
         }
         if (surveyDismissBtn) {
@@ -1079,9 +1071,7 @@
         }
 
         function showSurveyBanner(urls) {
-            if (surveyBanner && urls) {
-                surveyUrl = urls.surveyUrl;
-                marketplaceUrl = urls.marketplaceUrl;
+            if (surveyBanner) {
                 surveyBanner.classList.remove('hidden');
                 // Scroll to top to make banner visible
                 surveyBanner.scrollIntoView({ behavior: 'smooth', block: 'start' });

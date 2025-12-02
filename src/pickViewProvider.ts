@@ -90,6 +90,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'dismissSurvey':
           await this.handleDismissSurvey();
           break;
+        case 'openSurveyUrl':
+          await this.handleOpenSurveyUrl(data.url);
+          break;
       }
     });
   }
@@ -756,6 +759,18 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     await this.surveyPrompt.dismissSurvey();
     logger.info('Survey dismissed from webview');
     this.sendMessage({ type: 'surveyDismissed' });
+  }
+
+  private async handleOpenSurveyUrl(urlType: string) {
+    const urls = this.surveyPrompt.getSurveyUrls();
+    const url = urlType === 'survey' ? urls.surveyUrl : urls.marketplaceUrl;
+    
+    try {
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+      logger.info(`Opened ${urlType} URL: ${url}`);
+    } catch (error) {
+      logger.error(error, `Failed to open ${urlType} URL`);
+    }
   }
 
   private handleCancel() {
