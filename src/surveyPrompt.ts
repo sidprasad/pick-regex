@@ -29,6 +29,7 @@ export class SurveyPrompt {
     // Check if user has already dismissed the survey
     const dismissed = this.context.globalState.get<boolean>(SurveyPrompt.SURVEY_DISMISSED_KEY, false);
     if (dismissed) {
+      logger.info('Survey prompt already dismissed');
       return;
     }
 
@@ -38,10 +39,11 @@ export class SurveyPrompt {
     
     // Update usage count
     await this.context.globalState.update(SurveyPrompt.USAGE_COUNT_KEY, newCount);
-    logger.info(`PICK usage count: ${newCount}`);
+    logger.info(`PICK usage count: ${newCount} (threshold: ${SurveyPrompt.USAGE_THRESHOLD})`);
 
-    // Show prompt after threshold is reached (exactly at 3rd use)
-    if (newCount === SurveyPrompt.USAGE_THRESHOLD) {
+    // Show prompt when threshold is reached (at 3rd use or later if not yet shown)
+    if (newCount >= SurveyPrompt.USAGE_THRESHOLD) {
+      logger.info('Usage threshold reached, showing survey prompt');
       await this.showSurveyPrompt();
     }
   }

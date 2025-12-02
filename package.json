@@ -57,6 +57,11 @@
         "command": "pick.reportIssue",
         "title": "PICK: Report an Issue",
         "category": "PICK Regex Builder"
+      },
+      {
+        "command": "pick.resetSurveyState",
+        "title": "PICK: Reset Survey State",
+        "category": "PICK Regex Builder"
       }
     ],
     "keybindings": [

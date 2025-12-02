@@ -23,7 +23,12 @@ export function activate(context: vscode.ExtensionContext) {
 		await openIssueReport();
 	});
 
-	context.subscriptions.push(reportIssueCommand);
+	const resetSurveyCommand = vscode.commands.registerCommand('pick.resetSurveyState', async () => {
+		await surveyPrompt.resetUsageTracking();
+		vscode.window.showInformationMessage('PICK survey state has been reset.');
+	});
+
+	context.subscriptions.push(reportIssueCommand, resetSurveyCommand);
 }
 
 // This method is called when your extension is deactivated
