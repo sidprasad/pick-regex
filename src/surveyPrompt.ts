@@ -49,21 +49,20 @@ export class SurveyPrompt {
   }
 
   /**
-   * Show the survey prompt to the user using VS Code's standard information message
+   * Show the survey prompt to the user using VS Code's modal dialog
    */
   private async showSurveyPrompt(): Promise<void> {
     const message = 'PICK is a research tool. It helps us justify it to our funders if we collect user feedback. Would you help by sharing feedback or rating us?';
     
     const surveyOption = 'Share Feedback';
     const rateOption = 'Rate Extension';
-    const dismissOption = 'Dismiss';
     const dontAskOption = "Don't Ask Again";
 
     const choice = await vscode.window.showInformationMessage(
       message,
+      { modal: true },
       surveyOption,
       rateOption,
-      dismissOption,
       dontAskOption
     );
 

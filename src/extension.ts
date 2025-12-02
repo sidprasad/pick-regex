@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const resetSurveyCommand = vscode.commands.registerCommand('pick.resetSurveyState', async () => {
 		await surveyPrompt.resetUsageTracking();
-		vscode.window.showInformationMessage('PICK survey state has been reset.');
+		vscode.window.showInformationMessage('PICK local storage has been cleared.');
 	});
 
 	context.subscriptions.push(reportIssueCommand, resetSurveyCommand);

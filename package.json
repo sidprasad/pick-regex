@@ -5,7 +5,7 @@
   "publisher": "SiddharthaPrasad",
   "icon": "images/icon.png",
   "license": "MIT",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/sidprasad/pick-regex"
@@ -60,7 +60,7 @@
       },
       {
         "command": "pick.resetSurveyState",
-        "title": "PICK: Reset Survey State",
+        "title": "PICK: Clear Local Storage",
         "category": "PICK Regex Builder"
       }
     ],
