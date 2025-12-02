@@ -805,6 +805,76 @@
             color: var(--vscode-editor-foreground);
         }
 
+        /* Survey Banner styles */
+        .survey-banner {
+            background: linear-gradient(135deg, var(--vscode-statusBarItem-prominentBackground, #007acc) 0%, var(--vscode-statusBarItem-prominentHoverBackground, #005a9e) 100%);
+            border: 2px solid var(--vscode-statusBarItem-prominentBackground, #007acc);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .survey-banner.hidden {
+            display: none;
+        }
+
+        .survey-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .survey-message {
+            color: var(--vscode-statusBar-foreground, #ffffff);
+        }
+
+        .survey-message strong {
+            font-size: 1.1em;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .survey-message p {
+            margin: 0;
+            opacity: 0.95;
+            line-height: 1.4;
+        }
+
+        .survey-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .survey-actions .btn {
+            flex: 0 0 auto;
+            font-size: 0.9em;
+        }
+
+        .survey-actions .btn.primary {
+            background: var(--vscode-button-background, #0e639c);
+            color: var(--vscode-button-foreground, #ffffff);
+        }
+
+        .survey-actions .btn.primary:hover {
+            background: var(--vscode-button-hoverBackground, #1177bb);
+        }
+
+        .survey-actions .btn:not(.primary) {
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--vscode-statusBar-foreground, #ffffff);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .survey-actions .btn:not(.primary):hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .survey-actions .btn.secondary {
+            opacity: 0.85;
+        }
+
         /* Modal styles */
         .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 500; }
         .modal.hidden { display: none; }

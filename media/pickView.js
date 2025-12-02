@@ -32,6 +32,16 @@
         const finalPromptDisplay = document.getElementById('finalPromptDisplay');
         const reportIssueBtn = document.getElementById('reportIssueBtn');
 
+        // Survey banner elements
+        const surveyBanner = document.getElementById('surveyBanner');
+        const surveyFeedbackBtn = document.getElementById('surveyFeedbackBtn');
+        const surveyRateBtn = document.getElementById('surveyRateBtn');
+        const surveyDismissBtn = document.getElementById('surveyDismissBtn');
+
+        // Survey URLs (will be set when survey is shown)
+        let surveyUrl = '';
+        let marketplaceUrl = '';
+
         // Model selector elements
         const modelSelect = document.getElementById('modelSelect');
         const modelSelectorRow = document.getElementById('modelSelectorRow');
@@ -55,6 +65,28 @@
         if (reportIssueBtn) {
             reportIssueBtn.addEventListener('click', () => {
                 vscode.postMessage({ type: 'reportIssue' });
+            });
+        }
+        
+        // Survey banner event listeners
+        if (surveyFeedbackBtn) {
+            surveyFeedbackBtn.addEventListener('click', () => {
+                if (surveyUrl) {
+                    window.open(surveyUrl, '_blank');
+                }
+            });
+        }
+        if (surveyRateBtn) {
+            surveyRateBtn.addEventListener('click', () => {
+                if (marketplaceUrl) {
+                    window.open(marketplaceUrl, '_blank');
+                }
+            });
+        }
+        if (surveyDismissBtn) {
+            surveyDismissBtn.addEventListener('click', () => {
+                surveyBanner.classList.add('hidden');
+                vscode.postMessage({ type: 'dismissSurvey' });
             });
         }
         
@@ -468,6 +500,9 @@
                     break;
                 case 'finalResult':
                     showFinalResultWithContext(message.regex, message.wordsIn, message.wordsOut, message.status);
+                    if (message.showSurvey && message.surveyUrls) {
+                        showSurveyBanner(message.surveyUrls);
+                    }
                     break;
                 case 'copied':
                     showStatusWithoutCancel('Copied to clipboard');
@@ -477,6 +512,9 @@
                     break;
                 case 'noRegexFound':
                     showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut);
+                    if (message.showSurvey && message.surveyUrls) {
+                        showSurveyBanner(message.surveyUrls);
+                    }
                     break;
                 case 'insufficientWords':
                     showInsufficientWords(message.candidates, message.status);
@@ -1022,6 +1060,10 @@
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
+            // Hide survey banner on reset
+            if (surveyBanner) {
+                surveyBanner.classList.add('hidden');
+            }
         }
 
         function handleCancelled(message) {
@@ -1034,6 +1076,16 @@
             setTimeout(function() {
                 resetUI(false);
             }, 2000);
+        }
+
+        function showSurveyBanner(urls) {
+            if (surveyBanner && urls) {
+                surveyUrl = urls.surveyUrl;
+                marketplaceUrl = urls.marketplaceUrl;
+                surveyBanner.classList.remove('hidden');
+                // Scroll to top to make banner visible
+                surveyBanner.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         }
 
         // Make functions available globally for inline onclick handlers

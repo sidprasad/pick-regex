@@ -16,22 +16,23 @@ export class SurveyPrompt {
   constructor(private context: vscode.ExtensionContext) {}
 
   /**
-   * Increment usage count and potentially show survey prompt
+   * Increment usage count and check if survey should be shown
+   * Returns true if survey should be displayed
    */
-  async incrementUsageAndCheckPrompt(): Promise<void> {
+  async incrementUsageAndCheckPrompt(): Promise<boolean> {
     // Check if survey prompt is enabled in configuration
     const config = vscode.workspace.getConfiguration('pick');
     const surveyEnabled = config.get<boolean>('surveyPromptEnabled', true);
     
     if (!surveyEnabled) {
       logger.info('Survey prompt is disabled in configuration');
-      return;
+      return false;
     }
 
     // Check if user has already dismissed the survey
     const dismissed = this.context.globalState.get<boolean>(SurveyPrompt.SURVEY_DISMISSED_KEY, false);
     if (dismissed) {
-      return;
+      return false;
     }
 
     // Get current usage count
@@ -42,51 +43,50 @@ export class SurveyPrompt {
     await this.context.globalState.update(SurveyPrompt.USAGE_COUNT_KEY, newCount);
     logger.info(`PICK usage count: ${newCount}`);
 
-    // Show prompt after threshold is reached
-    if (newCount === SurveyPrompt.USAGE_THRESHOLD) {
-      await this.showSurveyPrompt();
+    // Check if we should show the survey
+    if (newCount >= SurveyPrompt.USAGE_THRESHOLD) {
+      return true;
     }
+    
+    return false;
   }
 
   /**
-   * Show the survey prompt to the user
+   * Get survey and marketplace URLs
    */
-  private async showSurveyPrompt(): Promise<void> {
-    const message = 'PICK is a research tool. It helps us justify it to our funders if we collect user feedback. Would you help by sharing feedback or rating us?';
+  getSurveyUrls(): { surveyUrl: string; marketplaceUrl: string } {
+    return {
+      surveyUrl: SurveyPrompt.SURVEY_URL,
+      marketplaceUrl: SurveyPrompt.MARKETPLACE_URL
+    };
+  }
+
+  /**
+   * Mark survey as dismissed
+   */
+  async dismissSurvey(): Promise<void> {
+    await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
+    logger.info('Survey dismissed permanently');
+  }
+
+  /**
+   * Check if survey should be shown (without incrementing)
+   */
+  shouldShowSurvey(): boolean {
+    const config = vscode.workspace.getConfiguration('pick');
+    const surveyEnabled = config.get<boolean>('surveyPromptEnabled', true);
     
-    const surveyOption = 'Share Feedback';
-    const rateOption = 'Rate Extension';
-    const dismissOption = 'Dismiss';
-    const dontAskOption = "Don't Ask Again";
-
-    const choice = await vscode.window.showInformationMessage(
-      message,
-      surveyOption,
-      rateOption,
-      dismissOption,
-      dontAskOption
-    );
-
-    if (choice === surveyOption) {
-      // Open survey in browser
-      logger.info('User chose to share feedback');
-      await vscode.env.openExternal(vscode.Uri.parse(SurveyPrompt.SURVEY_URL));
-      // Mark as dismissed so we don't show it again
-      await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
-    } else if (choice === rateOption) {
-      // Open marketplace page in browser
-      logger.info('User chose to rate on marketplace');
-      await vscode.env.openExternal(vscode.Uri.parse(SurveyPrompt.MARKETPLACE_URL));
-      // Mark as dismissed so we don't show it again
-      await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
-    } else if (choice === dontAskOption) {
-      // Mark as dismissed permanently
-      logger.info('User chose not to be asked again');
-      await this.context.globalState.update(SurveyPrompt.SURVEY_DISMISSED_KEY, true);
-    } else {
-      // User dismissed or clicked Dismiss - we can ask again later
-      logger.info('User dismissed survey prompt');
+    if (!surveyEnabled) {
+      return false;
     }
+
+    const dismissed = this.context.globalState.get<boolean>(SurveyPrompt.SURVEY_DISMISSED_KEY, false);
+    if (dismissed) {
+      return false;
+    }
+
+    const usageCount = this.context.globalState.get<number>(SurveyPrompt.USAGE_COUNT_KEY, 0);
+    return usageCount >= SurveyPrompt.USAGE_THRESHOLD;
   }
 
   /**

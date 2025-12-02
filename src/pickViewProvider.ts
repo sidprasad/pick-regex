@@ -87,6 +87,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
             this.sendMessage({ type: 'error', message: 'Failed to open issue report' });
           }
           break;
+        case 'dismissSurvey':
+          await this.handleDismissSurvey();
+          break;
       }
     });
   }
@@ -495,6 +498,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         .filter(record => record.classification === 'reject')
         .map(record => record.word);
       
+      // Check if survey should be shown and get URLs
+      const showSurvey = await this.surveyPrompt.incrementUsageAndCheckPrompt();
+      const surveyUrls = showSurvey ? this.surveyPrompt.getSurveyUrls() : undefined;
+      
       if (finalRegex === null) {
         // All candidates were eliminated - none are correct
         this.sendMessage({
@@ -502,11 +509,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           message: 'No candidate regexes match your requirements.',
           candidateDetails: this.controller.getStatus().candidateDetails,
           wordsIn,
-          wordsOut
+          wordsOut,
+          showSurvey,
+          surveyUrls
         });
-        
-        // Track usage completion and potentially show survey prompt
-        await this.surveyPrompt.incrementUsageAndCheckPrompt();
         
         return;
       }
@@ -519,11 +525,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         regex: finalRegex,
         wordsIn,
         wordsOut,
-        status
+        status,
+        showSurvey,
+        surveyUrls
       });
-      
-      // Track usage completion and potentially show survey prompt
-      await this.surveyPrompt.incrementUsageAndCheckPrompt();
     } catch (error) {
       logger.error(error, 'Error showing final results');
       this.sendMessage({
@@ -745,6 +750,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     this.controller.reset(preserveClassifications);
     logger.info(`Reset requested from webview (preserveClassifications: ${preserveClassifications}).`);
     this.sendMessage({ type: 'reset', preserveClassifications });
+  }
+
+  private async handleDismissSurvey() {
+    await this.surveyPrompt.dismissSurvey();
+    logger.info('Survey dismissed from webview');
+    this.sendMessage({ type: 'surveyDismissed' });
   }
 
   private handleCancel() {

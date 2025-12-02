@@ -10,6 +10,21 @@
 
 <body>
     <div class="container">
+        <!-- Survey Banner (shown after 3 uses) -->
+        <div id="surveyBanner" class="survey-banner hidden">
+            <div class="survey-content">
+                <div class="survey-message">
+                    <strong>Help us improve PICK!</strong>
+                    <p>PICK is a research tool. It helps us justify it to our funders if we collect user feedback.</p>
+                </div>
+                <div class="survey-actions">
+                    <button id="surveyFeedbackBtn" class="btn primary">Share Feedback</button>
+                    <button id="surveyRateBtn" class="btn">Rate Extension</button>
+                    <button id="surveyDismissBtn" class="btn secondary">Don't Show Again</button>
+                </div>
+            </div>
+        </div>
+        
         <!-- Status Bar (global - shown during LLM operations) -->
         <div id="statusBar" class="status-bar hidden">
             <div id="statusMessage" style="flex:1"></div>
