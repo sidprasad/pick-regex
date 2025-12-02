@@ -270,7 +270,23 @@
             equivalents.forEach(function(eq) {
                 const item = document.createElement('div');
                 item.className = 'equivalent-pattern';
-                item.innerHTML = highlightRegex(eq);
+                
+                const patternSpan = document.createElement('span');
+                patternSpan.className = 'equivalent-pattern-text';
+                patternSpan.innerHTML = highlightRegex(eq);
+                
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'btn copy';
+                copyBtn.setAttribute('data-pattern', encodeURIComponent(eq));
+                copyBtn.setAttribute('title', 'Copy alternative regex');
+                copyBtn.onclick = function() { copyRegex(decodeURIComponent(this.getAttribute('data-pattern'))); };
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
+                    '</svg>';
+                
+                item.appendChild(patternSpan);
+                item.appendChild(copyBtn);
                 list.appendChild(item);
             });
 
@@ -279,7 +295,7 @@
             toggle.type = 'button';
             toggle.setAttribute('aria-expanded', 'false');
 
-            const labelForCount = equivalents.length === 1 ? 'equivalent regex' : 'equivalent regexes';
+            const labelForCount = equivalents.length === 1 ? 'alternative' : 'alternatives';
 
             function renderToggle(expanded) {
                 const icon = expanded
@@ -290,7 +306,7 @@
                 toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
                     icon +
                     '</svg>' +
-                    '<span class="equivalent-count">' + equivalents.length + '</span>';
+                    '<span class="equivalent-count">' + equivalents.length + ' ' + labelForCount + '</span>';
             }
 
             toggle.setAttribute('title', 'Show ' + equivalents.length + ' ' + labelForCount);

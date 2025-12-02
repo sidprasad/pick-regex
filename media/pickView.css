@@ -378,6 +378,15 @@
             font-family: monospace;
             white-space: nowrap;
             overflow-x: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .equivalent-pattern-text {
+            flex: 1;
+            overflow-x: auto;
         }
 
         .equivalent-count {
