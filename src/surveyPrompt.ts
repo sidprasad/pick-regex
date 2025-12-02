@@ -52,10 +52,10 @@ export class SurveyPrompt {
    * Show the survey prompt to the user
    */
   private async showSurveyPrompt(): Promise<void> {
-    const message = 'PICK is a research tool. It helps us justify it to our funders if we collect user feedback. We would appreciate it if you filled out this short survey or gave us a rating on the store.';
+    const message = 'PICK is a research tool. It helps us justify it to our funders if we collect user feedback. Would you help by sharing feedback or rating us?';
     
     const surveyOption = 'Share Feedback';
-    const rateOption = 'Rate on Marketplace';
+    const rateOption = 'Rate Extension';
     const dismissOption = 'Dismiss';
     const dontAskOption = "Don't Ask Again";
 
