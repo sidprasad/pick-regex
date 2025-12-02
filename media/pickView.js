@@ -270,10 +270,9 @@
             equivalents.forEach(function(eq) {
                 const item = document.createElement('div');
                 item.className = 'equivalent-pattern';
-                item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; gap: 8px;';
                 
                 const patternSpan = document.createElement('span');
-                patternSpan.style.cssText = 'flex: 1; overflow-x: auto;';
+                patternSpan.className = 'equivalent-pattern-text';
                 patternSpan.innerHTML = highlightRegex(eq);
                 
                 const copyBtn = document.createElement('button');
