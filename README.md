@@ -1,5 +1,9 @@
 # PICK — Regex builder for VS Code
 
+[![CI](https://github.com/sidprasad/pick-regex/actions/workflows/ci.yml/badge.svg)](https://github.com/sidprasad/pick-regex/actions/workflows/ci.yml)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/SiddharthaPrasad.pick-regex?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.pick-regex)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 PICK (Pairwise Iterative-Choice Knockout) is an algorithm that enables you to make smart use of generative AI (GenAI) to generate regular expressions.
 
 Normally, a programmer asks GenAI to generate a regex, maybe stares hard at the output, and then, left without much of a choice, pastes it into code. The regex generated may be what makes most sense based on the GenAI's training set, but may not match your specific needs. How would you know?
@@ -46,7 +50,6 @@ PICK:
 4. shows example strings; your classification eliminate incompatible candidates.
 5. terminates when one or no candidates remain.
 
-PICK uses `@gruhn/regex-utils` for automata-based equivalence and `randexp` for example generation.
 
 ---
 
