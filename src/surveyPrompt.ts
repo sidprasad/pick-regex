@@ -52,7 +52,7 @@ export class SurveyPrompt {
    * Show the survey prompt to the user using VS Code's modal dialog
    */
   private async showSurveyPrompt(): Promise<void> {
-    const message = 'PICK is a research tool. It helps us justify it to our funders if we collect user feedback. Would you help by sharing feedback or rating us?';
+    const message = 'PICK is a research tool. It helps us justify it to our funders if we can show some user feedback. Would you help us by completing a very short, quick survey and/or by rating us?';
     
     const surveyOption = 'Share Feedback';
     const rateOption = 'Rate Extension';
