@@ -87,7 +87,9 @@
          */
         function updateModelSelector(models) {
             availableModels = models;
-            if (!modelSelect) return;
+            if (!modelSelect) {
+                return;
+            }
             
             modelSelect.innerHTML = '';
             
@@ -208,7 +210,9 @@
          * Escape HTML special characters to prevent XSS
          */
         function escapeHtml(text) {
-            if (!text) return '';
+            if (!text) {
+                return '';
+            }
             return text
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
