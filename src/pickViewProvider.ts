@@ -14,12 +14,20 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private controller: PickController;
   private analyzer = createRegexAnalyzer();
   private cancellationTokenSource?: vscode.CancellationTokenSource;
+  private stagnantPairCount = 0;
+  private nonEliminatingClassificationCount = 0;
+  private stagnationWarningSent = false;
+  private nextPairMaxElapsedMs?: number;
+  private forceDistinctNextPair = false;
+  private readonly stagnationStatusItem: vscode.StatusBarItem;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly surveyPrompt: SurveyPrompt
   ) {
     this.controller = new PickController();
+    this.stagnationStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    this.stagnationStatusItem.name = 'Pick: Stagnation';
   }
 
   public resolveWebviewView(
@@ -120,6 +128,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private async handleGenerateCandidates(prompt: string, modelId?: string) {
     try {
       this.sendMessage({ type: 'status', message: 'Generating candidate regexes...' });
+
+      this.resetStagnationTracking();
 
       // Generate candidate regexes using LLM
       // Dispose any existing cancellation token
@@ -344,7 +354,13 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      const pair = await this.controller.generateNextPair();
+      if (this.nextPairMaxElapsedMs) {
+        logger.info(`Using extended pair-generation timeout of ${this.nextPairMaxElapsedMs}ms due to stagnation.`);
+      }
+      const pair = await this.controller.generateNextPair({
+        maxElapsedMs: this.nextPairMaxElapsedMs,
+        requireDistinctSplit: this.forceDistinctNextPair
+      });
       const status = this.controller.getStatus();
       
       // Check cancellation before sending pair to UI
@@ -367,13 +383,19 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       
       // Check if the error is about running out of words
       const errorMessage = String(error);
-      if (errorMessage.includes('Could not generate unique word') || 
-          errorMessage.includes('Failed to generate') ||
-          errorMessage.includes('Exhausted word space')) {
+      const isExhaustionError = errorMessage.includes('Exhausted word space') ||
+        errorMessage.includes('Could not generate unique word') ||
+        errorMessage.includes('Unable to generate more distinguishing words');
+
+      if (isExhaustionError) {
         // We ran out of words - show best candidates so far
         const status = this.controller.getStatus();
         const activeCandidates = status.candidateDetails.filter(c => !c.eliminated);
-        
+
+        // Clear any lingering stagnation UI so users don't see both exhaustion and
+        // "working to generate" messages at the same time.
+        this.resetStagnationTracking();
+
         // Send a single consolidated message about word exhaustion
         this.sendMessage({
           type: 'insufficientWords',
@@ -381,10 +403,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           status,
           message: `Unable to generate more distinguishing words. ${activeCandidates.length} candidate(s) remain.`
         });
+      } else if (errorMessage.includes('Timed out while searching for a distinguishing pair') ||
+                 errorMessage.includes('Timed out while collecting candidate-matching words')) {
+        // Preserve stagnation context but surface a clear timeout message
+        this.sendMessage({
+          type: 'error',
+          message: 'Timed out while searching for a distinguishing pair. The remaining candidates may be too similar. Try resetting or refining your prompt.'
+        });
       } else {
         // For other errors, send a clean error message
         const cleanErrorMessage = error instanceof Error ? error.message : String(error);
-        this.sendMessage({ 
+        this.sendMessage({
           type: 'error', 
           message: `Error generating pair: ${cleanErrorMessage}` 
         });
@@ -394,19 +423,25 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleClassifyWord(word: string, classification: string) {
     try {
+      const previousStatus = this.controller.getStatus();
       const classificationEnum = classification as WordClassification;
       this.controller.classifyWord(word, classificationEnum);
-      
+
       const state = this.controller.getState();
       const status = this.controller.getStatus();
-      
+      const bothClassified = this.controller.areBothWordsClassified();
+
+      const activeCountDropped = status.activeCandidates < previousStatus.activeCandidates;
+
+      this.updateStagnationTracking(status, activeCountDropped);
+
       if (state === PickState.FINAL_RESULT) {
         await this.handleFinalResult();
       } else {
         // Check if both words are classified
-        if (this.controller.areBothWordsClassified()) {
+        if (bothClassified) {
           this.controller.clearCurrentPair();
-          
+
           // Send updated status
           this.sendMessage({
             type: 'wordClassified',
@@ -456,10 +491,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleVote(acceptedWord: string) {
     try {
+      const previousStatus = this.controller.getStatus();
       this.controller.processVote(acceptedWord);
-      
+
       const state = this.controller.getState();
       const status = this.controller.getStatus();
+      const activeCountDropped = status.activeCandidates < previousStatus.activeCandidates;
+
+      this.updateStagnationTracking(status, activeCountDropped);
       
       if (state === PickState.FINAL_RESULT) {
         await this.handleFinalResult();
@@ -536,6 +575,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private async handleRefineCandidates(prompt: string, modelId?: string) {
     try {
       this.sendMessage({ type: 'status', message: 'Refining with new candidates...' });
+
+      this.resetStagnationTracking();
 
       // Get session data before refinement
       const sessionData = this.controller.getSessionData();
@@ -743,6 +784,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private handleReset(preserveClassifications = false) {
     this.controller.reset(preserveClassifications);
+    this.resetStagnationTracking();
     logger.info(`Reset requested from webview (preserveClassifications: ${preserveClassifications}).`);
     this.sendMessage({ type: 'reset', preserveClassifications });
   }
@@ -756,15 +798,29 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       // Don't dispose or set to undefined yet - ongoing operations still need to check isCancellationRequested
       // The token will be disposed and replaced when a new operation starts
     }
-    
+
     // Reset controller state
     this.controller.reset(false);
-    
+
+    this.resetStagnationTracking();
+
     // Notify webview
-    this.sendMessage({ 
-      type: 'cancelled', 
-      message: 'Operation cancelled by user.' 
+    this.sendMessage({
+      type: 'cancelled',
+      message: 'Operation cancelled by user.'
     });
+  }
+
+  /**
+   * Reset counters used to detect when classification is not providing new information.
+   */
+  private resetStagnationTracking() {
+    this.stagnantPairCount = 0;
+    this.nonEliminatingClassificationCount = 0;
+    this.stagnationWarningSent = false;
+    this.nextPairMaxElapsedMs = undefined;
+    this.forceDistinctNextPair = false;
+    this.hideStagnationStatus();
   }
 
   /**
@@ -912,6 +968,55 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
 
     return { uniqueRegexes: unique, equivalenceMap: finalMap };
+  }
+
+  /**
+   * Detect when repeated classifications are not reducing the active candidate set
+   * and notify the user that the remaining regexes are very similar.
+   */
+  private updateStagnationTracking(status: ReturnType<PickController['getStatus']>, activeCountDropped: boolean) {
+    if (activeCountDropped) {
+      this.stagnantPairCount = 0;
+      this.nonEliminatingClassificationCount = 0;
+      this.stagnationWarningSent = false;
+      this.nextPairMaxElapsedMs = undefined;
+      this.forceDistinctNextPair = false;
+      this.hideStagnationStatus();
+      return;
+    }
+
+    this.nonEliminatingClassificationCount++;
+
+    if (this.nonEliminatingClassificationCount >= 3 && !this.stagnationWarningSent) {
+      // Track pair stagnation separately for legacy logging while keeping the classification-based trigger.
+      this.stagnantPairCount++;
+      this.stagnationWarningSent = true;
+      this.forceDistinctNextPair = true;
+      // Increase the search budget for the next pair generation attempt so we can
+      // push harder on hard-to-distinguish candidates without starving the UI.
+      this.nextPairMaxElapsedMs = Math.max(this.nextPairMaxElapsedMs ?? 60000, 60000);
+      const stagnationMessage =
+        "The remaining candidate regular expressions are very similar. We're working to generate a more distinguishing pair; this may take a few seconds.";
+
+      // Surface the warning prominently in VS Code so users notice even if the
+      // webview isn't focused, and also relay it to the webview UI.
+      void vscode.window.showInformationMessage(stagnationMessage);
+      this.showStagnationStatus(stagnationMessage);
+      this.sendMessage({
+        type: 'info',
+        message: stagnationMessage
+      });
+    }
+  }
+
+  private showStagnationStatus(message: string) {
+    this.stagnationStatusItem.text = '$(clock) Pick: finding distinguishing examples…';
+    this.stagnationStatusItem.tooltip = message;
+    this.stagnationStatusItem.show();
+  }
+
+  private hideStagnationStatus() {
+    this.stagnationStatusItem.hide();
   }
 
   private sendMessage(message: any) {

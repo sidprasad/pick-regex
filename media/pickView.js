@@ -446,6 +446,9 @@
                 case 'warning':
                     showWarning(message.message);
                     break;
+                case 'info':
+                    showInfo(message.message);
+                    break;
                 case 'permissionRequired':
                     showPermissionRequired(message.message);
                     break;
@@ -606,6 +609,15 @@
         function showWarning(message) {
             if (statusMessage) {
                 statusMessage.innerHTML = '<strong>Warning:</strong> ' + message;
+            }
+            statusBar.classList.remove('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+        }
+
+        function showInfo(message) {
+            if (statusMessage) {
+                statusMessage.textContent = message;
             }
             statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.add('hidden');
