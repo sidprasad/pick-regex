@@ -677,6 +677,7 @@
             font-family: monospace;
             overflow-x: auto;
             white-space: nowrap;
+            line-height: 1.35;
         }
 
         .word-readable,
@@ -690,6 +691,18 @@
 
         body[data-literal-mode="true"] .word-literal {
             display: inline;
+        }
+
+        /* Highlight differences between the two presented words */
+        .diff-chunk {
+            background: var(--vscode-editor-selectionBackground, rgba(255, 200, 0, 0.22));
+            color: inherit;
+            border-radius: 3px;
+            padding: 0 1px;
+        }
+
+        .same-chunk {
+            color: inherit;
         }
 
         .toggle-switch {
