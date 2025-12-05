@@ -14,6 +14,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private controller: PickController;
   private analyzer = createRegexAnalyzer();
   private cancellationTokenSource?: vscode.CancellationTokenSource;
+  private stagnantPairCount = 0;
+  private lastActiveCandidateCount?: number;
+  private stagnationWarningSent = false;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -120,6 +123,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private async handleGenerateCandidates(prompt: string, modelId?: string) {
     try {
       this.sendMessage({ type: 'status', message: 'Generating candidate regexes...' });
+
+      this.resetStagnationTracking();
 
       // Generate candidate regexes using LLM
       // Dispose any existing cancellation token
@@ -396,17 +401,20 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     try {
       const classificationEnum = classification as WordClassification;
       this.controller.classifyWord(word, classificationEnum);
-      
+
       const state = this.controller.getState();
       const status = this.controller.getStatus();
-      
+      const bothClassified = this.controller.areBothWordsClassified();
+
+      this.updateStagnationTracking(status, bothClassified);
+
       if (state === PickState.FINAL_RESULT) {
         await this.handleFinalResult();
       } else {
         // Check if both words are classified
-        if (this.controller.areBothWordsClassified()) {
+        if (bothClassified) {
           this.controller.clearCurrentPair();
-          
+
           // Send updated status
           this.sendMessage({
             type: 'wordClassified',
@@ -536,6 +544,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private async handleRefineCandidates(prompt: string, modelId?: string) {
     try {
       this.sendMessage({ type: 'status', message: 'Refining with new candidates...' });
+
+      this.resetStagnationTracking();
 
       // Get session data before refinement
       const sessionData = this.controller.getSessionData();
@@ -743,6 +753,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private handleReset(preserveClassifications = false) {
     this.controller.reset(preserveClassifications);
+    this.resetStagnationTracking();
     logger.info(`Reset requested from webview (preserveClassifications: ${preserveClassifications}).`);
     this.sendMessage({ type: 'reset', preserveClassifications });
   }
@@ -756,15 +767,26 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       // Don't dispose or set to undefined yet - ongoing operations still need to check isCancellationRequested
       // The token will be disposed and replaced when a new operation starts
     }
-    
+
     // Reset controller state
     this.controller.reset(false);
-    
+
+    this.resetStagnationTracking();
+
     // Notify webview
-    this.sendMessage({ 
-      type: 'cancelled', 
-      message: 'Operation cancelled by user.' 
+    this.sendMessage({
+      type: 'cancelled',
+      message: 'Operation cancelled by user.'
     });
+  }
+
+  /**
+   * Reset counters used to detect when classification is not providing new information.
+   */
+  private resetStagnationTracking() {
+    this.stagnantPairCount = 0;
+    this.lastActiveCandidateCount = undefined;
+    this.stagnationWarningSent = false;
   }
 
   /**
@@ -912,6 +934,38 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
 
     return { uniqueRegexes: unique, equivalenceMap: finalMap };
+  }
+
+  /**
+   * Detect when repeated classification pairs are not reducing the active candidate set
+   * and notify the user that the remaining regexes are very similar.
+   */
+  private updateStagnationTracking(status: ReturnType<PickController['getStatus']>, bothClassified: boolean) {
+    if (this.lastActiveCandidateCount === undefined) {
+      this.lastActiveCandidateCount = status.activeCandidates;
+      return;
+    }
+
+    if (status.activeCandidates !== this.lastActiveCandidateCount) {
+      this.lastActiveCandidateCount = status.activeCandidates;
+      this.stagnantPairCount = 0;
+      this.stagnationWarningSent = false;
+      return;
+    }
+
+    if (!bothClassified) {
+      return;
+    }
+
+    this.stagnantPairCount++;
+
+    if (this.stagnantPairCount >= 3 && !this.stagnationWarningSent) {
+      this.stagnationWarningSent = true;
+      this.sendMessage({
+        type: 'info',
+        message: "The remaining candidate regular expressions are very similar. We're working to generate a more distinguishing pair; this may take a few seconds."
+      });
+    }
   }
 
   private sendMessage(message: any) {
