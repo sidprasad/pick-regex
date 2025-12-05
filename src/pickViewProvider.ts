@@ -117,9 +117,42 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * Build a friendly description of the model being used so we can surface it in UI status updates
+   */
+  private async getModelDescription(modelId?: string): Promise<string | null> {
+    try {
+      const models = await getAvailableChatModels();
+      if (models.length === 0) {
+        return null;
+      }
+
+      const preferred = modelId ? models.find(m => m.id === modelId) : undefined;
+      const model = preferred ?? models[0];
+      const vendorPart = model.vendor ? ` from ${model.vendor}` : '';
+      const familyPart = model.family ? ` (${model.family})` : '';
+      return `${model.name}${familyPart}${vendorPart}`;
+    } catch (error) {
+      logger.warn(`Unable to describe model for status message: ${error}`);
+      return null;
+    }
+  }
+
   private async handleGenerateCandidates(prompt: string, modelId?: string) {
     try {
-      this.sendMessage({ type: 'status', message: 'Generating candidate regexes...' });
+      const modelDescription = await this.getModelDescription(modelId);
+      const statusMessage = modelDescription
+        ? `Asking ${modelDescription} to propose candidate regexes...`
+        : 'Asking your language model to propose candidate regexes...';
+      this.sendMessage({ type: 'status', message: statusMessage });
+
+      // While VS Code surfaces some LLM activity in the UI, the webview does not receive those updates.
+      // Send periodic heartbeats so users see that the model is still working when responses take longer.
+      const heartbeat = this.startModelHeartbeat(
+        modelDescription
+          ? `Waiting for ${modelDescription} to respond with candidates...`
+          : 'Waiting for your language model to respond with candidates...'
+      );
 
       // Generate candidate regexes using LLM
       // Dispose any existing cancellation token
@@ -133,7 +166,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId);
         candidates = result.candidates.map(c => c.regex);
         logger.info(`Generated ${candidates.length} candidates from LLM`);
-        
+
         // Log each candidate with explanation
         result.candidates.forEach((c, i) => {
           logger.info(`Candidate ${i + 1}: ${c.regex} (confidence: ${c.confidence ?? 'N/A'}) - ${c.explanation}`);
@@ -142,47 +175,51 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         // Check if it was cancelled
         if (this.cancellationTokenSource.token.isCancellationRequested) {
           logger.info('Candidate generation was cancelled by user');
-          this.sendMessage({ 
-            type: 'cancelled', 
-            message: 'Operation cancelled by user.' 
+          this.sendMessage({
+            type: 'cancelled',
+            message: 'Operation cancelled by user.'
           });
           return;
         }
-        
+
         // Handle specific error types
         if (error instanceof PermissionRequiredError) {
           logger.error(error, 'Permission required for language model access');
-          this.sendMessage({ 
-            type: 'permissionRequired', 
-            message: error.message 
+          this.sendMessage({
+            type: 'permissionRequired',
+            message: error.message
           });
           return;
         }
-        
+
         if (error instanceof NoModelsAvailableError) {
           logger.error(error, 'No language models available');
-          this.sendMessage({ 
-            type: 'noModelsAvailable', 
-            message: error.message 
+          this.sendMessage({
+            type: 'noModelsAvailable',
+            message: error.message
           });
           return;
         }
-        
+
         logger.error(error, 'Failed to generate candidate regexes');
-        this.sendMessage({ 
-          type: 'error', 
-          message: 'Could not generate any candidate regexes. Please try again.' 
+        this.sendMessage({
+          type: 'error',
+          message: 'Could not generate any candidate regexes. Please try again.'
+        });
+        return;
+      } finally {
+        heartbeat.stop();
+      }
+
+      if (candidates.length === 0) {
+        this.sendMessage({
+          type: 'error',
+          message: 'Could not generate any candidate regexes. Please try again.'
         });
         return;
       }
 
-      if (candidates.length === 0) {
-        this.sendMessage({ 
-          type: 'error', 
-          message: 'Could not generate any candidate regexes. Please try again.' 
-        });
-        return;
-      }
+      this.sendMessage({ type: 'status', message: 'Validating model output (syntax checks)...' });
 
       // Check cancellation before filtering
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -535,7 +572,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleRefineCandidates(prompt: string, modelId?: string) {
     try {
-      this.sendMessage({ type: 'status', message: 'Refining with new candidates...' });
+      const modelDescription = await this.getModelDescription(modelId);
+      const statusMessage = modelDescription
+        ? `Asking ${modelDescription} to refine your regex candidates...`
+        : 'Asking your language model to refine your regex candidates...';
+      this.sendMessage({ type: 'status', message: statusMessage });
+
+      const heartbeat = this.startModelHeartbeat(
+        modelDescription
+          ? `Waiting for ${modelDescription} to finish refining your candidates...`
+          : 'Waiting for your language model to finish refining your candidates...'
+      );
 
       // Get session data before refinement
       const sessionData = this.controller.getSessionData();
@@ -552,7 +599,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId);
         candidates = result.candidates.map(c => c.regex);
         logger.info(`Generated ${candidates.length} candidates from LLM for refinement`);
-        
+
         // Log each candidate with explanation
         result.candidates.forEach((c, i) => {
           logger.info(`Candidate ${i + 1}: ${c.regex} (confidence: ${c.confidence ?? 'N/A'}) - ${c.explanation}`);
@@ -561,47 +608,51 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         // Check if it was cancelled
         if (this.cancellationTokenSource.token.isCancellationRequested) {
           logger.info('Candidate refinement was cancelled by user');
-          this.sendMessage({ 
-            type: 'cancelled', 
-            message: 'Operation cancelled by user.' 
+          this.sendMessage({
+            type: 'cancelled',
+            message: 'Operation cancelled by user.'
           });
           return;
         }
-        
+
         // Handle specific error types
         if (error instanceof PermissionRequiredError) {
           logger.error(error, 'Permission required for language model access');
-          this.sendMessage({ 
-            type: 'permissionRequired', 
-            message: error.message 
+          this.sendMessage({
+            type: 'permissionRequired',
+            message: error.message
           });
           return;
         }
-        
+
         if (error instanceof NoModelsAvailableError) {
           logger.error(error, 'No language models available');
-          this.sendMessage({ 
-            type: 'noModelsAvailable', 
-            message: error.message 
+          this.sendMessage({
+            type: 'noModelsAvailable',
+            message: error.message
           });
           return;
         }
-        
+
         logger.error(error, 'Failed to generate candidate regexes during refinement');
-        this.sendMessage({ 
-          type: 'error', 
-          message: 'Could not generate any candidate regexes. Please try again.' 
+        this.sendMessage({
+          type: 'error',
+          message: 'Could not generate any candidate regexes. Please try again.'
+        });
+        return;
+      } finally {
+        heartbeat.stop();
+      }
+
+      if (candidates.length === 0) {
+        this.sendMessage({
+          type: 'error',
+          message: 'Could not generate any candidate regexes. Please try again.'
         });
         return;
       }
 
-      if (candidates.length === 0) {
-        this.sendMessage({ 
-          type: 'error', 
-          message: 'Could not generate any candidate regexes. Please try again.' 
-        });
-        return;
-      }
+      this.sendMessage({ type: 'status', message: 'Validating model output (syntax checks)...' });
 
       // Check cancellation before filtering
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -918,6 +969,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     if (this.view) {
       this.view.webview.postMessage(message);
     }
+  }
+
+  /**
+   * Periodically surface a status heartbeat to the webview while waiting for LLM responses.
+   */
+  private startModelHeartbeat(message: string, intervalMs = 8000): { stop: () => void } {
+    const interval = setInterval(() => this.sendMessage({ type: 'status', message }), intervalMs);
+    return {
+      stop: () => clearInterval(interval)
+    };
   }
 
   private getHtmlForWebview(webview: vscode.Webview) {
