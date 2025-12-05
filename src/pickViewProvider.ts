@@ -970,9 +970,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       // Increase the search budget for the next pair generation attempt so we can
       // push harder on hard-to-distinguish candidates without starving the UI.
       this.nextPairMaxElapsedMs = Math.max(this.nextPairMaxElapsedMs ?? 5000, 9000);
+      const stagnationMessage =
+        "The remaining candidate regular expressions are very similar. We're working to generate a more distinguishing pair; this may take a few seconds.";
+
+      // Surface the warning prominently in VS Code so users notice even if the
+      // webview isn't focused, and also relay it to the webview UI.
+      void vscode.window.showInformationMessage(stagnationMessage);
       this.sendMessage({
         type: 'info',
-        message: "The remaining candidate regular expressions are very similar. We're working to generate a more distinguishing pair; this may take a few seconds."
+        message: stagnationMessage
       });
     }
   }
