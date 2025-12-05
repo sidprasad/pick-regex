@@ -396,21 +396,44 @@ export class RegexAnalyzer {
       );
       const startTime = Date.now();
       const minElapsedMs = options.minElapsedMs ?? 500; // ensure we search for at least this long unless exhausted
-      const maxElapsedMs = options.maxElapsedMs ?? 5000; // absolute cap to avoid runaway
+      // Start with the provided/standard budget but be willing to stretch to a higher ceiling
+      // when repeated timeouts indicate we need to push harder to find distinguishing words.
+      const hardCapMs = Math.max(options.maxElapsedMs ?? 5000, 20000);
+      let budgetMs = options.maxElapsedMs ?? 5000; // mutable budget that can extend up to hardCapMs
+      let timedOutOps = 0;
       // Bound every expensive automata call by the remaining global budget so a single call
       // cannot stall the whole loop. If it times out, we skip that branch and keep going.
       const withTimeout = async <T>(promise: Promise<T>, label: string): Promise<T | null> => {
         const elapsed = Date.now() - startTime;
-        const remaining = Math.max(200, maxElapsedMs - elapsed);
-        return await Promise.race([
+        const remaining = Math.max(200, budgetMs - elapsed);
+        let timedOut = false;
+        const result = await Promise.race([
           promise,
           new Promise<null>(resolve => setTimeout(() => {
+            timedOut = true;
             logger.warn(`${label} timed out after ${remaining}ms`);
             resolve(null);
           }, remaining))
         ]);
+        if (timedOut) {
+          timedOutOps++;
+        }
+        return result;
       };
       const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
+      const maybeExtendBudget = (reason: string) => {
+        // If we are repeatedly timing out and still don't have enough variety,
+        // extend the search window toward the hard cap so we have a chance to
+        // gather a more informative pool instead of returning a weak pair.
+        if (timedOutOps < 3 || budgetMs >= hardCapMs) {return;}
+        const newBudget = Math.min(hardCapMs, Math.max(budgetMs + 5000, Math.floor(budgetMs * 1.5)));
+        if (newBudget > budgetMs) {
+          budgetMs = newBudget;
+          logger.warn(
+            `Extending distinguishing-word search budget to ${budgetMs}ms after repeated timeouts (${reason}).`
+          );
+        }
+      };
 
       // Helper: sample from source \ other, respecting exclusions.
       // Uses set difference sampling which is efficient even when patterns agree on many words.
@@ -486,7 +509,7 @@ export class RegexAnalyzer {
       for (let i = 0; i < candidateRegexes.length; i++) {
         for (let j = i + 1; j < candidateRegexes.length; j++) {
           const elapsed = Date.now() - startTime;
-          if (elapsed > maxElapsedMs) {break;}
+          if (elapsed > budgetMs) {break;}
           const a = candidateRegexes[i];
           const b = candidateRegexes[j];
           const fromA = await withTimeout(sampleDifference(a, b, 4), `sampleDifference ${a} \\ ${b}`);
@@ -504,13 +527,14 @@ export class RegexAnalyzer {
       //     because the pairwise differences only give words from the larger set.
       for (const regex of candidateRegexes) {
         const elapsed = Date.now() - startTime;
-        if (elapsed > maxElapsedMs) {break;}
+        if (elapsed > budgetMs) {break;}
         const samples = await withTimeout(
           sampleFromRegex(regex, 3),
           `sampleFromRegex ${regex}`
         );
         samples?.forEach(w => pool.add(w));
       }
+      maybeExtendBudget('pairwise sampling');
       logger.info(
         `generateTwoDistinguishingWords after direct sampling pool size: ${pool.size}, elapsed ${Date.now() - startTime}ms`
       );
@@ -551,11 +575,11 @@ export class RegexAnalyzer {
       }
       while (!skipEnumerateIfDistinguishing &&
              (pool.size < desiredPoolSize || (Date.now() - startTime) < minElapsedMs) &&
-             (Date.now() - startTime) < maxElapsedMs) {
+             (Date.now() - startTime) < budgetMs) {
         let addedThisPass = 0;
         for (const regex of candidateRegexes) {
           const elapsed = Date.now() - startTime;
-          if (elapsed > maxElapsedMs) {break;}
+          if (elapsed > budgetMs) {break;}
           if ((pool.size >= desiredPoolSize) && elapsed >= minElapsedMs) {break;}
           try {
             const samples = await withTimeout(
@@ -578,6 +602,7 @@ export class RegexAnalyzer {
         logger.info(
           `generateTwoDistinguishingWords sampling pass ${pass}: pool ${pool.size}, elapsed ${Date.now() - startTime}ms`
         );
+        maybeExtendBudget('enumeration');
         if (addedThisPass === 0 && (Date.now() - startTime) >= minElapsedMs) {
           break; // no progress after minimum time
         }
