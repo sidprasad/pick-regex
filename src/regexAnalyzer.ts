@@ -14,6 +14,26 @@ function isCacheOverflowError(error: unknown): boolean {
   return error instanceof Error && error.name === 'CacheOverflowError';
 }
 
+/**
+ * Timeout helper - resolves with result or rejects after timeout
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback?: T): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (fallback !== undefined) {
+        resolve(fallback);
+      } else {
+        reject(new Error(`Operation timed out after ${ms}ms`));
+      }
+    }, ms);
+    
+    promise.then(
+      (result) => { clearTimeout(timer); resolve(result); },
+      (error) => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
 export interface WordPairResult {
   wordIn: string;
   wordNotIn: string;
@@ -221,6 +241,7 @@ export class RegexAnalyzer {
    * Uses symmetric difference sampling (like @gruhn/regex-utils equiv checker):
    * - For each pair (A, B): sample from A\B and B\A
    * - This efficiently finds words that distinguish between candidates
+   * - Times out after ~1s, returning best result found so far
    */
   async generateTwoDistinguishingWords(
     candidateRegexes: string[],
@@ -241,42 +262,57 @@ export class RegexAnalyzer {
     }
 
     const excluded = new Set(excludedWords);
-    const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
     const pool = new Set<string>();
+    
+    // Build RBs for all candidates upfront
+    const rbs: (RegexBuilder | null)[] = await Promise.all(
+      candidateRegexes.map(async r => {
+        try {
+          return await createRb(r);
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const startTime = Date.now();
+    const TIMEOUT_MS = 1000; // 1 second target, hard limit 3s
+    const POOL_SIZE_LIMIT = 12; // Small pool - we only need good distinguishing words
+
+    const isTimedOut = () => Date.now() - startTime > TIMEOUT_MS;
 
     try {
       // Sample from pairwise symmetric differences (A\B and B\A)
-      // This is the key insight from @gruhn/regex-utils equiv checker
-      for (let i = 0; i < candidateRegexes.length && pool.size < 30; i++) {
-        for (let j = i + 1; j < candidateRegexes.length && pool.size < 30; j++) {
+      outerLoop:
+      for (let i = 0; i < candidateRegexes.length && pool.size < POOL_SIZE_LIMIT; i++) {
+        for (let j = i + 1; j < candidateRegexes.length && pool.size < POOL_SIZE_LIMIT; j++) {
+          if (isTimedOut()) { break outerLoop; }
+          
+          const rbA = rbs[i];
+          const rbB = rbs[j];
+          if (!rbA || !rbB) { continue; }
+          
           try {
-            const rbA = await createRb(candidateRegexes[i]);
-            const rbB = await createRb(candidateRegexes[j]);
-            
             // Compute symmetric difference parts
             const diffAB = rbA.without(rbB); // strings in A but not B
             const diffBA = rbB.without(rbA); // strings in B but not A
             
-            // Sample from A \ B
+            // Sample 1 word from A \ B (just need distinguishing examples)
             if (!diffAB.isEmpty()) {
-              let count = 0;
               for (const word of diffAB.enumerate()) {
                 if (!excluded.has(word) && !pool.has(word)) {
                   pool.add(word);
-                  count++;
-                  if (count >= 3) break;
+                  break;
                 }
               }
             }
             
-            // Sample from B \ A
+            // Sample 1 word from B \ A
             if (!diffBA.isEmpty()) {
-              let count = 0;
               for (const word of diffBA.enumerate()) {
                 if (!excluded.has(word) && !pool.has(word)) {
                   pool.add(word);
-                  count++;
-                  if (count >= 3) break;
+                  break;
                 }
               }
             }
@@ -286,17 +322,17 @@ export class RegexAnalyzer {
         }
       }
 
-      // Also sample directly from each candidate (for intersection words)
-      for (const regex of candidateRegexes) {
-        if (pool.size >= 30) break;
+      // Also sample 1 word directly from each candidate (for intersection words)
+      for (let i = 0; i < candidateRegexes.length && pool.size < POOL_SIZE_LIMIT; i++) {
+        if (isTimedOut()) { break; }
+        const rb = rbs[i];
+        if (!rb) { continue; }
+        
         try {
-          const rb = await createRb(regex);
-          let count = 0;
           for (const word of rb.enumerate()) {
             if (!excluded.has(word) && !pool.has(word)) {
               pool.add(word);
-              count++;
-              if (count >= 3) break;
+              break;
             }
           }
         } catch {
@@ -304,10 +340,15 @@ export class RegexAnalyzer {
         }
       }
 
-      // Filter pool to words that match at least one candidate
-      const poolArray = Array.from(pool).filter(w => 
-        !excluded.has(w) && regexObjects.some(re => re.test(w))
-      );
+      // Filter pool to words that match at least one candidate (using RBs)
+      const poolArray: string[] = [];
+      for (const w of pool) {
+        if (excluded.has(w)) { continue; }
+        // Check if word matches any candidate using verifyMatch
+        if (rbs.some((rb, idx) => rb && this.verifyMatch(w, candidateRegexes[idx]))) {
+          poolArray.push(w);
+        }
+      }
 
       if (poolArray.length < 2) {
         throw new Error('Could not find enough distinguishing words');
@@ -317,14 +358,17 @@ export class RegexAnalyzer {
       let bestPair: [string, string] | null = null;
       let bestScore = Infinity;
 
+      // Pre-compute match vectors for all words
+      const matchVectors = poolArray.map(w => 
+        candidateRegexes.map(r => this.verifyMatch(w, r))
+      );
+
       for (let i = 0; i < poolArray.length; i++) {
         for (let j = i + 1; j < poolArray.length; j++) {
-          const w1 = poolArray[i];
-          const w2 = poolArray[j];
+          if (isTimedOut() && bestPair) { break; }
           
-          // Compute match vectors
-          const m1 = regexObjects.map(re => re.test(w1));
-          const m2 = regexObjects.map(re => re.test(w2));
+          const m1 = matchVectors[i];
+          const m2 = matchVectors[j];
           
           // Count survivors for each of the 4 possible classification outcomes
           const survivors = [
@@ -343,7 +387,7 @@ export class RegexAnalyzer {
           
           if (score < bestScore) {
             bestScore = score;
-            bestPair = [w1, w2];
+            bestPair = [poolArray[i], poolArray[j]];
           }
         }
       }
@@ -354,7 +398,8 @@ export class RegexAnalyzer {
 
       // Validate result
       const [word1, word2] = bestPair;
-      if (!regexObjects.some(re => re.test(word1)) && !regexObjects.some(re => re.test(word2))) {
+      const anyMatch = candidateRegexes.some(r => this.verifyMatch(word1, r) || this.verifyMatch(word2, r));
+      if (!anyMatch) {
         throw new Error('Generated words match no candidates');
       }
 
