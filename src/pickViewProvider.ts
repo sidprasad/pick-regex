@@ -383,9 +383,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       
       // Check if the error is about running out of words
       const errorMessage = String(error);
-      if (errorMessage.includes('Could not generate unique word') ||
-          errorMessage.includes('Failed to generate') ||
-          errorMessage.includes('Exhausted word space')) {
+      const isExhaustionError = errorMessage.includes('Exhausted word space') ||
+        errorMessage.includes('Could not generate unique word') ||
+        errorMessage.includes('Unable to generate more distinguishing words');
+
+      if (isExhaustionError) {
         // We ran out of words - show best candidates so far
         const status = this.controller.getStatus();
         const activeCandidates = status.candidateDetails.filter(c => !c.eliminated);
@@ -401,10 +403,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           status,
           message: `Unable to generate more distinguishing words. ${activeCandidates.length} candidate(s) remain.`
         });
+      } else if (errorMessage.includes('Timed out while searching for a distinguishing pair') ||
+                 errorMessage.includes('Timed out while collecting candidate-matching words')) {
+        // Preserve stagnation context but surface a clear timeout message
+        this.sendMessage({
+          type: 'error',
+          message: 'Timed out while searching for a distinguishing pair. The remaining candidates may be too similar. Try resetting or refining your prompt.'
+        });
       } else {
         // For other errors, send a clean error message
         const cleanErrorMessage = error instanceof Error ? error.message : String(error);
-        this.sendMessage({ 
+        this.sendMessage({
           type: 'error', 
           message: `Error generating pair: ${cleanErrorMessage}` 
         });

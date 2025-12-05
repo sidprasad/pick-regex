@@ -635,11 +635,19 @@ export class RegexAnalyzer {
         `generateTwoDistinguishingWords pool size after filtering: ${poolArray.length} (initial pool ${pool.size})`
       );
 
+      const hitBudget = (Date.now() - startTime) >= budgetMs;
+
       if (poolArray.length < 2) {
+        if (timedOutOps > 0 || hitBudget) {
+          throw new Error('Timed out while collecting candidate-matching words within the search budget.');
+        }
         throw new Error('Exhausted word space: could not find two candidate-matching words after sampling all candidates.');
       }
 
       if (requireDistinctSplit && !poolHasDistinguishingPair()) {
+        if (timedOutOps > 0 || hitBudget) {
+          throw new Error('Timed out while searching for a distinguishing pair within the extended budget.');
+        }
         throw new Error('Exhausted word space: failed to find a distinguishing pair within the extended search budget.');
       }
 
