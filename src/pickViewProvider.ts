@@ -383,13 +383,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       
       // Check if the error is about running out of words
       const errorMessage = String(error);
-      if (errorMessage.includes('Could not generate unique word') || 
+      if (errorMessage.includes('Could not generate unique word') ||
           errorMessage.includes('Failed to generate') ||
           errorMessage.includes('Exhausted word space')) {
         // We ran out of words - show best candidates so far
         const status = this.controller.getStatus();
         const activeCandidates = status.candidateDetails.filter(c => !c.eliminated);
-        
+
+        // Clear any lingering stagnation UI so users don't see both exhaustion and
+        // "working to generate" messages at the same time.
+        this.resetStagnationTracking();
+
         // Send a single consolidated message about word exhaustion
         this.sendMessage({
           type: 'insufficientWords',
