@@ -367,7 +367,8 @@ export class RegexAnalyzer {
    */
   async generateTwoDistinguishingWords(
     candidateRegexes: string[],
-    excludedWords: string[] = []
+    excludedWords: string[] = [],
+    options: { minElapsedMs?: number; maxElapsedMs?: number } = {}
   ): Promise<TwoDistinguishingWordsResult> {
     if (candidateRegexes.length === 0) {
       throw new Error('Need at least one candidate regex');
@@ -394,8 +395,8 @@ export class RegexAnalyzer {
         `generateTwoDistinguishingWords start: ${candidateRegexes.length} candidates, ${excluded.size} excluded`
       );
       const startTime = Date.now();
-      const minElapsedMs = 500; // ensure we search for at least this long unless exhausted
-      const maxElapsedMs = 5000; // absolute cap to avoid runaway
+      const minElapsedMs = options.minElapsedMs ?? 500; // ensure we search for at least this long unless exhausted
+      const maxElapsedMs = options.maxElapsedMs ?? 5000; // absolute cap to avoid runaway
       // Bound every expensive automata call by the remaining global budget so a single call
       // cannot stall the whole loop. If it times out, we skip that branch and keep going.
       const withTimeout = async <T>(promise: Promise<T>, label: string): Promise<T | null> => {

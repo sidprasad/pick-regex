@@ -17,6 +17,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private stagnantPairCount = 0;
   private lastActiveCandidateCount?: number;
   private stagnationWarningSent = false;
+  private nextPairMaxElapsedMs?: number;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -349,7 +350,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      const pair = await this.controller.generateNextPair();
+      if (this.nextPairMaxElapsedMs) {
+        logger.info(`Using extended pair-generation timeout of ${this.nextPairMaxElapsedMs}ms due to stagnation.`);
+      }
+      const pair = await this.controller.generateNextPair({ maxElapsedMs: this.nextPairMaxElapsedMs });
       const status = this.controller.getStatus();
       
       // Check cancellation before sending pair to UI
@@ -787,6 +791,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     this.stagnantPairCount = 0;
     this.lastActiveCandidateCount = undefined;
     this.stagnationWarningSent = false;
+    this.nextPairMaxElapsedMs = undefined;
   }
 
   /**
@@ -950,6 +955,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.lastActiveCandidateCount = status.activeCandidates;
       this.stagnantPairCount = 0;
       this.stagnationWarningSent = false;
+      this.nextPairMaxElapsedMs = undefined;
       return;
     }
 
@@ -961,6 +967,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
     if (this.stagnantPairCount >= 3 && !this.stagnationWarningSent) {
       this.stagnationWarningSent = true;
+      // Increase the search budget for the next pair generation attempt so we can
+      // push harder on hard-to-distinguish candidates without starving the UI.
+      this.nextPairMaxElapsedMs = Math.max(this.nextPairMaxElapsedMs ?? 5000, 9000);
       this.sendMessage({
         type: 'info',
         message: "The remaining candidate regular expressions are very similar. We're working to generate a more distinguishing pair; this may take a few seconds."

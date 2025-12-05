@@ -39,6 +39,11 @@ export enum PickState {
 /**
  * Controller for the PICK interactive regex learning process
  */
+export interface DistinguishingWordOptions {
+  minElapsedMs?: number;
+  maxElapsedMs?: number;
+}
+
 export class PickController {
   private analyzer: RegexAnalyzer;
   private candidates: CandidateRegex[] = [];
@@ -141,7 +146,7 @@ export class PickController {
   /**
    * Generate the next distinguishing word pair
    */
-  async generateNextPair(): Promise<WordPair> {
+  async generateNextPair(options?: DistinguishingWordOptions): Promise<WordPair> {
     const activeCandidates = this.getActiveCandidates();
     
     if (activeCandidates.length === 0) {
@@ -151,7 +156,8 @@ export class PickController {
     try {
       const result = await this.analyzer.generateTwoDistinguishingWords(
         activeCandidates,
-        Array.from(this.usedWords)
+        Array.from(this.usedWords),
+        options
       );
 
       this.currentPair = {
