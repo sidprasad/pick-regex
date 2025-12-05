@@ -231,7 +231,9 @@ export async function generateRegexFromDescription(
     
     // Check for model_not_supported error (e.g., GPT-5 preview)
     const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes('model_not_supported')) {
+    if (errorMessage.includes('model_not_supported') || 
+        errorMessage.toLowerCase().includes('model is not supported') ||
+        errorMessage.toLowerCase().includes('requested model is not supported')) {
       logger.error(error, `Model not supported: ${model.name}`);
       throw new ModelNotSupportedError(model.name);
     }

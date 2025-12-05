@@ -218,6 +218,24 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           return;
         }
 
+        // Check for model_not_supported in error message (fallback if error class doesn't match)
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('model_not_supported') || 
+            errorMessage.toLowerCase().includes('model is not supported')) {
+          logger.error(error, 'Model not supported (detected from message)');
+          const msg = 'The selected model is not currently supported. Please try a different model.';
+          vscode.window.showErrorMessage(msg, 'Select Different Model').then(selection => {
+            if (selection === 'Select Different Model') {
+              this.checkAvailableModels();
+            }
+          });
+          this.sendMessage({
+            type: 'error',
+            message: msg
+          });
+          return;
+        }
+
         logger.error(error, 'Failed to generate candidate regexes');
         this.sendMessage({
           type: 'error',
@@ -664,6 +682,24 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           this.sendMessage({
             type: 'error',
             message: error.message
+          });
+          return;
+        }
+
+        // Check for model_not_supported in error message (fallback if error class doesn't match)
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('model_not_supported') || 
+            errorMessage.toLowerCase().includes('model is not supported')) {
+          logger.error(error, 'Model not supported (detected from message)');
+          const msg = 'The selected model is not currently supported. Please try a different model.';
+          vscode.window.showErrorMessage(msg, 'Select Different Model').then(selection => {
+            if (selection === 'Select Different Model') {
+              this.checkAvailableModels();
+            }
+          });
+          this.sendMessage({
+            type: 'error',
+            message: msg
           });
           return;
         }
