@@ -368,7 +368,7 @@ export class RegexAnalyzer {
   async generateTwoDistinguishingWords(
     candidateRegexes: string[],
     excludedWords: string[] = [],
-    options: { minElapsedMs?: number; maxElapsedMs?: number } = {}
+    options: { minElapsedMs?: number; maxElapsedMs?: number; requireDistinctSplit?: boolean } = {}
   ): Promise<TwoDistinguishingWordsResult> {
     if (candidateRegexes.length === 0) {
       throw new Error('Need at least one candidate regex');
@@ -396,10 +396,12 @@ export class RegexAnalyzer {
       );
       const startTime = Date.now();
       const minElapsedMs = options.minElapsedMs ?? 500; // ensure we search for at least this long unless exhausted
+      const requireDistinctSplit = options.requireDistinctSplit ?? false;
       // Start with the provided/standard budget but be willing to stretch to a higher ceiling
       // when repeated timeouts indicate we need to push harder to find distinguishing words.
-      const hardCapMs = Math.max(options.maxElapsedMs ?? 5000, 20000);
-      let budgetMs = options.maxElapsedMs ?? 5000; // mutable budget that can extend up to hardCapMs
+      const baseBudgetMs = options.maxElapsedMs ?? (requireDistinctSplit ? 60000 : 5000);
+      const hardCapMs = Math.max(baseBudgetMs, requireDistinctSplit ? 60000 : 20000);
+      let budgetMs = baseBudgetMs; // mutable budget that can extend up to hardCapMs
       let timedOutOps = 0;
       // Bound every expensive automata call by the remaining global budget so a single call
       // cannot stall the whole loop. If it times out, we skip that branch and keep going.
@@ -567,14 +569,16 @@ export class RegexAnalyzer {
       //    since enumerate() is slow when patterns agree on many short words.
       const blockedBase = Array.from(excluded);
       let pass = 0;
-      const skipEnumerateIfDistinguishing = hasDistinguishingPair() && pool.size >= 2;
+      const skipEnumerateIfDistinguishing = !requireDistinctSplit && hasDistinguishingPair() && pool.size >= 2;
       if (skipEnumerateIfDistinguishing) {
         logger.info(
           `generateTwoDistinguishingWords: skipping enumerate() since pairwise sampling found distinguishing words`
         );
       }
       while (!skipEnumerateIfDistinguishing &&
-             (pool.size < desiredPoolSize || (Date.now() - startTime) < minElapsedMs) &&
+             (pool.size < desiredPoolSize ||
+              (requireDistinctSplit && !hasDistinguishingPair()) ||
+              (Date.now() - startTime) < minElapsedMs) &&
              (Date.now() - startTime) < budgetMs) {
         let addedThisPass = 0;
         for (const regex of candidateRegexes) {
@@ -614,12 +618,29 @@ export class RegexAnalyzer {
       // Keep only words that match at least one candidate and aren’t excluded
       const poolArray = Array.from(pool).filter(w => !excluded.has(w) && regexObjects.some(re => re.test(w)));
 
+      const poolHasDistinguishingPair = (): boolean => {
+        for (let i = 0; i < poolArray.length; i++) {
+          for (let j = i + 1; j < poolArray.length; j++) {
+            const w1 = poolArray[i];
+            const w2 = poolArray[j];
+            const m1 = regexObjects.map(re => re.test(w1));
+            const m2 = regexObjects.map(re => re.test(w2));
+            if (m1.some((m, idx) => m !== m2[idx])) {return true;}
+          }
+        }
+        return false;
+      };
+
       logger.info(
         `generateTwoDistinguishingWords pool size after filtering: ${poolArray.length} (initial pool ${pool.size})`
       );
 
       if (poolArray.length < 2) {
         throw new Error('Exhausted word space: could not find two candidate-matching words after sampling all candidates.');
+      }
+
+      if (requireDistinctSplit && !poolHasDistinguishingPair()) {
+        throw new Error('Exhausted word space: failed to find a distinguishing pair within the extended search budget.');
       }
 
       // Score every pair for worst-case survivors and expected survivors

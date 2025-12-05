@@ -42,6 +42,7 @@ export enum PickState {
 export interface DistinguishingWordOptions {
   minElapsedMs?: number;
   maxElapsedMs?: number;
+  requireDistinctSplit?: boolean;
 }
 
 export class PickController {

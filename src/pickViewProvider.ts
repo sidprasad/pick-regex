@@ -18,12 +18,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private nonEliminatingClassificationCount = 0;
   private stagnationWarningSent = false;
   private nextPairMaxElapsedMs?: number;
+  private forceDistinctNextPair = false;
+  private readonly stagnationStatusItem: vscode.StatusBarItem;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly surveyPrompt: SurveyPrompt
   ) {
     this.controller = new PickController();
+    this.stagnationStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    this.stagnationStatusItem.name = 'Pick: Stagnation';
   }
 
   public resolveWebviewView(
@@ -353,7 +357,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       if (this.nextPairMaxElapsedMs) {
         logger.info(`Using extended pair-generation timeout of ${this.nextPairMaxElapsedMs}ms due to stagnation.`);
       }
-      const pair = await this.controller.generateNextPair({ maxElapsedMs: this.nextPairMaxElapsedMs });
+      const pair = await this.controller.generateNextPair({
+        maxElapsedMs: this.nextPairMaxElapsedMs,
+        requireDistinctSplit: this.forceDistinctNextPair
+      });
       const status = this.controller.getStatus();
       
       // Check cancellation before sending pair to UI
@@ -799,6 +806,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     this.nonEliminatingClassificationCount = 0;
     this.stagnationWarningSent = false;
     this.nextPairMaxElapsedMs = undefined;
+    this.forceDistinctNextPair = false;
+    this.hideStagnationStatus();
   }
 
   /**
@@ -958,6 +967,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.nonEliminatingClassificationCount = 0;
       this.stagnationWarningSent = false;
       this.nextPairMaxElapsedMs = undefined;
+      this.forceDistinctNextPair = false;
+      this.hideStagnationStatus();
       return;
     }
 
@@ -967,20 +978,32 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       // Track pair stagnation separately for legacy logging while keeping the classification-based trigger.
       this.stagnantPairCount++;
       this.stagnationWarningSent = true;
+      this.forceDistinctNextPair = true;
       // Increase the search budget for the next pair generation attempt so we can
       // push harder on hard-to-distinguish candidates without starving the UI.
-      this.nextPairMaxElapsedMs = Math.max(this.nextPairMaxElapsedMs ?? 5000, 9000);
+      this.nextPairMaxElapsedMs = Math.max(this.nextPairMaxElapsedMs ?? 60000, 60000);
       const stagnationMessage =
         "The remaining candidate regular expressions are very similar. We're working to generate a more distinguishing pair; this may take a few seconds.";
 
       // Surface the warning prominently in VS Code so users notice even if the
       // webview isn't focused, and also relay it to the webview UI.
       void vscode.window.showInformationMessage(stagnationMessage);
+      this.showStagnationStatus(stagnationMessage);
       this.sendMessage({
         type: 'info',
         message: stagnationMessage
       });
     }
+  }
+
+  private showStagnationStatus(message: string) {
+    this.stagnationStatusItem.text = '$(clock) Pick: finding distinguishing examples…';
+    this.stagnationStatusItem.tooltip = message;
+    this.stagnationStatusItem.show();
+  }
+
+  private hideStagnationStatus() {
+    this.stagnationStatusItem.hide();
   }
 
   private sendMessage(message: any) {
