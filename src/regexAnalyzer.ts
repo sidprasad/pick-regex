@@ -1,24 +1,17 @@
 import { logger } from './logger';
 
 /**
- * Lazy load the ES module
+ * Lazy-load the @gruhn/regex-utils ES module
  */
-async function getRB() {
-  const module = await import('@gruhn/regex-utils');
-  return module.RB;
+async function getRegexUtils() {
+  return await import('@gruhn/regex-utils');
 }
 
 /**
- * Check if an error is a CacheOverflowError
+ * Check if an error is a CacheOverflowError from regex-utils
  */
 function isCacheOverflowError(error: unknown): boolean {
-  // Check by name since we might not have loaded the class yet
   return error instanceof Error && error.name === 'CacheOverflowError';
-}
-
-export interface WordGenerationResult {
-  word: string;
-  explanation?: string;
 }
 
 export interface WordPairResult {
@@ -27,22 +20,22 @@ export interface WordPairResult {
   explanation?: string;
 }
 
-export interface DistinguishingWordsResult {
-  word1: string;
-  word2: string;
-  explanation: string;
-  distinguishingProperty?: string;
-}
-
 export interface TwoDistinguishingWordsResult {
   words: [string, string];
   explanation: string;
   properties?: string[];
 }
 
-async function createRb(pattern: string) {
+// Type for the RegexBuilder from @gruhn/regex-utils
+type RegexBuilder = ReturnType<Awaited<ReturnType<typeof getRegexUtils>>['RB']>;
+
+/**
+ * Create an RB (RegexBuilder) from a pattern string.
+ * Wraps with ^...$ anchors so patterns match the full string.
+ */
+async function createRb(pattern: string): Promise<RegexBuilder> {
+  const { RB } = await getRegexUtils();
   try {
-    const RB = await getRB();
     return RB(new RegExp(`^${pattern}$`));
   } catch (error) {
     throw new Error(`Unsupported regex syntax for '${pattern}': ${error}`);
@@ -50,308 +43,74 @@ async function createRb(pattern: string) {
 }
 
 /**
- * RegexAnalyzer using automata theory (randexp + regex-utils)
+ * RegexAnalyzer - uses @gruhn/regex-utils for automata-based regex analysis
+ * 
+ * Key library capabilities:
+ * - isEquivalent(): check if two regexes match the same language
+ * - without(): compute set difference (A \ B)  
+ * - enumerate(): fairly enumerate all matching strings
+ * - sample(): randomly sample matching strings
+ * - not(): compute complement
+ * - isEmpty(): check if language is empty
+ * - size(): count matching strings (bigint, undefined if infinite)
  */
 export class RegexAnalyzer {
-  private maxAttempts = 100;
 
   /**
-   * Rough heuristic for regex complexity to decide when to avoid heavy automata analysis.
-   */
-  estimateComplexity(pattern: string): number {
-    const lengthWeight = pattern.length;
-    const quantifierWeight = ((pattern.match(/[*+?{]/g) || []).length) * 5;
-    const alternationWeight = ((pattern.match(/\|/g) || []).length) * 8;
-    const groupWeight = ((pattern.match(/\(/g) || []).length) * 3;
-    return lengthWeight + quantifierWeight + alternationWeight + groupWeight;
-  }
-
-  /**
-   * 3. Generate a word IN and a word NOT IN a regex
-   * 
-   * This method includes a timeout to prevent hanging on complex regexes.
-   * Uses enumerate() for fair enumeration instead of random sampling.
-   */
-  async generateWordPair(regex: string, excludedWords: string[] = []): Promise<WordPairResult> {
-    const timeoutMs = 5000; // 5 seconds timeout
-    
-    let timeoutId: NodeJS.Timeout | undefined;
-    let partialWordIn = ''; // Track partial result for timeout case
-    
-    const generationPromise = (async () => {
-      try {
-        const rb = await createRb(regex);
-        const re = new RegExp(`^${regex}$`);
-
-        // Word that matches - use enumerate() for fair enumeration
-        const genIn = rb.enumerate();
-        let wordIn = '';
-        for (let i = 0; i < this.maxAttempts; i++) {
-          const next = genIn.next();
-          if (next.done) {break;}
-          if (!excludedWords.includes(next.value)) {
-            wordIn = next.value;
-            partialWordIn = wordIn; // Store partial result
-            break;
-          }
-        }
-        if (!wordIn) {
-          throw new Error('Could not generate word matching regex');
-        }
-        
-        // Word that doesn't match (using complement)
-        let wordNotIn = '';
-        try {
-          const complement = rb.not();
-          const gen = complement.enumerate(); // Use enumerate here too
-          for (let i = 0; i < 10; i++) {
-            const next = gen.next();
-            if (!next.done) {
-              const word = next.value;
-              if (!excludedWords.includes(word) && word !== wordIn) {
-                wordNotIn = word;
-                break;
-              }
-            }
-          }
-        } catch {
-          // Fallback: simple mutations
-          const strategies = [
-            () => wordIn + 'X',
-            () => 'X' + wordIn,
-            () => wordIn.slice(0, -1),
-            () => wordIn.toUpperCase() !== wordIn ? wordIn.toUpperCase() : wordIn.toLowerCase(),
-          ];
-          
-          for (const strategy of strategies) {
-            const candidate = strategy();
-            if (!re.test(candidate) && !excludedWords.includes(candidate)) {
-              wordNotIn = candidate;
-              break;
-            }
-          }
-        }
-        
-        if (!wordNotIn) {
-          wordNotIn = '!!!invalid!!!';
-        }
-        
-        return {
-          wordIn,
-          wordNotIn,
-          explanation: `'${wordIn}' matches, '${wordNotIn}' doesn't`
-        };
-      } catch (error) {
-        if (isCacheOverflowError(error)) {
-          logger.warn(`Regex too complex for word pair generation: '${regex}' - cache overflow`);
-          // Use partial result if available
-          if (partialWordIn) {
-            return {
-              wordIn: partialWordIn,
-              wordNotIn: partialWordIn + 'X',
-              explanation: 'Regex too complex - using partial results'
-            };
-          }
-          // Otherwise use fallback
-          return {
-            wordIn: 'test',
-            wordNotIn: 'invalid',
-            explanation: 'Regex too complex - using fallback words'
-          };
-        }
-        throw new Error(`Failed to generate word pair: ${error}`);
-      } finally {
-        // Clear timeout when generation completes
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-      }
-    })();
-    
-    const timeoutPromise = new Promise<WordPairResult>((resolve) => {
-      timeoutId = setTimeout(() => {
-        logger.warn(`Word pair generation timed out after ${timeoutMs}ms for regex: '${regex}' - using partial results`);
-        // Use partial result if available
-        if (partialWordIn) {
-          resolve({
-            wordIn: partialWordIn,
-            wordNotIn: partialWordIn + 'X',
-            explanation: 'Timeout - using partial enumeration results'
-          });
-        } else {
-          resolve({
-            wordIn: 'test',
-            wordNotIn: 'invalid',
-            explanation: 'Timeout - regex too complex for word generation'
-          });
-        }
-      }, timeoutMs);
-    });
-    
-    // Race between generation and timeout
-    const result = await Promise.race([generationPromise, timeoutPromise]);
-    
-    // Clean up timeout if it hasn't fired yet
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId);
-    }
-    
-    return result;
-  }
-
-  /**
-   * Generate multiple unique words matching a regex
-   * Uses @gruhn/regex-utils .enumerate() iterator for fair enumeration
-   * 
-   * This method includes a timeout to prevent hanging on complex regexes.
-   * If the timeout is exceeded, returns any words generated so far.
-   */
-  async generateMultipleWords(regex: string, count: number, excludedWords: string[] = [], cancellationToken?: { isCancellationRequested: boolean }): Promise<string[]> {
-    // Wrap in a timeout to prevent hanging
-    const timeoutMs = 5000; // 5 seconds timeout for word generation
-    
-    let timeoutId: NodeJS.Timeout | undefined;
-    let partialWords: string[] = []; // Track partial results for timeout case
-    
-    const generationPromise = (async () => {
-      try {
-        const rb = await createRb(regex);
-        const words: string[] = [];
-        const seen = new Set<string>(excludedWords);
-        
-        // Use enumerate() for fair enumeration instead of random sample()
-        const enumerator = rb.enumerate();
-        for (let i = 0; i < this.maxAttempts && words.length < count; i++) {
-          // Check for cancellation every few iterations to avoid hanging
-          if (cancellationToken?.isCancellationRequested) {
-            throw new Error('Word generation cancelled by user');
-          }
-          
-          const next = enumerator.next();
-          if (next.done) {break;}
-          
-          const word = next.value;
-          if (!seen.has(word)) {
-            words.push(word);
-            seen.add(word);
-            partialWords = [...words]; // Update partial results
-          }
-        }
-        
-        return words;
-      } catch (error) {
-        // Check for cancellation - look for our cancellation message
-        if (error instanceof Error && error.message.includes('cancelled')) {
-          throw error; // Re-throw cancellation errors
-        }
-        if (isCacheOverflowError(error)) {
-          logger.warn(`Regex too complex for word generation: '${regex}' - cache overflow`);
-          return partialWords.length > 0 ? partialWords : []; // Return partial results if available
-        }
-        throw new Error(`Failed to generate words for '${regex}': ${error}`);
-      } finally {
-        // Clear timeout when generation completes
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-      }
-    })();
-    
-    const timeoutPromise = new Promise<string[]>((resolve) => {
-      timeoutId = setTimeout(() => {
-        logger.warn(`Word generation timed out after ${timeoutMs}ms for regex: '${regex}' - returning ${partialWords.length} partial results`);
-        resolve(partialWords); // Return partial results instead of empty array
-      }, timeoutMs);
-    });
-    
-    // Race between generation and timeout
-    const result = await Promise.race([generationPromise, timeoutPromise]);
-    
-    // Clean up timeout if it hasn't fired yet
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId);
-    }
-    
-    return result;
-  }
-
-  /**
-   * Check if a regex pattern is valid JavaScript regex syntax
+   * Check if a pattern is valid JavaScript regex syntax
    */
   isValidRegex(pattern: string): boolean {
     try {
       new RegExp(`^${pattern}$`);
       return true;
-    } catch (e) {
-      logger.warn(`Invalid regex pattern: ${pattern} because ${e}`);
+    } catch {
       return false;
     }
   }
 
   /**
-   * Check if a regex pattern uses only syntax supported by @gruhn/regex-utils
-   * 
-   * This method attempts to create a regex-utils RB object from the pattern.
-   * If the library throws an exception, the pattern uses unsupported syntax.
-   * 
-   * Supported syntax:
-   * - Quantifiers: *, +, ?, {m,n}
-   * - Alternation: |
-   * - Character classes: ., \w, \d, \s, [...]
-   * - Escaping: \$, \., etc.
-   * - Groups: (?:...), (...)
-   * - Positive/negative lookahead: (?=...), (?!...)
-   * 
-   * Unsupported syntax that will cause this to return false:
-   * - Word boundaries: \b, \B
-   * - Lookbehind assertions: (?<=...), (?<!...)
-   * - Backreferences: \1, \2, etc.
-   * - Unicode property escapes: \p{...}, \P{...}
-   * - Named groups: (?<name>...)
-   * - Global/local flags (these shouldn't appear in pattern body anyway)
+   * Check if a pattern uses syntax supported by @gruhn/regex-utils
    */
   async hasSupportedSyntax(pattern: string): Promise<boolean> {
-    // First check if it's valid JavaScript regex
     if (!this.isValidRegex(pattern)) {
-      logger.warn(`Pattern has invalid JavaScript syntax: ${pattern}`);
       return false;
     }
-
-    // Try to create an RB object from the pattern
-    // If @gruhn/regex-utils throws an exception, the syntax is unsupported
     try {
       await createRb(pattern);
       return true;
-    } catch (error) {
-      logger.warn(`Pattern uses unsupported syntax for @gruhn/regex-utils: ${pattern} - ${error}`);
+    } catch {
       return false;
     }
   }
 
   /**
-   * Verify match
+   * Test if a word matches a regex pattern
    */
   verifyMatch(word: string, regex: string): boolean {
     try {
       return new RegExp(`^${regex}$`).test(word);
-    } catch (error) {
-      logger.error(`Error verifying match for word '${word}' and regex '${regex}': ${error}`);
+    } catch {
       return false;
     }
   }
 
   /**
-   * Direct equivalence check using @gruhn/regex-utils (RB) without extra set operations.
+   * Check if two regex patterns are equivalent (match the same language).
+   * Uses symmetric difference: A ≡ B iff (A \ B) and (B \ A) are both empty.
    */
   async areEquivalent(regexA: string, regexB: string): Promise<boolean> {
     try {
       const rbA = await createRb(regexA);
-      return rbA.isEquivalent(new RegExp(`^${regexB}$`));
+      const rbB = await createRb(regexB);
+      
+      // Compute symmetric difference
+      const diffAB = rbA.without(rbB);
+      const diffBA = rbB.without(rbA);
+      
+      return diffAB.isEmpty() && diffBA.isEmpty();
     } catch (error) {
       if (isCacheOverflowError(error)) {
-        logger.warn(`Regex too complex for equivalence check: '${regexA}' vs '${regexB}' - cache overflow`);
-        // For complex regexes that overflow the cache, conservatively assume they're not equivalent
-        // This prevents hanging and allows the deduplication to continue
+        logger.warn(`Regex too complex for equivalence check: '${regexA}' vs '${regexB}'`);
         return false;
       }
       throw error;
@@ -359,11 +118,109 @@ export class RegexAnalyzer {
   }
 
   /**
-   * Generate two distinguishing words from candidates
+   * Get the size of the set difference A \ B (words in A but not B)
+   * Returns undefined if infinite or too complex to compute
+   */
+  async countWordsInANotInB(regexA: string, regexB: string): Promise<bigint | undefined> {
+    try {
+      const rbA = await createRb(regexA);
+      const rbB = await createRb(regexB);
+      return rbA.without(rbB).size();
+    } catch (error) {
+      if (isCacheOverflowError(error)) {
+        logger.warn(`Regex too complex for set difference: '${regexA}' \\ '${regexB}'`);
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Generate a word that matches and a word that doesn't match a regex
+   */
+  async generateWordPair(regex: string, excludedWords: string[] = []): Promise<WordPairResult> {
+    const excluded = new Set(excludedWords);
+    
+    try {
+      const rb = await createRb(regex);
+      
+      // Find a word that matches using enumerate()
+      let wordIn = '';
+      for (const word of rb.enumerate()) {
+        if (!excluded.has(word)) {
+          wordIn = word;
+          break;
+        }
+      }
+      if (!wordIn) {
+        throw new Error('Could not generate word matching regex');
+      }
+
+      // Find a word that doesn't match using complement
+      let wordNotIn = '';
+      try {
+        for (const word of rb.not().enumerate()) {
+          if (!excluded.has(word) && word !== wordIn) {
+            wordNotIn = word;
+            break;
+          }
+        }
+      } catch {
+        // Fallback: simple mutation
+        wordNotIn = wordIn + 'X';
+      }
+
+      if (!wordNotIn) {
+        wordNotIn = wordIn + '!!!';
+      }
+
+      return { wordIn, wordNotIn, explanation: `'${wordIn}' matches, '${wordNotIn}' doesn't` };
+    } catch (error) {
+      if (isCacheOverflowError(error)) {
+        logger.warn(`Regex too complex for word pair generation: '${regex}'`);
+        return { wordIn: 'test', wordNotIn: 'invalid', explanation: 'Regex too complex' };
+      }
+      throw new Error(`Failed to generate word pair: ${error}`);
+    }
+  }
+
+  /**
+   * Generate multiple unique words matching a regex
+   */
+  async generateMultipleWords(
+    regex: string, 
+    count: number, 
+    excludedWords: string[] = []
+  ): Promise<string[]> {
+    const excluded = new Set(excludedWords);
+    const words: string[] = [];
+
+    try {
+      const rb = await createRb(regex);
+      
+      for (const word of rb.enumerate()) {
+        if (!excluded.has(word)) {
+          words.push(word);
+          if (words.length >= count) break;
+        }
+      }
+      
+      return words;
+    } catch (error) {
+      if (isCacheOverflowError(error)) {
+        logger.warn(`Regex too complex for word generation: '${regex}'`);
+        return words;
+      }
+      throw new Error(`Failed to generate words: ${error}`);
+    }
+  }
+
+  /**
+   * Generate two distinguishing words that best split a set of candidate regexes.
    * 
-   * Uses automata analysis to find words that maximally distinguish between candidates.
-   * Each word pair is chosen to provide maximum information gain by splitting the
-   * candidate set as evenly as possible.
+   * Uses symmetric difference sampling (like @gruhn/regex-utils equiv checker):
+   * - For each pair (A, B): sample from A\B and B\A
+   * - This efficiently finds words that distinguish between candidates
    */
   async generateTwoDistinguishingWords(
     candidateRegexes: string[],
@@ -373,333 +230,141 @@ export class RegexAnalyzer {
       throw new Error('Need at least one candidate regex');
     }
 
-    // Special case: only one candidate - show word IN and word NOT IN
+    // Single candidate: return word in and word not in
     if (candidateRegexes.length === 1) {
-      const regex = candidateRegexes[0];
-      const pair = await this.generateWordPair(regex, excludedWords);
-      
+      const pair = await this.generateWordPair(candidateRegexes[0], excludedWords);
       return {
         words: [pair.wordIn, pair.wordNotIn],
         explanation: `Single candidate: '${pair.wordIn}' matches, '${pair.wordNotIn}' doesn't`,
-        properties: [
-          'Matches the regex',
-          'Does not match the regex'
-        ]
+        properties: ['Matches the regex', 'Does not match the regex']
       };
     }
 
+    const excluded = new Set(excludedWords);
+    const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
+    const pool = new Set<string>();
+
     try {
-      const excluded = new Set(excludedWords);
-      logger.info(
-        `generateTwoDistinguishingWords start: ${candidateRegexes.length} candidates, ${excluded.size} excluded`
-      );
-      const startTime = Date.now();
-      const minElapsedMs = 500; // ensure we search for at least this long unless exhausted
-      const maxElapsedMs = 5000; // absolute cap to avoid runaway
-      // Bound every expensive automata call by the remaining global budget so a single call
-      // cannot stall the whole loop. If it times out, we skip that branch and keep going.
-      const withTimeout = async <T>(promise: Promise<T>, label: string): Promise<T | null> => {
-        const elapsed = Date.now() - startTime;
-        const remaining = Math.max(200, maxElapsedMs - elapsed);
-        return await Promise.race([
-          promise,
-          new Promise<null>(resolve => setTimeout(() => {
-            logger.warn(`${label} timed out after ${remaining}ms`);
-            resolve(null);
-          }, remaining))
-        ]);
-      };
-      const regexObjects = candidateRegexes.map(r => new RegExp(`^${r}$`));
-
-      // Helper: sample from source \ other, respecting exclusions.
-      // Uses set difference sampling which is efficient even when patterns agree on many words.
-      const sampleDifference = async (source: string, other: string, count: number): Promise<string[]> => {
-        // Skip expensive set ops for complex patterns; rely on sampling instead.
-        const complexityCap = 40;
-        if (this.estimateComplexity(source) > complexityCap || this.estimateComplexity(other) > complexityCap) {
-          return [];
-        }
-        const results: string[] = [];
-        const seen = new Set<string>();
-        try {
-          const diff = (await createRb(source)).without(new RegExp(`^${other}$`)).sample();
-          for (let i = 0; i < count * 3; i++) { // allow extra attempts
-            const next = diff.next();
-            if (next.done) {break;}
-            const candidate = next.value;
-            if (excluded.has(candidate) || seen.has(candidate)) {continue;}
-            results.push(candidate);
-            seen.add(candidate);
-            if (results.length >= count) {break;}
+      // Sample from pairwise symmetric differences (A\B and B\A)
+      // This is the key insight from @gruhn/regex-utils equiv checker
+      for (let i = 0; i < candidateRegexes.length && pool.size < 30; i++) {
+        for (let j = i + 1; j < candidateRegexes.length && pool.size < 30; j++) {
+          try {
+            const rbA = await createRb(candidateRegexes[i]);
+            const rbB = await createRb(candidateRegexes[j]);
+            
+            // Compute symmetric difference parts
+            const diffAB = rbA.without(rbB); // strings in A but not B
+            const diffBA = rbB.without(rbA); // strings in B but not A
+            
+            // Sample from A \ B
+            if (!diffAB.isEmpty()) {
+              let count = 0;
+              for (const word of diffAB.enumerate()) {
+                if (!excluded.has(word) && !pool.has(word)) {
+                  pool.add(word);
+                  count++;
+                  if (count >= 3) break;
+                }
+              }
+            }
+            
+            // Sample from B \ A
+            if (!diffBA.isEmpty()) {
+              let count = 0;
+              for (const word of diffBA.enumerate()) {
+                if (!excluded.has(word) && !pool.has(word)) {
+                  pool.add(word);
+                  count++;
+                  if (count >= 3) break;
+                }
+              }
+            }
+          } catch {
+            // Skip this pair if too complex
           }
-        } catch {
-          // ignore - difference sampling failed, rely on other methods
-        }
-
-        // NOTE: Removed fallback to generateMultipleWords because it uses enumerate()
-        // which is slow when patterns agree on many short words (the core issue this fixes).
-        // The pairwise difference sampling above is more targeted and efficient.
-
-        return results;
-      };
-
-      // Helper: sample words directly from a regex using enumerate().
-      // enumerate() works well for both bounded and unbounded patterns.
-      // For bounded patterns like [a-z]{1,64}, enumerate() is fast.
-      // For unbounded patterns, we limit iterations to avoid slow enumeration.
-      const sampleFromRegex = async (pattern: string, count: number): Promise<string[]> => {
-        const complexityCap = 40;
-        if (this.estimateComplexity(pattern) > complexityCap) {
-          return [];
-        }
-        const results: string[] = [];
-        const seen = new Set<string>();
-        try {
-          const rb = await createRb(pattern);
-          const enumerator = rb.enumerate();
-          // Allow extra iterations in case some are excluded or duplicates.
-          // Multiplier of 5 provides reasonable slack for filtered results.
-          const iterationMultiplier = 5;
-          const maxIterations = count * iterationMultiplier;
-          for (let i = 0; i < maxIterations; i++) {
-            const next = enumerator.next();
-            if (next.done) {break;}
-            const candidate = next.value;
-            if (excluded.has(candidate) || seen.has(candidate)) {continue;}
-            results.push(candidate);
-            seen.add(candidate);
-            if (results.length >= count) {break;}
-          }
-        } catch {
-          // ignore
-        }
-        return results;
-      };
-
-      const pool = new Set<string>();
-      const desiredPoolSize = Math.max(6, candidateRegexes.length * 2);
-
-      // 1) Gather from pairwise differences (each call bounded by remaining budget)
-      //    Request more samples (4 instead of 2) to fill the pool faster and avoid
-      //    falling back to enumerate() which is slow when patterns agree on many words.
-      for (let i = 0; i < candidateRegexes.length; i++) {
-        for (let j = i + 1; j < candidateRegexes.length; j++) {
-          const elapsed = Date.now() - startTime;
-          if (elapsed > maxElapsedMs) {break;}
-          const a = candidateRegexes[i];
-          const b = candidateRegexes[j];
-          const fromA = await withTimeout(sampleDifference(a, b, 4), `sampleDifference ${a} \\ ${b}`);
-          const fromB = await withTimeout(sampleDifference(b, a, 4), `sampleDifference ${b} \\ ${a}`);
-          fromA?.forEach(w => pool.add(w));
-          fromB?.forEach(w => pool.add(w));
         }
       }
-      logger.info(
-        `generateTwoDistinguishingWords pairwise stage pool size: ${pool.size}, elapsed ${Date.now() - startTime}ms`
-      );
 
-      // 1b) Also sample directly from each candidate to get words from intersections.
-      //     This is important when one pattern is a subset of another (e.g., [a-z]+ vs [a-z]{1,64})
-      //     because the pairwise differences only give words from the larger set.
+      // Also sample directly from each candidate (for intersection words)
       for (const regex of candidateRegexes) {
-        const elapsed = Date.now() - startTime;
-        if (elapsed > maxElapsedMs) {break;}
-        const samples = await withTimeout(
-          sampleFromRegex(regex, 3),
-          `sampleFromRegex ${regex}`
-        );
-        samples?.forEach(w => pool.add(w));
-      }
-      logger.info(
-        `generateTwoDistinguishingWords after direct sampling pool size: ${pool.size}, elapsed ${Date.now() - startTime}ms`
-      );
-
-      // Helper: check if current pool has sufficient distinguishing power
-      // Returns true if we have at least 2 words that can distinguish candidates
-      const hasDistinguishingPair = (): boolean => {
-        const poolWords = Array.from(pool).filter(w => !excluded.has(w) && regexObjects.some(re => re.test(w)));
-        if (poolWords.length < 2) {return false;}
-        
-        // Limit pair checking to avoid O(n^2) explosion for large pools.
-        // 10 words gives us 45 pairs to check, which is sufficient to detect
-        // distinguishing power without excessive computation.
-        const maxWordsToCheck = 10;
-        // Check if any pair of words has different match vectors
-        for (let i = 0; i < Math.min(poolWords.length, maxWordsToCheck); i++) {
-          for (let j = i + 1; j < Math.min(poolWords.length, maxWordsToCheck); j++) {
-            const m1 = regexObjects.map(re => re.test(poolWords[i]));
-            const m2 = regexObjects.map(re => re.test(poolWords[j]));
-            if (m1.some((m, idx) => m !== m2[idx])) {
-              return true;
+        if (pool.size >= 30) break;
+        try {
+          const rb = await createRb(regex);
+          let count = 0;
+          for (const word of rb.enumerate()) {
+            if (!excluded.has(word) && !pool.has(word)) {
+              pool.add(word);
+              count++;
+              if (count >= 3) break;
             }
           }
-        }
-        return false;
-      };
-
-      // 2) Enumerate from candidates if needed.
-      //    Skip this step if pairwise difference sampling already found distinguishing words,
-      //    since enumerate() is slow when patterns agree on many short words.
-      const blockedBase = Array.from(excluded);
-      let pass = 0;
-      const skipEnumerateIfDistinguishing = hasDistinguishingPair() && pool.size >= 2;
-      if (skipEnumerateIfDistinguishing) {
-        logger.info(
-          `generateTwoDistinguishingWords: skipping enumerate() since pairwise sampling found distinguishing words`
-        );
-      }
-      while (!skipEnumerateIfDistinguishing &&
-             (pool.size < desiredPoolSize || (Date.now() - startTime) < minElapsedMs) &&
-             (Date.now() - startTime) < maxElapsedMs) {
-        let addedThisPass = 0;
-        for (const regex of candidateRegexes) {
-          const elapsed = Date.now() - startTime;
-          if (elapsed > maxElapsedMs) {break;}
-          if ((pool.size >= desiredPoolSize) && elapsed >= minElapsedMs) {break;}
-          try {
-            const samples = await withTimeout(
-              this.generateMultipleWords(regex, 6, [...blockedBase, ...pool]),
-              `generateMultipleWords ${regex}`
-            );
-            if (!samples) {continue;}
-            samples.forEach(s => {
-              if (!excluded.has(s)) {
-                const before = pool.size;
-                pool.add(s);
-                if (pool.size > before) {addedThisPass++;}
-              }
-            });
-          } catch {
-            // ignore and continue
-          }
-        }
-        pass++;
-        logger.info(
-          `generateTwoDistinguishingWords sampling pass ${pass}: pool ${pool.size}, elapsed ${Date.now() - startTime}ms`
-        );
-        if (addedThisPass === 0 && (Date.now() - startTime) >= minElapsedMs) {
-          break; // no progress after minimum time
+        } catch {
+          // Skip if too complex
         }
       }
-      logger.info(
-        `generateTwoDistinguishingWords final pool size before scoring: ${pool.size}, elapsed ${Date.now() - startTime}ms`
-      );
 
-      // Keep only words that match at least one candidate and aren’t excluded
-      const poolArray = Array.from(pool).filter(w => !excluded.has(w) && regexObjects.some(re => re.test(w)));
-
-      logger.info(
-        `generateTwoDistinguishingWords pool size after filtering: ${poolArray.length} (initial pool ${pool.size})`
+      // Filter pool to words that match at least one candidate
+      const poolArray = Array.from(pool).filter(w => 
+        !excluded.has(w) && regexObjects.some(re => re.test(w))
       );
 
       if (poolArray.length < 2) {
-        throw new Error('Exhausted word space: could not find two candidate-matching words after sampling all candidates.');
+        throw new Error('Could not find enough distinguishing words');
       }
 
-      // Score every pair for worst-case survivors and expected survivors
-      const totalCandidates = regexObjects.length;
+      // Score all pairs and find the best one
       let bestPair: [string, string] | null = null;
-      let bestScore: { worst: number; expected: number; length: number } | null = null;
-      let fallbackPair: [string, string] | null = null;
-      let fallbackScore: { worst: number; expected: number; length: number } | null = null;
+      let bestScore = Infinity;
 
       for (let i = 0; i < poolArray.length; i++) {
         for (let j = i + 1; j < poolArray.length; j++) {
           const w1 = poolArray[i];
           const w2 = poolArray[j];
+          
+          // Compute match vectors
           const m1 = regexObjects.map(re => re.test(w1));
           const m2 = regexObjects.map(re => re.test(w2));
-
-          const survivorsAA = m1.filter((m, idx) => m && m2[idx]).length;
-          const survivorsAR = m1.filter((m, idx) => m && !m2[idx]).length;
-          const survivorsRA = m1.filter((m, idx) => !m && m2[idx]).length;
-          const survivorsRR = totalCandidates - (survivorsAA + survivorsAR + survivorsRA);
-
-          const worst = Math.max(survivorsAA, survivorsAR, survivorsRA, survivorsRR);
-          const expected = (survivorsAA + survivorsAR + survivorsRA + survivorsRR) / 4;
-          const length = w1.length + w2.length;
-
-          const hasDifference = m1.some((m, idx) => m !== m2[idx]);
-          const score = { worst, expected, length };
-
-          if (hasDifference) {
-            if (!bestScore ||
-                score.worst < bestScore.worst ||
-                (score.worst === bestScore.worst && score.expected < bestScore.expected) ||
-                (score.worst === bestScore.worst && score.expected === bestScore.expected && score.length < bestScore.length)
-            ) {
-              bestScore = score;
-              bestPair = [w1, w2];
-            }
-          }
-
-          // Track a fallback even when match patterns are identical
-          if (!fallbackScore ||
-              score.worst < fallbackScore.worst ||
-              (score.worst === fallbackScore.worst && score.expected < fallbackScore.expected) ||
-              (score.worst === fallbackScore.worst && score.expected === fallbackScore.expected && score.length < fallbackScore.length)
-          ) {
-            fallbackScore = score;
-            fallbackPair = [w1, w2];
+          
+          // Count survivors for each of the 4 possible classification outcomes
+          const survivors = [
+            m1.filter((m, idx) => m && m2[idx]).length,      // accept both
+            m1.filter((m, idx) => m && !m2[idx]).length,     // accept w1, reject w2
+            m1.filter((m, idx) => !m && m2[idx]).length,     // reject w1, accept w2
+            m1.filter((m, idx) => !m && !m2[idx]).length     // reject both
+          ];
+          
+          // Score = worst case survivors (lower is better)
+          const worstCase = Math.max(...survivors);
+          
+          // Prefer pairs that actually distinguish (different match patterns)
+          const distinguishes = m1.some((m, idx) => m !== m2[idx]);
+          const score = distinguishes ? worstCase : worstCase + 1000;
+          
+          if (score < bestScore) {
+            bestScore = score;
+            bestPair = [w1, w2];
           }
         }
       }
 
       if (!bestPair) {
-        // Fall back to any best-scoring pair even if match vectors are identical
-        if (!fallbackPair) {
-          throw new Error('Exhausted word space: unable to select two distinguishing words that match at least one active candidate.');
-        }
-        bestPair = fallbackPair;
+        bestPair = [poolArray[0], poolArray[1]];
       }
 
+      // Validate result
       const [word1, word2] = bestPair;
-
-      logger.info(
-        `generateTwoDistinguishingWords selected pair: "${word1}" vs "${word2}" from pool ${poolArray.length}`
-      );
-
-      // CRITICAL: Validate that at least one word matches at least one candidate
-      const word1Matches = regexObjects.some(re => re.test(word1));
-      const word2Matches = regexObjects.some(re => re.test(word2));
-      
-      if (!word1Matches && !word2Matches) {
-        throw new Error(
-          `Exhausted word space: generated words "${word1}" and "${word2}" match zero active candidates. ` +
-          `Cannot continue classification loop.`
-        );
+      if (!regexObjects.some(re => re.test(word1)) && !regexObjects.some(re => re.test(word2))) {
+        throw new Error('Generated words match no candidates');
       }
 
       return {
-        words: [word1, word2],
-        explanation: `Words selected to best split candidate set (${candidateRegexes.length} candidates)`,
+        words: bestPair,
+        explanation: `Words selected to split ${candidateRegexes.length} candidates`,
         properties: ['Distinguishing word 1', 'Distinguishing word 2']
       };
     } catch (error) {
-      throw new Error(`Failed to generate two distinguishing words: ${error}`);
-    }
-  }
-
-
-
-
-  /** 
-   * Gets the number of words in the language of regexA that are not in the language of regexB.
-   * Note: This is a potentially expensive operation and may not terminate for complex regexes.
-   */
-  async countWordsInANotInB(regexA: string, regexB: string, maxCount: number = 1000): Promise<bigint | undefined> {
-    try {
-      const rbA = await createRb(regexA);
-      const rbB = await createRb(regexB);
-      const difference = rbA.without(new RegExp(`^${regexB}$`));
-
-      const size = difference.size();
-      return size;
-    } catch (error) {
-      if (isCacheOverflowError(error)) {
-        logger.warn(`Regex too complex for counting words in A not in B: '${regexA}' vs '${regexB}' - cache overflow`);
-        return undefined;
-      }
+      throw new Error(`Failed to generate distinguishing words: ${error}`);
     }
   }
 }
