@@ -148,22 +148,24 @@
                 '<button onclick="cancelEditPrompt()" style="padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);" title="Cancel">Cancel</button>' +
                 '</div>';
 
-            if (currentPromptDisplay) {
+            const isFinalVisible = !finalSection.classList.contains('hidden');
+            const targetDisplay = isFinalVisible && finalPromptDisplay ? finalPromptDisplay : currentPromptDisplay;
+
+            if (targetDisplay) {
+                targetDisplay.innerHTML = editHtml;
+                setTimeout(function() {
+                    const input = document.getElementById('editPromptInput');
+                    if (input) {
+                        input.focus();
+                    }
+                }, 10);
+            }
+
+            // Keep both displays in sync so the revised view is reflected when switching sections
+            if (targetDisplay === finalPromptDisplay && currentPromptDisplay) {
                 currentPromptDisplay.innerHTML = editHtml;
-                setTimeout(function() {
-                    const input = document.getElementById('editPromptInput');
-                    if (input) {
-                        input.focus();
-                    }
-                }, 10);
-            } else if (finalPromptDisplay) {
+            } else if (targetDisplay === currentPromptDisplay && finalPromptDisplay) {
                 finalPromptDisplay.innerHTML = editHtml;
-                setTimeout(function() {
-                    const input = document.getElementById('editPromptInput');
-                    if (input) {
-                        input.focus();
-                    }
-                }, 10);
             }
         }
 
