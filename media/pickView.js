@@ -206,6 +206,16 @@
                 .replace(/'/g, "'");
         }
 
+        // Literal-safe display for a single character (used in diff rendering)
+        function toLiteralChar(ch) {
+            return toLiteralString(ch);
+        }
+
+        // Escape for inline onclick usage
+        function escapeForOnclick(str) {
+            return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
         /**
          * Escape HTML special characters to prevent XSS
          */
@@ -219,6 +229,71 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
+        }
+
+        /**
+         * Compute a simple LCS-based diff between two words.
+         * Returns a list of ops: { type: 'equal' | 'delete' | 'insert', charA?, charB? }
+         */
+        function diffWords(a, b) {
+            const n = a.length;
+            const m = b.length;
+            const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+
+            for (let i = n - 1; i >= 0; i--) {
+                for (let j = m - 1; j >= 0; j--) {
+                    if (a[i] === b[j]) {
+                        dp[i][j] = dp[i + 1][j + 1] + 1;
+                    } else {
+                        dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+                    }
+                }
+            }
+
+            const ops = [];
+            let i = 0;
+            let j = 0;
+            while (i < n && j < m) {
+                if (a[i] === b[j]) {
+                    ops.push({ type: 'equal', charA: a[i], charB: b[j] });
+                    i++; j++;
+                } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+                    ops.push({ type: 'delete', charA: a[i] });
+                    i++;
+                } else {
+                    ops.push({ type: 'insert', charB: b[j] });
+                    j++;
+                }
+            }
+            while (i < n) {
+                ops.push({ type: 'delete', charA: a[i] });
+                i++;
+            }
+            while (j < m) {
+                ops.push({ type: 'insert', charB: b[j] });
+                j++;
+            }
+            return ops;
+        }
+
+        /**
+         * Render a word with diff highlighting based on ops.
+         * side: 'a' or 'b'
+         */
+        function renderWordWithDiff(ops, side, literalMode) {
+            const spans = [];
+            for (const op of ops) {
+                const char = side === 'a' ? op.charA : op.charB;
+                if (char === undefined) {
+                    continue;
+                }
+                const isDiff = op.type !== 'equal';
+                const displayChar = literalMode ? toLiteralChar(char) : char;
+                spans.push(
+                    `<span class="${isDiff ? 'diff-chunk' : 'same-chunk'}">${escapeHtml(displayChar) || '&nbsp;'}</span>`
+                );
+            }
+            return spans.join('');
         }
 
         function highlightRegex(pattern) {
@@ -838,58 +913,44 @@
             updateWordHistory(status.wordHistory);
             showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
 
-            wordPair.innerHTML = '<div class="word-card" id="card-' + pair.word1 + '" data-word="' + pair.word1.replace(/"/g, '&quot;') + '">' +
-                '<div class="word-display">' +
-                '<span class="word-readable">' + pair.word1 + '</span>' +
-                '<span class="word-literal">' + toLiteralString(pair.word1) + '</span>' +
-                '</div>' +
-                '<div class="word-actions">' +
-                '<button class="btn accept" onclick="classifyWord(\'' + pair.word1.replace(/'/g, "\\'") + '\', \'accept\')" title="Upvote">' +
-                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                '<path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '<path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '</svg>' +
-                '</button>' +
-                '<button class="btn reject" onclick="classifyWord(\'' + pair.word1.replace(/'/g, "\\'") + '\', \'reject\')" title="Downvote">' +
-                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                '<path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '<path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '</svg>' +
-                '</button>' +
-                '<button class="btn unsure" onclick="classifyWord(\'' + pair.word1.replace(/'/g, "\\'") + '\', \'unsure\')" title="Skip">' +
-                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
-                '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '</svg>' +
-                '</button>' +
-                '</div>' +
-                '</div>' +
-                '<div class="word-card" id="card-' + pair.word2 + '" data-word="' + pair.word2.replace(/"/g, '&quot;') + '">' +
-                '<div class="word-display">' +
-                '<span class="word-readable">' + pair.word2 + '</span>' +
-                '<span class="word-literal">' + toLiteralString(pair.word2) + '</span>' +
-                '</div>' +
-                '<div class="word-actions">' +
-                '<button class="btn accept" onclick="classifyWord(\'' + pair.word2.replace(/'/g, "\\'") + '\', \'accept\')" title="Upvote">' +
-                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                '<path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '<path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '</svg>' +
-                '</button>' +
-                '<button class="btn reject" onclick="classifyWord(\'' + pair.word2.replace(/'/g, "\\'") + '\', \'reject\')" title="Downvote">' +
-                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                '<path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '<path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '</svg>' +
-                '</button>' +
-                '<button class="btn unsure" onclick="classifyWord(\'' + pair.word2.replace(/'/g, "\\'") + '\', \'unsure\')" title="Skip">' +
-                '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
-                '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '</svg>' +
-                '</button>' +
-                '</div>' +
-                '</div>';
+            const diffOps = diffWords(pair.word1, pair.word2);
+
+            function renderWordCard(word, side) {
+                const readable = renderWordWithDiff(diffOps, side, false);
+                const literal = renderWordWithDiff(diffOps, side, true);
+                const dataWord = escapeHtml(word);
+                const clickWord = escapeForOnclick(word);
+
+                return `
+                <div class="word-card" data-word="${dataWord}">
+                    <div class="word-display">
+                        <span class="word-readable">${readable}</span>
+                        <span class="word-literal">${literal}</span>
+                    </div>
+                    <div class="word-actions">
+                        <button class="btn accept" onclick="classifyWord('${clickWord}', 'accept')" title="Upvote">
+                        <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        </button>
+                        <button class="btn reject" onclick="classifyWord('${clickWord}', 'reject')" title="Downvote">
+                        <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        </button>
+                        <button class="btn unsure" onclick="classifyWord('${clickWord}', 'unsure')" title="Skip">
+                        <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>
+                        <path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        </button>
+                    </div>
+                </div>`;
+            }
+
+            wordPair.innerHTML = renderWordCard(pair.word1, 'a') + renderWordCard(pair.word2, 'b');
         }
 
         function updateWordHistory(history) {
