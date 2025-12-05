@@ -31,6 +31,7 @@
         const currentPromptDisplay = document.getElementById('currentPromptDisplay');
         const finalPromptDisplay = document.getElementById('finalPromptDisplay');
         const reportIssueBtn = document.getElementById('reportIssueBtn');
+        const diffToggle = document.getElementById('diffToggle');
 
         // Model selector elements
         const modelSelect = document.getElementById('modelSelect');
@@ -75,12 +76,19 @@
 
         // Track literal mode state
         let literalMode = true;
+        // Track diff view state (off by default)
+        let diffMode = false;
+
+        // Keep last shown pair/status for re-rendering when toggles change
+        let lastPair = null;
+        let lastStatus = null;
 
         // Track classified words
         const classifiedWords = new Set();
 
-        // Initialize body data attribute
+        // Initialize body data attributes
         document.body.setAttribute('data-literal-mode', literalMode.toString());
+        document.body.setAttribute('data-diff-mode', diffMode.toString());
 
         /**
          * Update the model selector dropdown with available models
@@ -442,6 +450,10 @@
                 if (menuRow) {
                     menuRow.setAttribute('aria-checked', literalMode ? 'true' : 'false');
                 }
+                // Re-render current pair if one exists
+                if (lastPair && lastStatus) {
+                    showWordPair(lastPair, lastStatus);
+                }
             });
         }
 
@@ -459,6 +471,29 @@
                 const menuRow = document.getElementById('showCandidatesMenuRow');
                 if (menuRow) {
                     menuRow.setAttribute('aria-checked', show ? 'true' : 'false');
+                }
+                // Re-render current pair if one exists
+                if (lastPair && lastStatus) {
+                    showWordPair(lastPair, lastStatus);
+                }
+            });
+        }
+
+        if (diffToggle) {
+            // ensure UI reflects default
+            if (!diffToggle.checked) {
+                // nothing needed; default is off
+            }
+            diffToggle.addEventListener('change', function() {
+                diffMode = diffToggle.checked;
+                document.body.setAttribute('data-diff-mode', diffMode.toString());
+                const menuRow = document.getElementById('diffMenuRow');
+                if (menuRow) {
+                    menuRow.setAttribute('aria-checked', diffMode ? 'true' : 'false');
+                }
+                // Re-render current pair if one exists
+                if (lastPair && lastStatus) {
+                    showWordPair(lastPair, lastStatus);
                 }
             });
         }
@@ -910,16 +945,26 @@
         }
 
         function showWordPair(pair, status) {
+            // cache for re-render when toggles change
+            lastPair = pair;
+            lastStatus = status;
+
             showSection('voting');
             updateCandidates(status.candidateDetails, status.threshold);
             updateWordHistory(status.wordHistory);
             showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
 
-            const diffOps = diffWords(pair.word1, pair.word2);
+            const diffOps = diffMode ? diffWords(pair.word1, pair.word2) : null;
 
             function renderWordCard(word, side) {
-                const readable = renderWordWithDiff(diffOps, side, false);
-                const literal = renderWordWithDiff(diffOps, side, true);
+                let readable, literal;
+                if (diffOps) {
+                    readable = renderWordWithDiff(diffOps, side, false);
+                    literal = renderWordWithDiff(diffOps, side, true);
+                } else {
+                    readable = escapeHtml(word);
+                    literal = toLiteralString(word);
+                }
                 const dataWord = escapeHtml(word);
                 const clickWord = escapeForOnclick(word);
 
