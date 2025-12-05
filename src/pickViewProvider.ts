@@ -15,7 +15,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private analyzer = createRegexAnalyzer();
   private cancellationTokenSource?: vscode.CancellationTokenSource;
   private stagnantPairCount = 0;
-  private lastActiveCandidateCount?: number;
+  private nonEliminatingClassificationCount = 0;
   private stagnationWarningSent = false;
   private nextPairMaxElapsedMs?: number;
 
@@ -403,6 +403,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleClassifyWord(word: string, classification: string) {
     try {
+      const previousStatus = this.controller.getStatus();
       const classificationEnum = classification as WordClassification;
       this.controller.classifyWord(word, classificationEnum);
 
@@ -410,7 +411,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       const status = this.controller.getStatus();
       const bothClassified = this.controller.areBothWordsClassified();
 
-      this.updateStagnationTracking(status, bothClassified);
+      const activeCountDropped = status.activeCandidates < previousStatus.activeCandidates;
+
+      this.updateStagnationTracking(status, activeCountDropped);
 
       if (state === PickState.FINAL_RESULT) {
         await this.handleFinalResult();
@@ -468,10 +471,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleVote(acceptedWord: string) {
     try {
+      const previousStatus = this.controller.getStatus();
       this.controller.processVote(acceptedWord);
-      
+
       const state = this.controller.getState();
       const status = this.controller.getStatus();
+      const activeCountDropped = status.activeCandidates < previousStatus.activeCandidates;
+
+      this.updateStagnationTracking(status, activeCountDropped);
       
       if (state === PickState.FINAL_RESULT) {
         await this.handleFinalResult();
@@ -789,7 +796,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
    */
   private resetStagnationTracking() {
     this.stagnantPairCount = 0;
-    this.lastActiveCandidateCount = undefined;
+    this.nonEliminatingClassificationCount = 0;
     this.stagnationWarningSent = false;
     this.nextPairMaxElapsedMs = undefined;
   }
@@ -942,30 +949,23 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Detect when repeated classification pairs are not reducing the active candidate set
+   * Detect when repeated classifications are not reducing the active candidate set
    * and notify the user that the remaining regexes are very similar.
    */
-  private updateStagnationTracking(status: ReturnType<PickController['getStatus']>, bothClassified: boolean) {
-    if (this.lastActiveCandidateCount === undefined) {
-      this.lastActiveCandidateCount = status.activeCandidates;
-      return;
-    }
-
-    if (status.activeCandidates !== this.lastActiveCandidateCount) {
-      this.lastActiveCandidateCount = status.activeCandidates;
+  private updateStagnationTracking(status: ReturnType<PickController['getStatus']>, activeCountDropped: boolean) {
+    if (activeCountDropped) {
       this.stagnantPairCount = 0;
+      this.nonEliminatingClassificationCount = 0;
       this.stagnationWarningSent = false;
       this.nextPairMaxElapsedMs = undefined;
       return;
     }
 
-    if (!bothClassified) {
-      return;
-    }
+    this.nonEliminatingClassificationCount++;
 
-    this.stagnantPairCount++;
-
-    if (this.stagnantPairCount >= 3 && !this.stagnationWarningSent) {
+    if (this.nonEliminatingClassificationCount >= 3 && !this.stagnationWarningSent) {
+      // Track pair stagnation separately for legacy logging while keeping the classification-based trigger.
+      this.stagnantPairCount++;
       this.stagnationWarningSent = true;
       // Increase the search budget for the next pair generation attempt so we can
       // push harder on hard-to-distinguish candidates without starving the UI.
