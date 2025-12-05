@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PickController, PickState, WordClassification } from './pickController';
-import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, getAvailableChatModels } from './regexService';
+import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, getAvailableChatModels } from './regexService';
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
 import { openIssueReport } from './issueReporter';
@@ -196,6 +196,23 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           logger.error(error, 'No language models available');
           this.sendMessage({
             type: 'noModelsAvailable',
+            message: error.message
+          });
+          return;
+        }
+
+        if (error instanceof ModelNotSupportedError) {
+          logger.error(error, 'Model not supported');
+          vscode.window.showErrorMessage(
+            error.message,
+            'Select Different Model'
+          ).then(selection => {
+            if (selection === 'Select Different Model') {
+              this.checkAvailableModels();
+            }
+          });
+          this.sendMessage({
+            type: 'error',
             message: error.message
           });
           return;
@@ -629,6 +646,23 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           logger.error(error, 'No language models available');
           this.sendMessage({
             type: 'noModelsAvailable',
+            message: error.message
+          });
+          return;
+        }
+
+        if (error instanceof ModelNotSupportedError) {
+          logger.error(error, 'Model not supported');
+          vscode.window.showErrorMessage(
+            error.message,
+            'Select Different Model'
+          ).then(selection => {
+            if (selection === 'Select Different Model') {
+              this.checkAvailableModels();
+            }
+          });
+          this.sendMessage({
+            type: 'error',
             message: error.message
           });
           return;

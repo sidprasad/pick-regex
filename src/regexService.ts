@@ -42,6 +42,16 @@ export class NoModelsAvailableError extends Error {
 }
 
 /**
+ * Error thrown when the selected model is not supported by the backend
+ */
+export class ModelNotSupportedError extends Error {
+  constructor(modelName: string) {
+    super(`The model "${modelName}" is not currently supported. Please try selecting a different model.`);
+    this.name = 'ModelNotSupportedError';
+  }
+}
+
+/**
  * Get all available chat models from VS Code
  * @returns Array of available chat models
  */
@@ -218,6 +228,14 @@ export async function generateRegexFromDescription(
         );
       }
     }
+    
+    // Check for model_not_supported error (e.g., GPT-5 preview)
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('model_not_supported')) {
+      logger.error(error, `Model not supported: ${model.name}`);
+      throw new ModelNotSupportedError(model.name);
+    }
+    
     // Re-throw other errors
     throw error;
   }
