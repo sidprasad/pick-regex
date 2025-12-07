@@ -306,6 +306,8 @@
 
         .candidates-list {
             margin-top: 10px;
+            max-height: 40vh;
+            overflow-y: auto;
         }
 
         .candidate-item {
@@ -816,7 +818,9 @@
         }
 
         .regex-quantifier {
-            color: var(--vscode-charts-blue, #4fc1ff);
+            /* Use a darker, more visible color for quantifiers in light mode */
+            color: var(--vscode-symbolIcon-numberForeground, #0e639c);
+            font-weight: 500;
         }
 
         .regex-escape {
@@ -825,6 +829,24 @@
 
         .regex-literal {
             color: var(--vscode-editor-foreground);
+        }
+
+        /* Ensure copy buttons and icons are visible in light themes */
+        .candidate-header .icon-btn,
+        .regex-display .icon-btn {
+            color: var(--vscode-icon-foreground, var(--vscode-foreground));
+            opacity: 0.8;
+        }
+
+        .candidate-header .icon-btn:hover,
+        .regex-display .icon-btn:hover {
+            opacity: 1;
+            background: var(--vscode-toolbar-hoverBackground);
+        }
+
+        .candidate-header .codicon,
+        .regex-display .codicon {
+            color: var(--vscode-icon-foreground, var(--vscode-foreground));
         }
 
         /* Modal styles */

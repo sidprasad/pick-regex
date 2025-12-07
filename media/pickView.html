@@ -74,6 +74,9 @@
         <!-- Voting Section -->
         <div id="votingSection" class="section hidden">
             <div id="currentPromptDisplay" class="current-prompt-display"></div>
+            <div style="margin-bottom: 12px;">
+                <button id="startFreshBtn" class="secondary full-width">Build a New Regex</button>
+            </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h4 style="margin:0;">Should the generated regex match these words?</h4>
                 <div class="display-controls" aria-hidden="false">
@@ -105,9 +108,6 @@
             <div class="word-history" id="wordHistory">
                 <h3>Word Classification History</h3>
                 <div id="historyItems"></div>
-            </div>
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--vscode-panel-border);">
-                <button id="startFreshBtn" class="secondary full-width">Build a New Regex</button>
             </div>
         </div>
 
