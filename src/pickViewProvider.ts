@@ -87,7 +87,6 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'reportIssue':
           try {
             await openIssueReport();
-            this.sendMessage({ type: 'info', message: 'Issue template copied to clipboard. Paste it into GitHub.' });
           } catch (error) {
             logger.error(error, 'Failed to open issue report');
             this.sendMessage({ type: 'error', message: 'Failed to open issue report' });

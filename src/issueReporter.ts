@@ -47,5 +47,22 @@ export async function openIssueReport(): Promise<void> {
   // Use a clean new-issue link; user pastes the clipboard content.
   const issueUrl = 'https://github.com/sidprasad/pick-regex/issues/new';
   await vscode.env.openExternal(vscode.Uri.parse(issueUrl));
-  vscode.window.showInformationMessage('Issue template copied to clipboard. Paste it into the GitHub form.');
+  
+  // Show modal dialog if enabled
+  const config = vscode.workspace.getConfiguration('pick');
+  const showModal = config.get<boolean>('showIssueReportModal', true);
+  
+  if (showModal) {
+    const selection = await vscode.window.showInformationMessage(
+      'Issue template copied to clipboard. The GitHub issue page will open in your browser. Paste the clipboard content into the issue form.',
+      { modal: true },
+      'OK',
+      "Don't Show Again"
+    );
+    
+    if (selection === "Don't Show Again") {
+      await config.update('showIssueReportModal', false, vscode.ConfigurationTarget.Global);
+      logger.info('User disabled issue report modal');
+    }
+  }
 }
