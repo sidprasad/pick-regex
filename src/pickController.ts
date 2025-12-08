@@ -68,7 +68,12 @@ export class PickController {
   /**
    * Start the process with a user prompt
    */
-  async generateCandidates(prompt: string, candidatePatterns: string[], equivalenceMap: Map<string, string[]> = new Map()): Promise<void> {
+  async generateCandidates(
+    prompt: string, 
+    candidatePatterns: string[], 
+    equivalenceMap: Map<string, string[]> = new Map(),
+    progressCallback?: (current: number, total: number) => void
+  ): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Generating candidates for prompt: ${prompt}`);
     this.currentPrompt = prompt;
@@ -84,7 +89,7 @@ export class PickController {
     }));
     logger.info(`Initialized ${this.candidates.length} candidate regexes.`);
 
-    await this.autoAdjustThreshold(candidatePatterns);
+    await this.autoAdjustThreshold(candidatePatterns, progressCallback);
 
     this.usedWords.clear();
     this.wordHistory = [];
@@ -96,7 +101,12 @@ export class PickController {
    * Refine the current prompt with new candidates while preserving existing classifications
    * This allows users to iterate on their prompt without losing their work
    */
-  async refineCandidates(newPrompt: string, newCandidatePatterns: string[], equivalenceMap: Map<string, string[]> = new Map()): Promise<void> {
+  async refineCandidates(
+    newPrompt: string, 
+    newCandidatePatterns: string[], 
+    equivalenceMap: Map<string, string[]> = new Map(),
+    progressCallback?: (current: number, total: number) => void
+  ): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Refining candidates with new prompt: ${newPrompt}`);
     logger.info(`Preserving ${this.wordHistory.length} existing classifications`);
@@ -116,7 +126,7 @@ export class PickController {
     // Re-apply existing classifications to new candidates
     this.recalculateVotes();
 
-    await this.autoAdjustThreshold(newCandidatePatterns);
+    await this.autoAdjustThreshold(newCandidatePatterns, progressCallback);
 
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state after refinement.');
@@ -596,7 +606,10 @@ export class PickController {
    * For each candidate, the threshold is the SMALLEST number of distinguishing words
    * between it and ANY other candidate, capped at the default threshold.
    */
-  private async autoAdjustThreshold(candidatePatterns: string[]): Promise<void> {
+  private async autoAdjustThreshold(
+    candidatePatterns: string[],
+    progressCallback?: (current: number, total: number) => void
+  ): Promise<void> {
     if (candidatePatterns.length < 2) {
       return;
     }
@@ -607,36 +620,78 @@ export class PickController {
     // Initialize with default threshold
     candidatePatterns.forEach(pattern => minDistinguishing.set(pattern, defaultThreshold));
 
+    logger.info(`Computing distinguishability for ${candidatePatterns.length} candidates...`);
+    let timeoutCount = 0;
+
+    // Calculate total comparisons for progress
+    const totalComparisons = (candidatePatterns.length * (candidatePatterns.length - 1)) / 2;
+    let completedComparisons = 0;
+    let foundMinThreshold = false;
+
     // Compare all pairs
-    for (let i = 0; i < candidatePatterns.length; i++) {
-      for (let j = i + 1; j < candidatePatterns.length; j++) {
+    for (let i = 0; i < candidatePatterns.length && !foundMinThreshold; i++) {
+      for (let j = i + 1; j < candidatePatterns.length && !foundMinThreshold; j++) {
         try {
-          const countANotB = await this.analyzer.countWordsInANotInB(
-            candidatePatterns[i],
-            candidatePatterns[j]
-          );
-          const countBNotA = await this.analyzer.countWordsInANotInB(
-            candidatePatterns[j],
-            candidatePatterns[i]
-          );
+          // Add timeout to prevent hanging on complex regex comparisons
+          const timeoutPromise = new Promise<void>((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout')), 5000); // 5 second timeout per comparison
+          });
+          
+          const countPromise = (async () => {
+            const countANotB = await this.analyzer.countWordsInANotInB(
+              candidatePatterns[i],
+              candidatePatterns[j]
+            );
+            const countBNotA = await this.analyzer.countWordsInANotInB(
+              candidatePatterns[j],
+              candidatePatterns[i]
+            );
 
-          // Convert bigint to number, capping at default threshold
-          const countA = countANotB !== undefined 
-            ? Math.min(Number(countANotB), defaultThreshold)
-            : defaultThreshold;
-          const countB = countBNotA !== undefined 
-            ? Math.min(Number(countBNotA), defaultThreshold)
-            : defaultThreshold;
+            // Convert bigint to number, capping at default threshold
+            const countA = countANotB !== undefined 
+              ? Math.min(Number(countANotB), defaultThreshold)
+              : defaultThreshold;
+            const countB = countBNotA !== undefined 
+              ? Math.min(Number(countBNotA), defaultThreshold)
+              : defaultThreshold;
 
-          // Update minimum for each candidate
-          const currentMinA = minDistinguishing.get(candidatePatterns[i])!;
-          const currentMinB = minDistinguishing.get(candidatePatterns[j])!;
-          minDistinguishing.set(candidatePatterns[i], Math.min(currentMinA, countA));
-          minDistinguishing.set(candidatePatterns[j], Math.min(currentMinB, countB));
+            // Update minimum for each candidate
+            const currentMinA = minDistinguishing.get(candidatePatterns[i])!;
+            const currentMinB = minDistinguishing.get(candidatePatterns[j])!;
+            minDistinguishing.set(candidatePatterns[i], Math.min(currentMinA, countA));
+            minDistinguishing.set(candidatePatterns[j], Math.min(currentMinB, countB));
+            
+            // Check if we've reached minimum threshold - can stop early
+            if (Math.min(currentMinA, countA) === 1 || Math.min(currentMinB, countB) === 1) {
+              foundMinThreshold = true;
+              logger.info('Found minimum threshold of 1 - stopping early');
+            }
+          })();
+
+          await Promise.race([countPromise, timeoutPromise]);
         } catch (error) {
-          logger.warn(`Could not count distinguishing words for '${candidatePatterns[i]}' vs '${candidatePatterns[j]}': ${error}`);
+          const errMsg = error instanceof Error ? error.message : String(error);
+          if (errMsg === 'Timeout') {
+            timeoutCount++;
+            logger.warn(`Timeout counting distinguishing words for pair ${i+1}-${j+1} - will use minimum threshold`);
+            // Set both to 1 (safest/most conservative) if we timeout
+            minDistinguishing.set(candidatePatterns[i], 1);
+            minDistinguishing.set(candidatePatterns[j], 1);
+            foundMinThreshold = true; // Can stop since we hit minimum
+          } else {
+            logger.warn(`Could not count distinguishing words for '${candidatePatterns[i]}' vs '${candidatePatterns[j]}': ${error}`);
+          }
+        } finally {
+          completedComparisons++;
+          if (progressCallback) {
+            progressCallback(completedComparisons, totalComparisons);
+          }
         }
       }
+    }
+
+    if (timeoutCount > 0) {
+      logger.warn(`${timeoutCount} pairwise comparison(s) timed out - using conservative threshold of 1`);
     }
 
     // Set threshold for each candidate (minimum 1)
