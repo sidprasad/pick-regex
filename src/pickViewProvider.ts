@@ -50,7 +50,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'refineCandidates':
           // Don't await - run asynchronously so other messages can be processed
-          this.handleRefineCandidates(data.prompt, data.modelId).catch(error => {
+          this.handleRefineCandidates(data.prompt, data.modelId, data.modelChanged, data.previousModelId).catch(error => {
             logger.error(error, 'Error in handleRefineCandidates');
           });
           break;
@@ -615,8 +615,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleRefineCandidates(prompt: string, modelId?: string) {
+  private async handleRefineCandidates(prompt: string, modelId?: string, modelChanged?: boolean, previousModelId?: string) {
     try {
+      // Log revision type
+      if (modelChanged && previousModelId) {
+        const prevModelDesc = await this.getModelDescription(previousModelId);
+        const newModelDesc = await this.getModelDescription(modelId);
+        logger.info(`Revising with MODEL CHANGE: ${prevModelDesc || previousModelId} → ${newModelDesc || modelId}`);
+      } else {
+        logger.info(`Revising with prompt refinement (same model: ${modelId || 'default'})`);
+      }
+
       const modelDescription = await this.getModelDescription(modelId);
       const statusMessage = modelDescription
         ? `Asking ${modelDescription} to refine your regex candidates...`

@@ -47,6 +47,7 @@
         // Track available models
         let availableModels = [];
         let selectedModelId = '';
+        let previousModelId = '';
         
         if (statusCancelBtn) {
             statusCancelBtn.addEventListener('click', function() {
@@ -143,17 +144,33 @@
 
         function editPrompt() {
             const currentPrompt = promptInput.value;
+            
+            // Build model selector options
+            let modelOptions = '';
+            availableModels.forEach(function(model) {
+                const selected = model.id === selectedModelId ? ' selected' : '';
+                modelOptions += '<option value="' + model.id + '"' + selected + '>' + model.name + '</option>';
+            });
+            
             const editHtml = '<div class="prompt-label">Revise Your Description</div>' +
+                '<div style="display: flex; flex-direction: column; gap: 8px;">' +
                 '<div style="display: flex; gap: 8px; align-items: center;">' +
                 '<input type="text" id="editPromptInput" value="' + currentPrompt + '" ' +
                 'style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;" ' +
                 'placeholder="Enter a refined description..." />' +
-                '<button onclick="submitEditedPrompt()" style="padding: 6px 12px; min-width: auto;" title="Generate new candidates with edited prompt">' +
+                '</div>' +
+                '<div style="display: flex; gap: 8px; align-items: center;">' +
+                '<select id="editModelSelect" ' +
+                'style="flex: 1; padding: 6px 8px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 2px; font-size: 13px;">' +
+                modelOptions +
+                '</select>' +
+                '<button onclick="submitEditedPrompt()" style="padding: 6px 12px; min-width: auto;" title="Generate new candidates with revised prompt and model">' +
                 '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="12" height="12">' +
                 '<path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
                 '</svg>' +
                 '</button>' +
                 '<button onclick="cancelEditPrompt()" style="padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);" title="Cancel">Cancel</button>' +
+                '</div>' +
                 '</div>';
 
             const isFinalVisible = !finalSection.classList.contains('hidden');
@@ -165,6 +182,12 @@
                     const input = document.getElementById('editPromptInput');
                     if (input) {
                         input.focus();
+                        input.addEventListener('keypress', function(e) {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                submitEditedPrompt();
+                            }
+                        });
                     }
                 }, 10);
             }
@@ -179,11 +202,23 @@
 
         function submitEditedPrompt() {
             const editInput = document.getElementById('editPromptInput');
+            const editModelSelect = document.getElementById('editModelSelect');
             const newPrompt = editInput.value.trim();
+            const newModelId = editModelSelect ? editModelSelect.value : selectedModelId;
+            
             if (newPrompt) {
                 promptInput.value = newPrompt;
                 updatePromptDisplay(newPrompt);
-                vscode.postMessage({ type: 'refineCandidates', prompt: newPrompt, modelId: selectedModelId });
+                const modelChanged = previousModelId && previousModelId !== newModelId;
+                vscode.postMessage({ 
+                    type: 'refineCandidates', 
+                    prompt: newPrompt, 
+                    modelId: newModelId,
+                    modelChanged: modelChanged,
+                    previousModelId: previousModelId
+                });
+                selectedModelId = newModelId;
+                previousModelId = newModelId;
                 showSection('loading');
             }
         }
@@ -419,6 +454,7 @@
             if (prompt) {
                 updatePromptDisplay(prompt);
                 vscode.postMessage({ type: 'generateCandidates', prompt: prompt, modelId: selectedModelId });
+                previousModelId = selectedModelId;
                 showSection('loading');
             }
         });
@@ -1160,7 +1196,7 @@
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
             setTimeout(function() {
-                resetUI(false);
+                resetUI(true);
             }, 2000);
         }
 
