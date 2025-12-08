@@ -703,7 +703,7 @@
         function showError(message) {
             // Stop the spinner and reset to prompt section
             showSection('prompt');
-            // Ensure cancel button is hidden (not handled by showSection)
+            // statusCancelBtn needs explicit hiding since showSection doesn't manage it
             statusCancelBtn.classList.add('hidden');
             
             // Show the error message
