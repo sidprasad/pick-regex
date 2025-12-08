@@ -703,10 +703,8 @@
         function showError(message) {
             // Stop the spinner and reset to prompt section
             showSection('prompt');
-            statusBar.classList.add('hidden');
-            inlineCancelBtn.classList.add('hidden');
+            // Ensure cancel button is hidden (not handled by showSection)
             statusCancelBtn.classList.add('hidden');
-            generateBtn.classList.remove('hidden');
             
             // Show the error message
             errorSection.textContent = message;
