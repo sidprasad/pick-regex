@@ -43,10 +43,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
      webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.type) {
         case 'generateCandidates':
-          await this.handleGenerateCandidates(data.prompt, data.modelId);
+          // Don't await - run asynchronously so other messages can be processed
+          this.handleGenerateCandidates(data.prompt, data.modelId).catch(error => {
+            logger.error(error, 'Error in handleGenerateCandidates');
+          });
           break;
         case 'refineCandidates':
-          await this.handleRefineCandidates(data.prompt, data.modelId);
+          // Don't await - run asynchronously so other messages can be processed
+          this.handleRefineCandidates(data.prompt, data.modelId).catch(error => {
+            logger.error(error, 'Error in handleRefineCandidates');
+          });
           break;
         case 'classifyWord':
           this.handleClassifyWord(data.word, data.classification);
