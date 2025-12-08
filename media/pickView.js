@@ -701,6 +701,14 @@
         }
 
         function showError(message) {
+            // Stop the spinner and reset to prompt section
+            showSection('prompt');
+            statusBar.classList.add('hidden');
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+            generateBtn.classList.remove('hidden');
+            
+            // Show the error message
             errorSection.textContent = message;
             errorSection.classList.remove('hidden');
         }
