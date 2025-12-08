@@ -159,6 +159,8 @@ export async function generateRegexFromDescription(
   token: vscode.CancellationToken,
   modelId?: string
 ): Promise<RegexGenerationResult> {
+  logger.info(`User prompt: ${description}`);
+
   // Get available language models
   const models = await vscode.lm.selectChatModels({});
 
