@@ -68,8 +68,7 @@
       {
         "command": "pick.reportIssue",
         "key": "ctrl+alt+r",
-        "mac": "cmd+alt+r",
-        "when": "editorTextFocus"
+        "mac": "cmd+alt+r"
       }
     ],
     "configuration": {
