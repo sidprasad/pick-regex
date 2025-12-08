@@ -354,7 +354,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       // Initialize controller with unique candidates
-      await this.controller.generateCandidates(prompt, uniqueCandidates, equivalenceMap);
+      this.sendMessage({ type: 'status', message: 'Determining elimination thresholds...' });
+      await this.controller.generateCandidates(prompt, uniqueCandidates, equivalenceMap, (current, total) => {
+        const percent = Math.round((current / total) * 100);
+        this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
+      });
       
       // Check cancellation before sending results
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -822,7 +826,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       // Refine candidates with preserved classifications
-      await this.controller.refineCandidates(prompt, uniqueCandidates, equivalenceMap);
+      this.sendMessage({ type: 'status', message: 'Determining elimination thresholds...' });
+      await this.controller.refineCandidates(prompt, uniqueCandidates, equivalenceMap, (current, total) => {
+        const percent = Math.round((current / total) * 100);
+        this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
+      });
       
       // Check cancellation before sending results
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
