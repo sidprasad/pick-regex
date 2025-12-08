@@ -701,6 +701,16 @@
         }
 
         function showError(message) {
+            // Stop the spinner and clear status message
+            if (statusMessage) {
+                statusMessage.innerHTML = '';
+            }
+            // Reset to prompt section
+            showSection('prompt');
+            // statusCancelBtn needs explicit hiding since showSection doesn't manage it
+            statusCancelBtn.classList.add('hidden');
+            
+            // Show the error message
             errorSection.textContent = message;
             errorSection.classList.remove('hidden');
         }
