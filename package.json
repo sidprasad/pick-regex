@@ -5,7 +5,7 @@
   "publisher": "SiddharthaPrasad",
   "icon": "images/icon.png",
   "license": "MIT",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "repository": {
     "type": "git",
     "url": "https://github.com/sidprasad/pick-regex"
@@ -68,8 +68,7 @@
       {
         "command": "pick.reportIssue",
         "key": "ctrl+alt+r",
-        "mac": "cmd+alt+r",
-        "when": "editorTextFocus"
+        "mac": "cmd+alt+r"
       }
     ],
     "configuration": {
@@ -85,6 +84,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable or disable the survey prompt after using PICK multiple times"
+        },
+        "pick.showIssueReportModal": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show modal dialog when reporting an issue to remind user to paste clipboard content"
         }
       }
     }
