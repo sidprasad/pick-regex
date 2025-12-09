@@ -9,6 +9,7 @@
 </head>
 
 <body>
+    <!--SPLASH_HTML_PLACEHOLDER-->
     <div class="container">
         <!-- Status Bar (global - shown during LLM operations) -->
         <div id="statusBar" class="status-bar hidden">
@@ -38,7 +39,7 @@
       <option value="">Loading models...</option>
     </select>
   </div>
-  
+
   <p style="margin: 0 0 6px 0; font-size: 1.05rem; font-weight: 500;">
     Describe what your regex should match.
   </p>
@@ -136,7 +137,7 @@
 
         <!-- Error Display -->
         <div id="errorSection" class="error hidden"></div>
-        
+
         <!-- Candidates help modal (hidden by default) -->
         <div id="candidatesHelpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="candidatesHelpTitle">
   <div class="modal-overlay" id="candidatesHelpOverlay"></div>
@@ -166,7 +167,8 @@
         if (window.initializePickView) {
             window.initializePickView(vscode);
         }
-    </script>
+        
+        </script>
 </body>
 
 </html>

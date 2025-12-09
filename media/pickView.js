@@ -37,12 +37,21 @@
         const modelSelect = document.getElementById('modelSelect');
         const modelSelectorRow = document.getElementById('modelSelectorRow');
 
+        // Splash screen elements
+        const splashScreen = document.getElementById('splashScreen');
+        const splashStartBtn = document.getElementById('splashStartBtn');
+        const splashDismissBtn = document.getElementById('splashDismissBtn');
+
         // Additional UI Elements
         const promptInput = document.getElementById('promptInput');
         const generateBtn = document.getElementById('generateBtn');
         const resetBtn = document.getElementById('resetBtn');
         const startFreshBtn = document.getElementById('startFreshBtn');
         const cancelBtn = inlineCancelBtn;
+
+        // Persisted webview state (used to avoid repeatedly showing the splash)
+        let viewState = vscode.getState() || {};
+        const hasAcknowledgedSplash = Boolean(viewState.splashAcknowledged);
         
         // Random placeholder rotation
         const placeholders = [
@@ -61,7 +70,34 @@
         let availableModels = [];
         let selectedModelId = '';
         let previousModelId = '';
-        
+
+        function hideSplash() {
+            if (splashScreen) {
+                splashScreen.classList.add('hidden');
+                splashScreen.setAttribute('aria-hidden', 'true');
+            }
+
+            viewState = { ...viewState, splashAcknowledged: true };
+            vscode.setState(viewState);
+
+            if (promptInput) {
+                promptInput.focus();
+            }
+        }
+
+        if (splashScreen && !hasAcknowledgedSplash) {
+            splashScreen.classList.remove('hidden');
+            splashScreen.setAttribute('aria-hidden', 'false');
+        }
+
+        if (splashStartBtn) {
+            splashStartBtn.addEventListener('click', hideSplash);
+        }
+
+        if (splashDismissBtn) {
+            splashDismissBtn.addEventListener('click', hideSplash);
+        }
+
         if (statusCancelBtn) {
             statusCancelBtn.addEventListener('click', function() {
                 vscode.postMessage({ type: 'cancel' });

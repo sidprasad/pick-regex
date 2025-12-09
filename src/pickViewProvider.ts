@@ -1075,14 +1075,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private getHtmlForWebview(webview: vscode.Webview) {
     const htmlPath = path.join(this.extensionUri.fsPath, 'media', 'pickView.html');
+    const splashPath = path.join(this.extensionUri.fsPath, 'media', 'pickSplash.html');
     const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'pickView.js'));
     const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'pickView.css'));
     
     try {
+      const splashHtml = fs.readFileSync(splashPath, 'utf8');
       let html = fs.readFileSync(htmlPath, 'utf8');
-      // Inject the CSS and JS file URIs into the HTML
+      // Inject the CSS, JS, and splash partial into the HTML
       html = html.replace('<!--CSS_URI_PLACEHOLDER-->', cssUri.toString());
       html = html.replace('<!--JS_URI_PLACEHOLDER-->', jsUri.toString());
+      html = html.replace('<!--SPLASH_HTML_PLACEHOLDER-->', splashHtml);
       return html;
     } catch (err) {
       // In test environments the media file may not be available. Return a minimal
