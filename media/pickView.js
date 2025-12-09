@@ -44,6 +44,19 @@
         const startFreshBtn = document.getElementById('startFreshBtn');
         const cancelBtn = inlineCancelBtn;
         
+        // Random placeholder rotation
+        const placeholders = [
+            'e.g., January birthdays',
+            'e.g., T Shirt Sizes',
+            'e.g., Countries in North America'
+        ];
+        
+        // Set a random placeholder on load
+        if (promptInput) {
+            const randomIndex = Math.floor(Math.random() * placeholders.length);
+            promptInput.placeholder = placeholders[randomIndex];
+        }
+        
         // Track available models
         let availableModels = [];
         let selectedModelId = '';
