@@ -36,6 +36,12 @@
             padding: 18px 20px 16px 20px;
         }
 
+        .splash-card h3 {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+            color: var(--vscode-titleBar-activeForeground);
+        }
+
         .splash-pill {
             display: inline-block;
             padding: 4px 10px;
@@ -63,6 +69,39 @@
 
         .splash-list li + li {
             margin-top: 6px;
+        }
+
+        .splash-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 12px;
+            margin: 14px 0 16px 0;
+        }
+
+        .splash-block {
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            background: var(--vscode-editorWidget-background, var(--vscode-input-background));
+        }
+
+        .splash-steps,
+        .splash-list {
+            padding-left: 18px;
+            margin: 0;
+            color: var(--vscode-foreground);
+            line-height: 1.5;
+        }
+
+        .splash-steps li + li,
+        .splash-list li + li {
+            margin-top: 6px;
+        }
+
+        .splash-note {
+            margin: 10px 0 0 0;
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
         }
 
         .splash-actions {
