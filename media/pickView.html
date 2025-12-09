@@ -9,38 +9,7 @@
 </head>
 
 <body>
-    <div id="splashScreen" class="splash-screen hidden" aria-hidden="true">
-        <div class="splash-card" role="dialog" aria-modal="true" aria-labelledby="splashTitle">
-            <p class="splash-pill">Research software</p>
-            <h2 id="splashTitle">Welcome to PICK</h2>
-            <p class="splash-lede">PICK helps you guide AI-generated regexes by voting on concrete examples—so you keep control of what ships.</p>
-
-            <div class="splash-grid" aria-label="How PICK works and why we show this message">
-                <div class="splash-block">
-                    <h3>How PICK works</h3>
-                    <ol class="splash-steps">
-                        <li>Describe the strings your regex should match.</li>
-                        <li>PICK asks your configured language model for several regex candidates and removes near-duplicates.</li>
-                        <li>We show example strings; you upvote/downvote/skip. Votes eliminate incompatible regexes until one wins—or none fit.</li>
-                    </ol>
-                    <p class="splash-note">Tip: If nothing fits, revise your description instead of starting over—your past votes carry forward.</p>
-                </div>
-                <div class="splash-block">
-                    <h3>Why we show this</h3>
-                    <ul class="splash-list">
-                        <li>PICK is research software; expect occasional quirks while we improve it.</li>
-                        <li>Bug reports help us fix issues quickly.</li>
-                        <li>We love hearing about cases where PICK nailed it or missed—we learn from both.</li>
-                    </ul>
-                </div>
-            </div>
-            <div class="splash-actions">
-                <button id="splashStartBtn" class="primary">Start building regexes</button>
-                <button id="splashReportBtn" class="secondary">Share feedback / bugs</button>
-                <button id="splashDismissBtn" class="quiet" aria-label="Hide this message in the future">Hide this message</button>
-            </div>
-        </div>
-    </div>
+    <!--SPLASH_HTML_PLACEHOLDER-->
     <div class="container">
         <!-- Status Bar (global - shown during LLM operations) -->
         <div id="statusBar" class="status-bar hidden">
@@ -70,7 +39,7 @@
       <option value="">Loading models...</option>
     </select>
   </div>
-  
+
   <p style="margin: 0 0 6px 0; font-size: 1.05rem; font-weight: 500;">
     Describe what your regex should match.
   </p>
@@ -168,7 +137,7 @@
 
         <!-- Error Display -->
         <div id="errorSection" class="error hidden"></div>
-        
+
         <!-- Candidates help modal (hidden by default) -->
         <div id="candidatesHelpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="candidatesHelpTitle">
   <div class="modal-overlay" id="candidatesHelpOverlay"></div>
@@ -198,7 +167,8 @@
         if (window.initializePickView) {
             window.initializePickView(vscode);
         }
-    </script>
+        
+        </script>
 </body>
 
 </html>
