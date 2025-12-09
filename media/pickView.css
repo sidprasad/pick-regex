@@ -15,6 +15,68 @@
             font-size: var(--vscode-font-size);
         }
 
+        .splash-screen {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            background: color-mix(in srgb, var(--vscode-editor-background) 70%, transparent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            z-index: 60;
+        }
+
+        .splash-card {
+            max-width: 760px;
+            width: 100%;
+            background: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 10px;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.25);
+            padding: 18px 20px 16px 20px;
+        }
+
+        .splash-pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-descriptionForeground);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 11px;
+            margin: 0 0 8px 0;
+        }
+
+        .splash-lede {
+            margin: 6px 0 12px 0;
+            font-size: 14px;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .splash-list {
+            padding-left: 18px;
+            margin: 0 0 14px 0;
+            color: var(--vscode-foreground);
+            line-height: 1.5;
+        }
+
+        .splash-list li + li {
+            margin-top: 6px;
+        }
+
+        .splash-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+
+        .splash-screen.hidden {
+            display: none;
+        }
+
         .container {
             max-width: 100%;
         }

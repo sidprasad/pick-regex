@@ -37,6 +37,11 @@
         const modelSelect = document.getElementById('modelSelect');
         const modelSelectorRow = document.getElementById('modelSelectorRow');
 
+        // Splash screen elements
+        const splashScreen = document.getElementById('splashScreen');
+        const splashStartBtn = document.getElementById('splashStartBtn');
+        const splashReportBtn = document.getElementById('splashReportBtn');
+
         // Additional UI Elements
         const promptInput = document.getElementById('promptInput');
         const generateBtn = document.getElementById('generateBtn');
@@ -61,7 +66,27 @@
         let availableModels = [];
         let selectedModelId = '';
         let previousModelId = '';
-        
+
+        function hideSplash() {
+            if (splashScreen) {
+                splashScreen.classList.add('hidden');
+            }
+
+            if (promptInput) {
+                promptInput.focus();
+            }
+        }
+
+        if (splashStartBtn) {
+            splashStartBtn.addEventListener('click', hideSplash);
+        }
+
+        if (splashReportBtn) {
+            splashReportBtn.addEventListener('click', () => {
+                vscode.postMessage({ type: 'reportIssue' });
+            });
+        }
+
         if (statusCancelBtn) {
             statusCancelBtn.addEventListener('click', function() {
                 vscode.postMessage({ type: 'cancel' });

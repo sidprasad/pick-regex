@@ -9,6 +9,22 @@
 </head>
 
 <body>
+    <div id="splashScreen" class="splash-screen">
+        <div class="splash-card" role="dialog" aria-modal="true" aria-labelledby="splashTitle">
+            <p class="splash-pill">Research software</p>
+            <h2 id="splashTitle">Thanks for trying PICK</h2>
+            <p class="splash-lede">PICK is evolving quickly. Please bear with rough edges and help us learn from your experience.</p>
+            <ul class="splash-list">
+                <li>Expect quirks—this is research software and your patience helps us ship improvements.</li>
+                <li>We appreciate bug reports so we can fix issues quickly.</li>
+                <li>Tell us about interesting cases where PICK nailed it or missed so we can learn.</li>
+            </ul>
+            <div class="splash-actions">
+                <button id="splashStartBtn" class="primary">Start building regexes</button>
+                <button id="splashReportBtn" class="secondary">Share feedback / bugs</button>
+            </div>
+        </div>
+    </div>
     <div class="container">
         <!-- Status Bar (global - shown during LLM operations) -->
         <div id="statusBar" class="status-bar hidden">
