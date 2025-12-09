@@ -1,26 +1,32 @@
 <div id="splashScreen" class="splash-screen hidden" aria-hidden="true">
     <div class="splash-card" role="dialog" aria-modal="true" aria-labelledby="splashTitle">
-        <p class="splash-pill">Research software</p>
-        <h2 id="splashTitle">Welcome to PICK</h2>
-        <p class="splash-lede">PICK helps you shape AI-generated regexes by voting on examples until the best fit emerges.</p>
-
-        <div class="splash-grid" aria-label="How PICK works and why we show this message">
-            <div class="splash-block">
-                <h3>How PICK works</h3>
-                <ol class="splash-steps">
-                    <li>Describe what the regex should match.</li>
-                    <li>We propose several regex candidates and filter near-duplicates.</li>
-                    <li>You vote on example strings; votes eliminate mismatches until a winner (or none) remains.</li>
-                </ol>
-            </div>
-            <div class="splash-block">
-                <h3>Why this notice</h3>
-                <p>PICK is research software, so you may see occasional quirks. We appreciate patience and bug reports. Interesting success or failure cases help us improve.</p>
-            </div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+            <h2 id="splashTitle" style="margin: 0;">About PICK</h2>
+            <button id="splashDismissBtn" class="icon-btn" style="padding: 4px; min-width: auto; font-size: 18px; line-height: 1;" title="Do not show this message again" aria-label="Do not show this message again">✕</button>
         </div>
+
+        <p class="splash-lede">
+            PICK helps you build a regex from a natural-language description by iteratively refining it with examples.
+        </p>
+
+        <p>
+            You start by describing what the regex should match.
+        </p>
+        <p>
+            PICK sends that description to an LLM of your choice to surface several plausible interpretations.
+        </p>
+        <p>
+            It then shows example strings, and your votes narrow down which behavior best matches your intent.
+        </p>
+
+        <p class="splash-disclaimer">
+            <strong>PICK is research software.</strong>
+            You may encounter rough edges or unexpected behavior.
+            We appreciate patience, bug reports, and especially concrete cases where the tool either works particularly well or misses the mark—these directly inform our research.
+        </p>
+
         <div class="splash-actions">
-            <button id="splashStartBtn" class="primary">Start building regexes</button>
-            <button id="splashDismissBtn" class="quiet" aria-label="Hide this message in the future">Hide this message</button>
+            <button id="splashStartBtn" class="primary">Start using PICK</button>
         </div>
     </div>
 </div>
