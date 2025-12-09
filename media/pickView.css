@@ -18,8 +18,7 @@
         .splash-screen {
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.35);
-            background: color-mix(in srgb, var(--vscode-editor-background) 70%, transparent);
+            background: color-mix(in srgb, var(--vscode-editor-background) 55%, transparent);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -71,6 +70,20 @@
             gap: 10px;
             flex-wrap: wrap;
             margin-top: 6px;
+        }
+
+        .quiet {
+            background: transparent;
+            color: var(--vscode-descriptionForeground);
+            border: 1px solid transparent;
+            height: 32px;
+            padding: 4px 10px;
+        }
+
+        .quiet:hover {
+            background: var(--vscode-input-background);
+            color: var(--vscode-foreground);
+            border-color: var(--vscode-panel-border);
         }
 
         .splash-screen.hidden {
