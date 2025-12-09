@@ -40,7 +40,6 @@
         // Splash screen elements
         const splashScreen = document.getElementById('splashScreen');
         const splashStartBtn = document.getElementById('splashStartBtn');
-        const splashReportBtn = document.getElementById('splashReportBtn');
         const splashDismissBtn = document.getElementById('splashDismissBtn');
 
         // Additional UI Elements
@@ -97,13 +96,6 @@
 
         if (splashDismissBtn) {
             splashDismissBtn.addEventListener('click', hideSplash);
-        }
-
-        if (splashReportBtn) {
-            splashReportBtn.addEventListener('click', () => {
-                hideSplash();
-                vscode.postMessage({ type: 'reportIssue' });
-            });
         }
 
         if (statusCancelBtn) {
