@@ -96,6 +96,18 @@ Avoid placing sensitive information in prompts if this is a concern.
 
 We welcome pull requests. Please ensure that any proposed changes are well tested and that you can clearly describe how you validated them. Thoughtful, carefully evaluated contributions are especially appreciated.
 
+## Testing the language model availability behavior
+
+These steps validate the recent changes that wait for language models to finish initializing and suppress models the platform reports as unsupported. Run the extension in a VS Code Extension Development Host (`Run > Start Debugging`), then:
+
+1. **Ensure the Copilot/LM extension is active**: open the **Extensions** view and confirm the language model provider (e.g., GitHub Copilot) shows as *Enabled*. If it was disabled, enable it and reload the window.
+2. **Observe the startup log**: after the window reloads, open the **Output** panel and select **PICK: Regex Builder**. You should see `Regex Builder is now active!` followed by a log entry showing the elimination threshold and, once the Copilot extension finishes activating, no warning about missing language models.
+3. **Confirm model discovery**: open the PICK webview (Activity Bar → **PICK Regex Builder**). After a few seconds, open the model selector; it should list the available Copilot models without warning banners about model availability.
+4. **Handle unsupported models gracefully**: if you intentionally pick a model that reports `model not supported` in the output, reopen the model selector. The failing model should no longer appear for the remainder of the session, and the UI should default back to a supported model instead of showing another error.
+5. **Reload resilience**: reload the window (`Developer: Reload Window`) and repeat steps 2–4 to ensure the delayed-initialization handling still prevents spurious “No language models available” warnings.
+
+For automated checks, run `npm run compile` to ensure the TypeScript build succeeds and `npm run lint` to verify code style.
+
 You can submit a pull request at https://github.com/sidprasad/pick-regex
 
 Development workflow:
