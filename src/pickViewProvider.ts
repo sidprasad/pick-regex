@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PickController, PickState, WordClassification } from './pickController';
-import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, getAvailableChatModels, waitForAvailableChatModels, markModelUnsupported } from './regexService';
+import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, getAvailableChatModels, waitForChatModelAvailability, markModelUnsupported } from './regexService';
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
 import { openIssueReport } from './issueReporter';
@@ -111,19 +111,31 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
    */
   private async checkAvailableModels() {
     try {
-      const models = await waitForAvailableChatModels();
+      const availability = await waitForChatModelAvailability();
 
-      if (models.length === 0) {
+      if (availability.available.length === 0) {
         logger.warn('No language models available on startup');
         this.sendMessage({
           type: 'noModelsAvailable',
           message: 'No language models available. Please ensure you have a language model extension installed (e.g., GitHub Copilot) and that you are signed in.'
         });
       } else {
-        logger.info(`Found ${models.length} available language model(s): ${models.map(m => m.name).join(', ')}`);
+        logger.info(`Found ${availability.available.length} available language model(s): ${availability.available.map(m => m.name).join(', ')}`);
+
+        if (availability.unavailable.length > 0) {
+          const details = availability.unavailable.map(m => `${m.name}: ${m.reason}`).join('; ');
+          logger.warn(`Some models were hidden because they are unavailable: ${details}`);
+        }
+
+        if (availability.pendingConsent.length > 0) {
+          logger.info(`Some models may require consent before use: ${availability.pendingConsent.map(m => m.name).join(', ')}`);
+        }
+
         this.sendMessage({
           type: 'modelsAvailable',
-          models: models
+          models: availability.available,
+          unavailableModels: availability.unavailable,
+          pendingModels: availability.pendingConsent
         });
       }
     } catch (error) {
@@ -238,7 +250,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         if (errorMessage.includes('model_not_supported') ||
             errorMessage.toLowerCase().includes('model is not supported')) {
           logger.error(error, 'Model not supported (detected from message)');
-          markModelUnsupported(modelId);
+          markModelUnsupported(modelId, 'Provider responded with model_not_supported for this workspace.');
           const msg = 'The selected model is not currently supported. Please try a different model.';
           vscode.window.showErrorMessage(msg, 'Select Different Model').then(selection => {
             if (selection === 'Select Different Model') {
@@ -737,9 +749,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
         // Check for model_not_supported in error message (fallback if error class doesn't match)
         const errorMessage = error instanceof Error ? error.message : String(error);
-        if (errorMessage.includes('model_not_supported') || 
+        if (errorMessage.includes('model_not_supported') ||
             errorMessage.toLowerCase().includes('model is not supported')) {
           logger.error(error, 'Model not supported (detected from message)');
+          markModelUnsupported(modelId, 'Provider responded with model_not_supported for this workspace.');
           const msg = 'The selected model is not currently supported. Please try a different model.';
           vscode.window.showErrorMessage(msg, 'Select Different Model').then(selection => {
             if (selection === 'Select Different Model') {

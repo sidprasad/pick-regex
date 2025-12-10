@@ -21,8 +21,18 @@ export interface AvailableChatModel {
   family: string;
 }
 
+export interface UnavailableChatModel extends AvailableChatModel {
+  reason: string;
+}
+
+export interface ChatModelAvailability {
+  available: AvailableChatModel[];
+  unavailable: UnavailableChatModel[];
+  pendingConsent: AvailableChatModel[];
+}
+
 // Track models that are known to be unsupported so we can hide them from selection once detected
-const unsupportedModelIds = new Set<string>();
+const unsupportedModelReasons = new Map<string, string>();
 let accessInformation: vscode.LanguageModelAccessInformation | undefined;
 
 /**
@@ -68,13 +78,8 @@ export class ModelNotSupportedError extends Error {
  * @returns Array of available chat models
  */
 export async function getAvailableChatModels(): Promise<AvailableChatModel[]> {
-  const models = await selectUsableChatModels();
-  return models.map(model => ({
-    id: model.id,
-    name: model.name,
-    vendor: model.vendor,
-    family: model.family
-  }));
+  const snapshot = await getChatModelAvailability();
+  return snapshot.available;
 }
 
 /**
@@ -82,21 +87,61 @@ export async function getAvailableChatModels(): Promise<AvailableChatModel[]> {
  * This avoids false "no models" warnings while language model extensions finish activating.
  */
 export async function waitForAvailableChatModels(timeoutMs = 5000): Promise<AvailableChatModel[]> {
-  const existing = await getAvailableChatModels();
-  if (existing.length > 0) {
-    return existing;
+  const snapshot = await waitForChatModelAvailability(timeoutMs);
+  return snapshot.available;
+}
+
+async function selectUsableChatModels(): Promise<vscode.LanguageModelChat[]> {
+  try {
+    const { usableModels, unavailable } = await collectChatModels();
+
+    unavailable.forEach(model => logger.warn(`Hiding unavailable model ${model.name} (${model.id}): ${model.reason}`));
+    return usableModels;
+  } catch (error) {
+    logger.warn(`Failed to get available chat models: ${error}`);
+    return [];
+  }
+}
+
+export function markModelUnsupported(modelId?: string, reason: string = 'The provider reported this model is not supported for this workspace.') {
+  if (!modelId) {
+    return;
+  }
+
+  unsupportedModelReasons.set(modelId, reason);
+}
+
+export async function getChatModelAvailability(): Promise<ChatModelAvailability> {
+  try {
+    const { usableModels, unavailable, pendingConsent } = await collectChatModels();
+
+    return {
+      available: usableModels.map(toAvailableChatModel),
+      unavailable,
+      pendingConsent: pendingConsent.map(toAvailableChatModel)
+    };
+  } catch (error) {
+    logger.warn(`Failed to describe chat models: ${error}`);
+    return { available: [], unavailable: [], pendingConsent: [] };
+  }
+}
+
+export async function waitForChatModelAvailability(timeoutMs = 5000): Promise<ChatModelAvailability> {
+  const snapshot = await getChatModelAvailability();
+  if (snapshot.available.length > 0) {
+    return snapshot;
   }
 
   return await new Promise(resolve => {
     let disposable: vscode.Disposable;
     const timer = setTimeout(async () => {
       disposable.dispose();
-      resolve(await getAvailableChatModels());
+      resolve(await getChatModelAvailability());
     }, timeoutMs);
 
     disposable = vscode.lm.onDidChangeChatModels(async () => {
-      const refreshed = await getAvailableChatModels();
-      if (refreshed.length > 0) {
+      const refreshed = await getChatModelAvailability();
+      if (refreshed.available.length > 0) {
         clearTimeout(timer);
         disposable.dispose();
         resolve(refreshed);
@@ -105,36 +150,46 @@ export async function waitForAvailableChatModels(timeoutMs = 5000): Promise<Avai
   });
 }
 
-async function selectUsableChatModels(): Promise<vscode.LanguageModelChat[]> {
-  try {
-    const models = await vscode.lm.selectChatModels({});
-
-    return models.filter(model => {
-      if (unsupportedModelIds.has(model.id)) {
-        logger.warn(`Hiding previously unsupported model: ${model.name} (${model.id})`);
-        return false;
-      }
-
-      const access = accessInformation?.canSendRequest(model);
-      if (access === false) {
-        logger.warn(`Skipping model without access: ${model.name} (${model.id})`);
-        return false;
-      }
-
-      return true;
-    });
-  } catch (error) {
-    logger.warn(`Failed to get available chat models: ${error}`);
-    return [];
-  }
+function toAvailableChatModel(model: vscode.LanguageModelChat): AvailableChatModel {
+  return {
+    id: model.id,
+    name: model.name,
+    vendor: model.vendor,
+    family: model.family
+  };
 }
 
-export function markModelUnsupported(modelId?: string) {
-  if (!modelId) {
-    return;
+async function collectChatModels(): Promise<{ usableModels: vscode.LanguageModelChat[]; unavailable: UnavailableChatModel[]; pendingConsent: vscode.LanguageModelChat[] }> {
+  const models = await vscode.lm.selectChatModels({});
+  const unavailable: UnavailableChatModel[] = [];
+  const pendingConsent: vscode.LanguageModelChat[] = [];
+  const usableModels: vscode.LanguageModelChat[] = [];
+
+  for (const model of models) {
+    const base = toAvailableChatModel(model);
+    const unsupportedReason = unsupportedModelReasons.get(model.id);
+    if (unsupportedReason) {
+      unavailable.push({ ...base, reason: unsupportedReason });
+      continue;
+    }
+
+    const access = accessInformation?.canSendRequest(model);
+    if (access === false) {
+      unavailable.push({
+        ...base,
+        reason: 'VS Code reports this model cannot accept requests. Ensure your provider extension is enabled and you are signed in with access.'
+      });
+      continue;
+    }
+
+    if (access === undefined) {
+      pendingConsent.push(model);
+    }
+
+    usableModels.push(model);
   }
 
-  unsupportedModelIds.add(modelId);
+  return { usableModels, unavailable, pendingConsent };
 }
 
 /**
@@ -302,7 +357,7 @@ export async function generateRegexFromDescription(
         errorMessage.toLowerCase().includes('model is not supported') ||
         errorMessage.toLowerCase().includes('requested model is not supported')) {
       logger.error(error, `Model not supported: ${model.name}`);
-      markModelUnsupported(model.id);
+      markModelUnsupported(model.id, 'Provider responded with model_not_supported for this workspace.');
       throw new ModelNotSupportedError(model.name);
     }
     

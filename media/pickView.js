@@ -39,6 +39,7 @@
         // Model selector elements
         const modelSelect = document.getElementById('modelSelect');
         const modelSelectorRow = document.getElementById('modelSelectorRow');
+        const modelAvailabilityNote = document.getElementById('modelAvailabilityNote');
 
         // Splash screen elements
         const splashScreen = document.getElementById('splashScreen');
@@ -222,14 +223,19 @@
         /**
          * Update the model selector dropdown with available models
          */
-        function updateModelSelector(models) {
+        function updateModelSelector(models, unavailable, pendingConsent) {
             availableModels = models;
             if (!modelSelect) {
                 return;
             }
-            
+
             modelSelect.innerHTML = '';
-            
+
+            if (modelAvailabilityNote) {
+                modelAvailabilityNote.classList.add('hidden');
+                modelAvailabilityNote.textContent = '';
+            }
+
             if (models.length === 0) {
                 const option = document.createElement('option');
                 option.value = '';
@@ -238,7 +244,7 @@
                 modelSelect.disabled = true;
                 return;
             }
-            
+
             modelSelect.disabled = false;
             models.forEach(function(model, index) {
                 const option = document.createElement('option');
@@ -250,6 +256,25 @@
                 }
                 modelSelect.appendChild(option);
             });
+
+            const unavailableList = Array.isArray(unavailable) ? unavailable : [];
+            const pendingList = Array.isArray(pendingConsent) ? pendingConsent : [];
+            const noteParts = [];
+
+            if (unavailableList.length > 0) {
+                const hidden = unavailableList.map(model => `${model.name} (${model.reason})`).join('; ');
+                noteParts.push(`Hidden because unavailable: ${hidden}`);
+            }
+
+            if (pendingList.length > 0) {
+                const pendingNames = pendingList.map(model => model.name).join(', ');
+                noteParts.push(`May require permission before use: ${pendingNames}`);
+            }
+
+            if (modelAvailabilityNote && noteParts.length > 0) {
+                modelAvailabilityNote.textContent = noteParts.join(' ');
+                modelAvailabilityNote.classList.remove('hidden');
+            }
         }
 
         // Helper function to update prompt display
@@ -826,7 +851,7 @@
                 case 'modelsAvailable':
                     // Clear any previous model availability errors and populate selector
                     errorSection.classList.add('hidden');
-                    updateModelSelector(message.models);
+                    updateModelSelector(message.models, message.unavailableModels, message.pendingModels);
                     break;
                 case 'candidatesGenerated':
                     inlineCancelBtn.classList.add('hidden');

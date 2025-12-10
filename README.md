@@ -103,8 +103,9 @@ These steps validate the recent changes that wait for language models to finish 
 1. **Ensure the Copilot/LM extension is active**: open the **Extensions** view and confirm the language model provider (e.g., GitHub Copilot) shows as *Enabled*. If it was disabled, enable it and reload the window.
 2. **Observe the startup log**: after the window reloads, open the **Output** panel and select **PICK: Regex Builder**. You should see `Regex Builder is now active!` followed by a log entry showing the elimination threshold and, once the Copilot extension finishes activating, no warning about missing language models.
 3. **Confirm model discovery**: open the PICK webview (Activity Bar → **PICK Regex Builder**). After a few seconds, open the model selector; it should list the available Copilot models without warning banners about model availability.
-4. **Handle unsupported models gracefully**: if you intentionally pick a model that reports `model not supported` in the output, reopen the model selector. The failing model should no longer appear for the remainder of the session, and the UI should default back to a supported model instead of showing another error.
-5. **Reload resilience**: reload the window (`Developer: Reload Window`) and repeat steps 2–4 to ensure the delayed-initialization handling still prevents spurious “No language models available” warnings.
+4. **Review availability notes**: under the selector, PICK now shows why some discovered models were hidden (e.g., blocked by provider access checks) and which models are waiting for consent. Verify that models you cannot use are called out with a reason instead of silently disappearing.
+5. **Handle unsupported models gracefully**: if you intentionally pick a model that reports `model not supported` in the output, reopen the model selector. The failing model should no longer appear for the remainder of the session, and the UI should default back to a supported model instead of showing another error.
+6. **Reload resilience**: reload the window (`Developer: Reload Window`) and repeat steps 2–5 to ensure the delayed-initialization handling still prevents spurious “No language models available” warnings.
 
 For automated checks, run `npm run compile` to ensure the TypeScript build succeeds and `npm run lint` to verify code style.
 
