@@ -3,12 +3,15 @@ import { PickViewProvider } from './pickViewProvider';
 import { initializeLogging, logger } from './logger';
 import { openIssueReport } from './issueReporter';
 import { SurveyPrompt } from './surveyPrompt';
+import { initializeLanguageModelAccess } from './regexService';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	const log = initializeLogging(context);
-	log.info('PICK: Regex Builder is now active!');
+        const log = initializeLogging(context);
+        log.info('PICK: Regex Builder is now active!');
+
+        initializeLanguageModelAccess(context.languageModelAccessInformation);
 
 	// Initialize survey prompt manager
 	const surveyPrompt = new SurveyPrompt(context);

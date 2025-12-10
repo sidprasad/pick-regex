@@ -23,6 +23,15 @@ export interface AvailableChatModel {
 
 // Track models that are known to be unsupported so we can hide them from selection once detected
 const unsupportedModelIds = new Set<string>();
+let accessInformation: vscode.LanguageModelAccessInformation | undefined;
+
+/**
+ * Initialize language model access information so we can filter out models that
+ * cannot accept requests (e.g., missing entitlement or disabled provider).
+ */
+export function initializeLanguageModelAccess(info: vscode.LanguageModelAccessInformation) {
+  accessInformation = info;
+}
 
 /**
  * Error thrown when user has not granted permission to use language models
@@ -59,28 +68,13 @@ export class ModelNotSupportedError extends Error {
  * @returns Array of available chat models
  */
 export async function getAvailableChatModels(): Promise<AvailableChatModel[]> {
-  try {
-    // Get all available chat models without filtering
-    const models = await vscode.lm.selectChatModels({});
-
-    return models
-      .filter(model => {
-        const isUnsupported = unsupportedModelIds.has(model.id);
-        if (isUnsupported) {
-          logger.warn(`Hiding previously unsupported model: ${model.name} (${model.id})`);
-        }
-        return !isUnsupported;
-      })
-      .map(model => ({
-        id: model.id,
-        name: model.name,
-        vendor: model.vendor,
-        family: model.family
-      }));
-  } catch (error) {
-    logger.warn(`Failed to get available chat models: ${error}`);
-    return [];
-  }
+  const models = await selectUsableChatModels();
+  return models.map(model => ({
+    id: model.id,
+    name: model.name,
+    vendor: model.vendor,
+    family: model.family
+  }));
 }
 
 /**
@@ -109,6 +103,30 @@ export async function waitForAvailableChatModels(timeoutMs = 5000): Promise<Avai
       }
     });
   });
+}
+
+async function selectUsableChatModels(): Promise<vscode.LanguageModelChat[]> {
+  try {
+    const models = await vscode.lm.selectChatModels({});
+
+    return models.filter(model => {
+      if (unsupportedModelIds.has(model.id)) {
+        logger.warn(`Hiding previously unsupported model: ${model.name} (${model.id})`);
+        return false;
+      }
+
+      const access = accessInformation?.canSendRequest(model);
+      if (access === false) {
+        logger.warn(`Skipping model without access: ${model.name} (${model.id})`);
+        return false;
+      }
+
+      return true;
+    });
+  } catch (error) {
+    logger.warn(`Failed to get available chat models: ${error}`);
+    return [];
+  }
 }
 
 function markModelUnsupported(modelId: string) {
@@ -205,7 +223,7 @@ export async function generateRegexFromDescription(
   logger.info(`User prompt: ${description}`);
 
   // Get available language models
-  const models = await vscode.lm.selectChatModels({});
+  const models = await selectUsableChatModels();
 
   if (models.length === 0) {
     throw new NoModelsAvailableError();
