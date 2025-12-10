@@ -254,58 +254,118 @@
 
         // Helper function to update prompt display
         function updatePromptDisplay(prompt) {
-            const html = '<div class="prompt-label">Your Description</div>' +
-                '<div class="prompt-text" style="display: flex; justify-content: space-between; align-items: center;">' +
-                '<span>' + prompt + '</span>' +
-                '<button onclick="editPrompt()" class="icon-btn" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Revise and refine prompt">' +
-                '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 21v-3l12-12 3 3L6 21H3zM19.5 7.5l-3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-                '<span class="btn-label">Revise</span>' +
-                '</button>' +
-                '</div>';
+            // Create DOM elements instead of HTML string
+            const container = document.createElement('div');
+            
+            const label = document.createElement('div');
+            label.className = 'prompt-label';
+            label.textContent = 'Your Description';
+            
+            const textDiv = document.createElement('div');
+            textDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+            textDiv.className = 'prompt-text';
+            
+            const span = document.createElement('span');
+            span.textContent = prompt;
+            
+            const button = document.createElement('button');
+            button.className = 'icon-btn';
+            button.style.cssText = 'padding: 4px 8px; font-size: 11px; margin-left: 10px;';
+            button.title = 'Revise and refine prompt';
+            button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 21v-3l12-12 3 3L6 21H3zM19.5 7.5l-3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+                '<span class="btn-label">Revise</span>';
+            button.addEventListener('click', editPrompt);
+            
+            textDiv.appendChild(span);
+            textDiv.appendChild(button);
+            
+            container.appendChild(label);
+            container.appendChild(textDiv);
+            
             if (currentPromptDisplay) {
-                currentPromptDisplay.innerHTML = html;
+                currentPromptDisplay.innerHTML = '';
+                currentPromptDisplay.appendChild(container.cloneNode(true));
             }
             if (finalPromptDisplay) {
-                finalPromptDisplay.innerHTML = html;
+                finalPromptDisplay.innerHTML = '';
+                finalPromptDisplay.appendChild(container.cloneNode(true));
             }
         }
 
         function editPrompt() {
             const currentPrompt = promptInput.value;
             
-            // Build model selector options
-            let modelOptions = '';
+            // Create DOM elements for edit interface
+            const container = document.createElement('div');
+            
+            const label = document.createElement('div');
+            label.className = 'prompt-label';
+            label.textContent = 'Revise Your Description';
+            
+            const flexCol = document.createElement('div');
+            flexCol.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
+            
+            // Input row
+            const inputRow = document.createElement('div');
+            inputRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'editPromptInput';
+            input.value = currentPrompt;
+            input.style.cssText = 'flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;';
+            input.placeholder = 'Enter a refined description...';
+            
+            inputRow.appendChild(input);
+            
+            // Select row
+            const selectRow = document.createElement('div');
+            selectRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+            
+            const select = document.createElement('select');
+            select.id = 'editModelSelect';
+            select.style.cssText = 'flex: 1; padding: 6px 8px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 2px; font-size: 13px;';
+            
             availableModels.forEach(function(model) {
-                const selected = model.id === selectedModelId ? ' selected' : '';
-                modelOptions += '<option value="' + model.id + '"' + selected + '>' + model.name + '</option>';
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                if (model.id === selectedModelId) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
             });
             
-            const editHtml = '<div class="prompt-label">Revise Your Description</div>' +
-                '<div style="display: flex; flex-direction: column; gap: 8px;">' +
-                '<div style="display: flex; gap: 8px; align-items: center;">' +
-                '<input type="text" id="editPromptInput" value="' + currentPrompt + '" ' +
-                'style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;" ' +
-                'placeholder="Enter a refined description..." />' +
-                '</div>' +
-                '<div style="display: flex; gap: 8px; align-items: center;">' +
-                '<select id="editModelSelect" ' +
-                'style="flex: 1; padding: 6px 8px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 2px; font-size: 13px;">' +
-                modelOptions +
-                '</select>' +
-                '<button onclick="submitEditedPrompt()" style="padding: 6px 12px; min-width: auto;" title="Generate new candidates with revised prompt and model">' +
-                '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="12" height="12">' +
+            const submitBtn = document.createElement('button');
+            submitBtn.style.cssText = 'padding: 6px 12px; min-width: auto;';
+            submitBtn.title = 'Generate new candidates with revised prompt and model';
+            submitBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="12" height="12">' +
                 '<path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '</svg>' +
-                '</button>' +
-                '<button onclick="cancelEditPrompt()" style="padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);" title="Cancel">Cancel</button>' +
-                '</div>' +
-                '</div>';
+                '</svg>';
+            submitBtn.addEventListener('click', submitEditedPrompt);
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.style.cssText = 'padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);';
+            cancelBtn.title = 'Cancel';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.addEventListener('click', cancelEditPrompt);
+            
+            selectRow.appendChild(select);
+            selectRow.appendChild(submitBtn);
+            selectRow.appendChild(cancelBtn);
+            
+            flexCol.appendChild(inputRow);
+            flexCol.appendChild(selectRow);
+            
+            container.appendChild(label);
+            container.appendChild(flexCol);
 
             const isFinalVisible = !finalSection.classList.contains('hidden');
             const targetDisplay = isFinalVisible && finalPromptDisplay ? finalPromptDisplay : currentPromptDisplay;
 
             if (targetDisplay) {
-                targetDisplay.innerHTML = editHtml;
+                targetDisplay.innerHTML = '';
+                targetDisplay.appendChild(container);
                 setTimeout(function() {
                     const input = document.getElementById('editPromptInput');
                     if (input) {
@@ -385,9 +445,15 @@
             return toLiteralString(ch);
         }
 
-        // Escape for inline onclick usage
-        function escapeForOnclick(str) {
-            return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        /**
+         * Log to backend logger via message passing
+         */
+        function log(level, message) {
+            vscode.postMessage({
+                type: 'log',
+                level: level,
+                message: message
+            });
         }
 
         /**
@@ -738,6 +804,7 @@
         // Handle messages from extension
         window.addEventListener('message', function(event) {
             const message = event.data;
+            log('info', 'Received message: type="' + message.type + '"');
 
             switch (message.type) {
                 case 'status':
@@ -1129,12 +1196,14 @@
         }
 
         function classifyWord(word, classification) {
+            log('info', 'classifyWord called: word="' + word + '" (length: ' + word.length + '), classification="' + classification + '"');
             classifiedWords.add(word);
             vscode.postMessage({
                 type: 'classifyWord',
                 word: word,
                 classification: classification
             });
+            log('info', 'Sent classifyWord message to extension');
 
             const wordCards = document.querySelectorAll('.word-card');
             wordCards.forEach(function(card) {
@@ -1148,6 +1217,7 @@
         }
 
         function showWordPair(pair, status) {
+            log('info', 'showWordPair called: word1="' + pair.word1 + '" (length: ' + pair.word1.length + '), word2="' + pair.word2 + '" (length: ' + pair.word2.length + ')');
             // cache for re-render when toggles change
             lastPair = pair;
             lastStatus = status;
@@ -1159,7 +1229,11 @@
 
             const diffOps = diffMode ? diffWords(pair.word1, pair.word2) : null;
 
-            function renderWordCard(word, side) {
+            /**
+             * Create a word card element programmatically (DOM-based, not string-based)
+             * This avoids escaping issues with inline onclick handlers
+             */
+            function createWordCard(word, side) {
                 let readable, literal;
                 if (diffOps) {
                     readable = renderWordWithDiff(diffOps, side, false);
@@ -1168,39 +1242,74 @@
                     readable = escapeHtml(word);
                     literal = toLiteralString(word);
                 }
-                const dataWord = escapeHtml(word);
-                const clickWord = escapeForOnclick(word);
 
-                return `
-                <div class="word-card" data-word="${dataWord}">
-                    <div class="word-display">
-                        <span class="word-readable">${readable}</span>
-                        <span class="word-literal">${literal}</span>
-                    </div>
-                    <div class="word-actions">
-                        <button class="btn accept" onclick="classifyWord('${clickWord}', 'accept')" title="Upvote">
-                        <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        </button>
-                        <button class="btn reject" onclick="classifyWord('${clickWord}', 'reject')" title="Downvote">
-                        <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        </button>
-                        <button class="btn unsure" onclick="classifyWord('${clickWord}', 'unsure')" title="Skip">
-                        <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>
-                        <path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        </button>
-                    </div>
-                </div>`;
+                // Create card container
+                const card = document.createElement('div');
+                card.className = 'word-card';
+                card.setAttribute('data-word', word);
+
+                // Create display section
+                const display = document.createElement('div');
+                display.className = 'word-display';
+                
+                const readableSpan = document.createElement('span');
+                readableSpan.className = 'word-readable';
+                readableSpan.innerHTML = readable;
+                
+                const literalSpan = document.createElement('span');
+                literalSpan.className = 'word-literal';
+                literalSpan.innerHTML = literal;
+                
+                display.appendChild(readableSpan);
+                display.appendChild(literalSpan);
+
+                // Create actions section
+                const actions = document.createElement('div');
+                actions.className = 'word-actions';
+
+                // Create accept button
+                const acceptBtn = createButton('accept', 'Upvote', word);
+                acceptBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▲</span>';
+
+                // Create reject button
+                const rejectBtn = createButton('reject', 'Downvote', word);
+                rejectBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▼</span>';
+
+                // Create unsure button
+                const unsureBtn = createButton('unsure', 'Skip', word);
+                unsureBtn.innerHTML = '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+                    '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '</svg>';
+
+                actions.appendChild(acceptBtn);
+                actions.appendChild(rejectBtn);
+                actions.appendChild(unsureBtn);
+
+                card.appendChild(display);
+                card.appendChild(actions);
+
+                return card;
             }
 
-            wordPair.innerHTML = renderWordCard(pair.word1, 'a') + renderWordCard(pair.word2, 'b');
+            /**
+             * Helper function to create a classification button with proper event listener
+             */
+            function createButton(classification, title, word) {
+                const button = document.createElement('button');
+                button.className = 'btn ' + classification;
+                button.title = title;
+                // Attach event listener directly - no escaping needed!
+                button.addEventListener('click', function() {
+                    classifyWord(word, classification);
+                });
+                return button;
+            }
+
+            // Clear and rebuild word pair container
+            wordPair.innerHTML = '';
+            wordPair.appendChild(createWordCard(pair.word1, 'a'));
+            wordPair.appendChild(createWordCard(pair.word2, 'b'));
         }
 
         function updateWordHistory(history) {
@@ -1211,23 +1320,79 @@
 
             historyItems.innerHTML = '';
             history.forEach(function(item, index) {
-                const div = document.createElement('div');
-                div.className = 'history-item';
-                div.innerHTML = '<div>' +
-                    '<div class="word-display">' +
-                    '<span class="word-readable history-word" data-word="' + item.word.replace(/"/g, '&quot;') + '">' + item.word + '</span>' +
-                    '<span class="word-literal history-word" data-word="' + item.word.replace(/"/g, '&quot;') + '">' + toLiteralString(item.word) + '</span>' +
-                    '</div>' +
-                    '<div class="history-matches">' + item.matchingRegexes.length + ' regex(es) match this word</div>' +
-                    '</div>' +
-                    '<div class="history-classification">' +
-                    '<select onchange="updateClassification(' + index + ', this.value)">' +
-                    '<option value="accept"' + (item.classification === 'accept' ? ' selected' : '') + '>Accept</option>' +
-                    '<option value="reject"' + (item.classification === 'reject' ? ' selected' : '') + '>Reject</option>' +
-                    '<option value="unsure"' + (item.classification === 'unsure' ? ' selected' : '') + '>Unsure</option>' +
-                    '</select>' +
-                    '</div>';
-                historyItems.appendChild(div);
+                // Create history item container
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+
+                // Create word display section
+                const contentDiv = document.createElement('div');
+                
+                const wordDisplay = document.createElement('div');
+                wordDisplay.className = 'word-display';
+                
+                const readableSpan = document.createElement('span');
+                readableSpan.className = 'word-readable history-word';
+                readableSpan.setAttribute('data-word', item.word);
+                readableSpan.textContent = item.word;
+                
+                const literalSpan = document.createElement('span');
+                literalSpan.className = 'word-literal history-word';
+                literalSpan.setAttribute('data-word', item.word);
+                literalSpan.textContent = toLiteralString(item.word);
+                
+                wordDisplay.appendChild(readableSpan);
+                wordDisplay.appendChild(literalSpan);
+                
+                const matchesDiv = document.createElement('div');
+                matchesDiv.className = 'history-matches';
+                matchesDiv.textContent = item.matchingRegexes.length + ' regex(es) match this word';
+                
+                contentDiv.appendChild(wordDisplay);
+                contentDiv.appendChild(matchesDiv);
+
+                // Create classification selector
+                const classificationDiv = document.createElement('div');
+                classificationDiv.className = 'history-classification';
+                
+                const select = document.createElement('select');
+                
+                const acceptOption = document.createElement('option');
+                acceptOption.value = 'accept';
+                acceptOption.textContent = 'Accept';
+                if (item.classification === 'accept') {
+                    acceptOption.selected = true;
+                }
+                
+                const rejectOption = document.createElement('option');
+                rejectOption.value = 'reject';
+                rejectOption.textContent = 'Reject';
+                if (item.classification === 'reject') {
+                    rejectOption.selected = true;
+                }
+                
+                const unsureOption = document.createElement('option');
+                unsureOption.value = 'unsure';
+                unsureOption.textContent = 'Unsure';
+                if (item.classification === 'unsure') {
+                    unsureOption.selected = true;
+                }
+                
+                select.appendChild(acceptOption);
+                select.appendChild(rejectOption);
+                select.appendChild(unsureOption);
+                
+                // Attach event listener for classification change
+                select.addEventListener('change', function() {
+                    updateClassification(index, this.value);
+                });
+                
+                classificationDiv.appendChild(select);
+
+                // Assemble the history item
+                historyItem.appendChild(contentDiv);
+                historyItem.appendChild(classificationDiv);
+                
+                historyItems.appendChild(historyItem);
             });
         }
 
@@ -1287,21 +1452,53 @@
             finalRegex.innerHTML = '';
             finalRegex.appendChild(container);
 
-            const detailsHtml = candidateDetails.map(function(c) {
-                return '<div class="candidate-item eliminated" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 6px 0; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px;">' +
-                    '<span class="candidate-pattern" style="flex: 1; overflow-x: auto; white-space: nowrap; margin-right: 10px; font-family: monospace;">' + highlightRegex(c.pattern) + '</span>' +
-                    '<div class="candidate-votes" style="display:flex; gap:8px; align-items:center;">' +
-                    '<button class="btn copy" data-pattern="' + encodeURIComponent(c.pattern) + '" onclick="copyRegex(decodeURIComponent(this.getAttribute(\'data-pattern\')))" title="Copy regex">' +
-                    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+            const detailsContainer = document.createElement('div');
+            
+            candidateDetails.forEach(function(c) {
+                const item = document.createElement('div');
+                item.className = 'candidate-item eliminated';
+                item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 6px 0; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px;';
+                
+                const patternSpan = document.createElement('span');
+                patternSpan.className = 'candidate-pattern';
+                patternSpan.style.cssText = 'flex: 1; overflow-x: auto; white-space: nowrap; margin-right: 10px; font-family: monospace;';
+                patternSpan.innerHTML = highlightRegex(c.pattern);
+                
+                const votesDiv = document.createElement('div');
+                votesDiv.className = 'candidate-votes';
+                votesDiv.style.cssText = 'display:flex; gap:8px; align-items:center;';
+                
+                // Create copy button with event listener
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'btn copy';
+                copyBtn.title = 'Copy regex';
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
                     '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
                     '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
-                    '</svg>' +
-                    '</button>' +
-                    '<span class="badge" style="background: #4caf50;">✓ ' + c.positiveVotes + '</span>' +
-                    '<span class="badge" style="background: #f44336;">✗ ' + c.negativeVotes + '</span>' +
-                    '</div>' +
-                    '</div>';
-            }).join('');
+                    '</svg>';
+                copyBtn.addEventListener('click', function() {
+                    copyRegex(c.pattern);
+                });
+                
+                const positiveBadge = document.createElement('span');
+                positiveBadge.className = 'badge';
+                positiveBadge.style.background = '#4caf50';
+                positiveBadge.textContent = '✓ ' + c.positiveVotes;
+                
+                const negativeBadge = document.createElement('span');
+                negativeBadge.className = 'badge';
+                negativeBadge.style.background = '#f44336';
+                negativeBadge.textContent = '✗ ' + c.negativeVotes;
+                
+                votesDiv.appendChild(copyBtn);
+                votesDiv.appendChild(positiveBadge);
+                votesDiv.appendChild(negativeBadge);
+                
+                item.appendChild(patternSpan);
+                item.appendChild(votesDiv);
+                
+                detailsContainer.appendChild(item);
+            });
 
             wordsIn.innerHTML = (inWords && inWords.length > 0) 
                 ? inWords.map(function(w) {
@@ -1324,10 +1521,16 @@
             if (candidateDetails && candidateDetails.length > 0) {
                 const candidatesNote = document.createElement('div');
                 candidatesNote.style.cssText = 'margin-top: 20px; padding: 10px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px;';
-                candidatesNote.innerHTML = '<div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">' +
-                    '<strong>All candidates were eliminated:</strong>' +
-                    '</div>' +
-                    detailsHtml;
+                
+                const header = document.createElement('div');
+                header.style.cssText = 'font-size: 12px; opacity: 0.8; margin-bottom: 8px;';
+                const strong = document.createElement('strong');
+                strong.textContent = 'All candidates were eliminated:';
+                header.appendChild(strong);
+                
+                candidatesNote.appendChild(header);
+                candidatesNote.appendChild(detailsContainer);
+                
                 const examplesGrid = document.querySelector('.examples');
                 if (examplesGrid && examplesGrid.parentNode) {
                     examplesGrid.parentNode.insertBefore(candidatesNote, examplesGrid.nextSibling);
@@ -1367,13 +1570,8 @@
             }, 2000);
         }
 
-        // Make functions available globally for inline onclick handlers
-        window.classifyWord = classifyWord;
-        window.updateClassification = updateClassification;
-        window.vote = vote;
-        window.editPrompt = editPrompt;
-        window.submitEditedPrompt = submitEditedPrompt;
-        window.cancelEditPrompt = cancelEditPrompt;
+        // Functions no longer need to be global since we use addEventListener instead of inline handlers
+        // Keeping for backwards compatibility or debugging if needed
         window.copyRegex = copyRegex;
         window.toLiteralString = toLiteralString;
         window.highlightRegex = highlightRegex;

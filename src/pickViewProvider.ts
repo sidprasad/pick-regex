@@ -42,6 +42,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     // Handle messages from the webview
      webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.type) {
+        case 'log':
+          // Forward webview logs to backend logger
+          if (data.level === 'info') {
+            logger.info(`[Webview] ${data.message}`);
+          } else if (data.level === 'warn') {
+            logger.warn(`[Webview] ${data.message}`);
+          } else if (data.level === 'error') {
+            logger.error(`[Webview] ${data.message}`);
+          }
+          break;
         case 'generateCandidates':
           // Don't await - run asynchronously so other messages can be processed
           this.handleGenerateCandidates(data.prompt, data.modelId).catch(error => {
@@ -403,6 +413,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleRequestNextPair() {
+    logger.info('handleRequestNextPair called');
     try {
       // Check cancellation at the start
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -415,9 +426,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       const activeCount = this.controller.getActiveCandidateCount();
+      logger.info(`Active candidates: ${activeCount}`);
       
       if (activeCount === 0) {
         // No candidates left - show error
+        logger.warn('No active candidates remaining, cannot generate next pair');
         this.sendMessage({ 
           type: 'error', 
           message: 'No active candidates remaining' 
@@ -425,8 +438,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      logger.info('Calling controller.generateNextPair()');
       const pair = await this.controller.generateNextPair();
       const status = this.controller.getStatus();
+      
+      logger.info(`Generated pair: word1="${pair.word1}" (length: ${pair.word1.length}), word2="${pair.word2}" (length: ${pair.word2.length})`);
       
       // Check cancellation before sending pair to UI
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -438,11 +454,13 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      logger.info('Sending newPair message to webview');
       this.sendMessage({
         type: 'newPair',
         pair,
         status
       });
+      logger.info('handleRequestNextPair completed successfully');
     } catch (error) {
       logger.error(error, 'Error generating next pair');
       
@@ -456,6 +474,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         const activeCandidates = status.candidateDetails.filter(c => !c.eliminated);
         
         // Send a single consolidated message about word exhaustion
+        logger.warn(`Insufficient words to continue, ${activeCandidates.length} candidates remain`);
         this.sendMessage({
           type: 'insufficientWords',
           candidates: activeCandidates,
@@ -465,6 +484,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       } else {
         // For other errors, send a clean error message
         const cleanErrorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`Failed to generate pair: ${cleanErrorMessage}`);
         this.sendMessage({ 
           type: 'error', 
           message: `Error generating pair: ${cleanErrorMessage}` 
@@ -475,18 +495,27 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleClassifyWord(word: string, classification: string) {
     try {
+      logger.info(`handleClassifyWord called: word="${word}" (length: ${word.length}), classification="${classification}"`);
+      
       const classificationEnum = classification as WordClassification;
       this.controller.classifyWord(word, classificationEnum);
       
       const state = this.controller.getState();
       const status = this.controller.getStatus();
       
+      logger.info(`After classifyWord: state=${state}, activeCandidates=${status.activeCandidates}`);
+      
       if (state === PickState.FINAL_RESULT) {
+        logger.info('State transitioned to FINAL_RESULT, calling handleFinalResult');
         await this.handleFinalResult();
       } else {
         // Check if both words are classified
-        if (this.controller.areBothWordsClassified()) {
+        const bothClassified = this.controller.areBothWordsClassified();
+        logger.info(`Checking areBothWordsClassified: ${bothClassified}`);
+        
+        if (bothClassified) {
           this.controller.clearCurrentPair();
+          logger.info('Both words classified, clearing current pair and generating next pair');
           
           // Send updated status
           this.sendMessage({
@@ -498,6 +527,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           // Generate next pair
           this.handleRequestNextPair();
         } else {
+          logger.info('Only one word classified so far, waiting for second word');
           // Send updated status but don't generate next pair yet
           this.sendMessage({
             type: 'wordClassified',

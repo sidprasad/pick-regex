@@ -948,4 +948,114 @@ suite('PickController Test Suite', () => {
         'Only one candidate should remain active');
     });
   });
+
+  // Regression test for issue: Extension Hanging mid vote
+  // See: https://github.com/sidprasad/pick-regex/issues (Extension Hanging mid vote)
+  suite('Special Character Handling (Regression Tests)', () => {
+    test('Should handle words with double quotes in classification', async () => {
+      // This test ensures that words containing double quotes can be classified
+      // Previously, double quotes would break when using inline onclick attributes
+      // Now uses programmatic DOM building with event listeners (no escaping needed)
+      const patterns = ['[!"#$%&\'()*,\\-./:;<=>?@[\\]^_`{|}~]{2,}', '!!+"*'];
+      await controller.generateCandidates('punctuation test', patterns);
+      
+      // Simulate a word pair that contains double quotes
+      const wordWithQuote = '!!"';  // This was causing the hang
+      const normalWord = '!!';
+      
+      // Set up the current pair manually to test classification
+      controller['currentPair'] = { word1: wordWithQuote, word2: normalWord };
+      
+      // This should not throw and should properly classify the word
+      assert.doesNotThrow(() => {
+        controller.classifyWord(wordWithQuote, WordClassification.ACCEPT);
+      }, 'Should handle words with double quotes without throwing');
+      
+      // Verify the word was recorded in history
+      const history = controller.getWordHistory();
+      assert.strictEqual(history.length, 1);
+      assert.strictEqual(history[0].word, wordWithQuote);
+      assert.strictEqual(history[0].classification, WordClassification.ACCEPT);
+      
+      // Classify the second word
+      assert.doesNotThrow(() => {
+        controller.classifyWord(normalWord, WordClassification.ACCEPT);
+      });
+      
+      // Verify both words are now classified
+      assert.strictEqual(controller.areBothWordsClassified(), true);
+      assert.strictEqual(controller.getWordHistory().length, 2);
+    });
+
+    test('Should handle words with various special characters', async () => {
+      // Test a comprehensive set of special characters that could break HTML escaping
+      const specialChars = [
+        '"',           // Double quote
+        "'",           // Single quote
+        '\\',          // Backslash
+        '&',           // Ampersand
+        '<',           // Less than
+        '>',           // Greater than
+        '\n',          // Newline
+        '\t',          // Tab
+        '!!"',         // The specific case from the bug report
+        '\'"',         // Mixed quotes
+        'say "hello"', // Realistic example with quotes
+        "can't"        // Realistic example with apostrophe
+      ];
+      
+      const patterns = ['.*'];
+      await controller.generateCandidates('special chars test', patterns);
+      
+      // Test each special character
+      for (const specialChar of specialChars) {
+        // Reset for next test
+        controller.reset();
+        await controller.generateCandidates('special chars test', patterns);
+        
+        controller['currentPair'] = { word1: specialChar, word2: 'normal' };
+        
+        // Should not throw when classifying words with special characters
+        assert.doesNotThrow(() => {
+          controller.classifyWord(specialChar, WordClassification.ACCEPT);
+        }, `Should handle special character: ${JSON.stringify(specialChar)}`);
+        
+        // Verify it was recorded correctly
+        const history = controller.getWordHistory();
+        assert.strictEqual(history[0].word, specialChar,
+          `Word should be recorded correctly for: ${JSON.stringify(specialChar)}`);
+      }
+    });
+
+    test('Should handle words that match punctuation regex patterns', async () => {
+      // Test the actual patterns from the bug report logs
+      const patterns = [
+        '([!"#$%&\'()*,\\-./:;<=>?@[\\]^_`{|}~])\\1+',  // Repeated punctuation (with backreference)
+        '([.,!?;:])\\1+',                               // Common sentence punctuation repeated
+        '[!"#$%&\'()*,\\-./:;<=>?@[\\]^_`{|}~]{2,}',   // Any 2+ punctuation marks
+        '(?:[.,!?]){2,}',                               // Sequences of specific marks
+        '(\\W)\\1+'                                     // Any non-word character repeated
+      ];
+      
+      await controller.generateCandidates('repeated punctuation', patterns);
+      
+      // Test words from the bug report that caused the hang
+      const problematicWords = ['!!', ',!', '!,"', '!,'];
+      
+      for (const word of problematicWords) {
+        controller.reset();
+        await controller.generateCandidates('repeated punctuation', patterns);
+        
+        controller['currentPair'] = { word1: word, word2: '...' };
+        
+        assert.doesNotThrow(() => {
+          controller.classifyWord(word, WordClassification.ACCEPT);
+          controller.classifyWord('...', WordClassification.REJECT);
+        }, `Should handle word from bug report: ${JSON.stringify(word)}`);
+        
+        assert.strictEqual(controller.areBothWordsClassified(), true,
+          `Both words should be classified for: ${JSON.stringify(word)}`);
+      }
+    });
+  });
 });
