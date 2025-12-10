@@ -1266,23 +1266,79 @@
 
             historyItems.innerHTML = '';
             history.forEach(function(item, index) {
-                const div = document.createElement('div');
-                div.className = 'history-item';
-                div.innerHTML = '<div>' +
-                    '<div class="word-display">' +
-                    '<span class="word-readable history-word" data-word="' + item.word.replace(/"/g, '&quot;') + '">' + item.word + '</span>' +
-                    '<span class="word-literal history-word" data-word="' + item.word.replace(/"/g, '&quot;') + '">' + toLiteralString(item.word) + '</span>' +
-                    '</div>' +
-                    '<div class="history-matches">' + item.matchingRegexes.length + ' regex(es) match this word</div>' +
-                    '</div>' +
-                    '<div class="history-classification">' +
-                    '<select onchange="updateClassification(' + index + ', this.value)">' +
-                    '<option value="accept"' + (item.classification === 'accept' ? ' selected' : '') + '>Accept</option>' +
-                    '<option value="reject"' + (item.classification === 'reject' ? ' selected' : '') + '>Reject</option>' +
-                    '<option value="unsure"' + (item.classification === 'unsure' ? ' selected' : '') + '>Unsure</option>' +
-                    '</select>' +
-                    '</div>';
-                historyItems.appendChild(div);
+                // Create history item container
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+
+                // Create word display section
+                const contentDiv = document.createElement('div');
+                
+                const wordDisplay = document.createElement('div');
+                wordDisplay.className = 'word-display';
+                
+                const readableSpan = document.createElement('span');
+                readableSpan.className = 'word-readable history-word';
+                readableSpan.setAttribute('data-word', item.word);
+                readableSpan.textContent = item.word;
+                
+                const literalSpan = document.createElement('span');
+                literalSpan.className = 'word-literal history-word';
+                literalSpan.setAttribute('data-word', item.word);
+                literalSpan.textContent = toLiteralString(item.word);
+                
+                wordDisplay.appendChild(readableSpan);
+                wordDisplay.appendChild(literalSpan);
+                
+                const matchesDiv = document.createElement('div');
+                matchesDiv.className = 'history-matches';
+                matchesDiv.textContent = item.matchingRegexes.length + ' regex(es) match this word';
+                
+                contentDiv.appendChild(wordDisplay);
+                contentDiv.appendChild(matchesDiv);
+
+                // Create classification selector
+                const classificationDiv = document.createElement('div');
+                classificationDiv.className = 'history-classification';
+                
+                const select = document.createElement('select');
+                
+                const acceptOption = document.createElement('option');
+                acceptOption.value = 'accept';
+                acceptOption.textContent = 'Accept';
+                if (item.classification === 'accept') {
+                    acceptOption.selected = true;
+                }
+                
+                const rejectOption = document.createElement('option');
+                rejectOption.value = 'reject';
+                rejectOption.textContent = 'Reject';
+                if (item.classification === 'reject') {
+                    rejectOption.selected = true;
+                }
+                
+                const unsureOption = document.createElement('option');
+                unsureOption.value = 'unsure';
+                unsureOption.textContent = 'Unsure';
+                if (item.classification === 'unsure') {
+                    unsureOption.selected = true;
+                }
+                
+                select.appendChild(acceptOption);
+                select.appendChild(rejectOption);
+                select.appendChild(unsureOption);
+                
+                // Attach event listener for classification change
+                select.addEventListener('change', function() {
+                    updateClassification(index, this.value);
+                });
+                
+                classificationDiv.appendChild(select);
+
+                // Assemble the history item
+                historyItem.appendChild(contentDiv);
+                historyItem.appendChild(classificationDiv);
+                
+                historyItems.appendChild(historyItem);
             });
         }
 
@@ -1342,21 +1398,53 @@
             finalRegex.innerHTML = '';
             finalRegex.appendChild(container);
 
-            const detailsHtml = candidateDetails.map(function(c) {
-                return '<div class="candidate-item eliminated" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 6px 0; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px;">' +
-                    '<span class="candidate-pattern" style="flex: 1; overflow-x: auto; white-space: nowrap; margin-right: 10px; font-family: monospace;">' + highlightRegex(c.pattern) + '</span>' +
-                    '<div class="candidate-votes" style="display:flex; gap:8px; align-items:center;">' +
-                    '<button class="btn copy" data-pattern="' + encodeURIComponent(c.pattern) + '" onclick="copyRegex(decodeURIComponent(this.getAttribute(\'data-pattern\')))" title="Copy regex">' +
-                    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+            const detailsContainer = document.createElement('div');
+            
+            candidateDetails.forEach(function(c) {
+                const item = document.createElement('div');
+                item.className = 'candidate-item eliminated';
+                item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 6px 0; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px;';
+                
+                const patternSpan = document.createElement('span');
+                patternSpan.className = 'candidate-pattern';
+                patternSpan.style.cssText = 'flex: 1; overflow-x: auto; white-space: nowrap; margin-right: 10px; font-family: monospace;';
+                patternSpan.innerHTML = highlightRegex(c.pattern);
+                
+                const votesDiv = document.createElement('div');
+                votesDiv.className = 'candidate-votes';
+                votesDiv.style.cssText = 'display:flex; gap:8px; align-items:center;';
+                
+                // Create copy button with event listener
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'btn copy';
+                copyBtn.title = 'Copy regex';
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
                     '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
                     '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
-                    '</svg>' +
-                    '</button>' +
-                    '<span class="badge" style="background: #4caf50;">✓ ' + c.positiveVotes + '</span>' +
-                    '<span class="badge" style="background: #f44336;">✗ ' + c.negativeVotes + '</span>' +
-                    '</div>' +
-                    '</div>';
-            }).join('');
+                    '</svg>';
+                copyBtn.addEventListener('click', function() {
+                    copyRegex(c.pattern);
+                });
+                
+                const positiveBadge = document.createElement('span');
+                positiveBadge.className = 'badge';
+                positiveBadge.style.background = '#4caf50';
+                positiveBadge.textContent = '✓ ' + c.positiveVotes;
+                
+                const negativeBadge = document.createElement('span');
+                negativeBadge.className = 'badge';
+                negativeBadge.style.background = '#f44336';
+                negativeBadge.textContent = '✗ ' + c.negativeVotes;
+                
+                votesDiv.appendChild(copyBtn);
+                votesDiv.appendChild(positiveBadge);
+                votesDiv.appendChild(negativeBadge);
+                
+                item.appendChild(patternSpan);
+                item.appendChild(votesDiv);
+                
+                detailsContainer.appendChild(item);
+            });
 
             wordsIn.innerHTML = (inWords && inWords.length > 0) 
                 ? inWords.map(function(w) {
@@ -1379,10 +1467,16 @@
             if (candidateDetails && candidateDetails.length > 0) {
                 const candidatesNote = document.createElement('div');
                 candidatesNote.style.cssText = 'margin-top: 20px; padding: 10px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px;';
-                candidatesNote.innerHTML = '<div style="font-size: 12px; opacity: 0.8; margin-bottom: 8px;">' +
-                    '<strong>All candidates were eliminated:</strong>' +
-                    '</div>' +
-                    detailsHtml;
+                
+                const header = document.createElement('div');
+                header.style.cssText = 'font-size: 12px; opacity: 0.8; margin-bottom: 8px;';
+                const strong = document.createElement('strong');
+                strong.textContent = 'All candidates were eliminated:';
+                header.appendChild(strong);
+                
+                candidatesNote.appendChild(header);
+                candidatesNote.appendChild(detailsContainer);
+                
                 const examplesGrid = document.querySelector('.examples');
                 if (examplesGrid && examplesGrid.parentNode) {
                     examplesGrid.parentNode.insertBefore(candidatesNote, examplesGrid.nextSibling);
