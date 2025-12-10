@@ -1579,7 +1579,6 @@
         // Functions no longer need to be global since we use addEventListener instead of inline handlers
         // Keeping for backwards compatibility or debugging if needed
         window.copyRegex = copyRegex;
-        window.copyRegex = copyRegex;
         window.toLiteralString = toLiteralString;
         window.highlightRegex = highlightRegex;
     };
