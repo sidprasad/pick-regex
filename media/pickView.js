@@ -254,58 +254,118 @@
 
         // Helper function to update prompt display
         function updatePromptDisplay(prompt) {
-            const html = '<div class="prompt-label">Your Description</div>' +
-                '<div class="prompt-text" style="display: flex; justify-content: space-between; align-items: center;">' +
-                '<span>' + prompt + '</span>' +
-                '<button onclick="editPrompt()" class="icon-btn" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" title="Revise and refine prompt">' +
-                '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 21v-3l12-12 3 3L6 21H3zM19.5 7.5l-3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-                '<span class="btn-label">Revise</span>' +
-                '</button>' +
-                '</div>';
+            // Create DOM elements instead of HTML string
+            const container = document.createElement('div');
+            
+            const label = document.createElement('div');
+            label.className = 'prompt-label';
+            label.textContent = 'Your Description';
+            
+            const textDiv = document.createElement('div');
+            textDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+            textDiv.className = 'prompt-text';
+            
+            const span = document.createElement('span');
+            span.textContent = prompt;
+            
+            const button = document.createElement('button');
+            button.className = 'icon-btn';
+            button.style.cssText = 'padding: 4px 8px; font-size: 11px; margin-left: 10px;';
+            button.title = 'Revise and refine prompt';
+            button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 21v-3l12-12 3 3L6 21H3zM19.5 7.5l-3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+                '<span class="btn-label">Revise</span>';
+            button.addEventListener('click', editPrompt);
+            
+            textDiv.appendChild(span);
+            textDiv.appendChild(button);
+            
+            container.appendChild(label);
+            container.appendChild(textDiv);
+            
             if (currentPromptDisplay) {
-                currentPromptDisplay.innerHTML = html;
+                currentPromptDisplay.innerHTML = '';
+                currentPromptDisplay.appendChild(container.cloneNode(true));
             }
             if (finalPromptDisplay) {
-                finalPromptDisplay.innerHTML = html;
+                finalPromptDisplay.innerHTML = '';
+                finalPromptDisplay.appendChild(container.cloneNode(true));
             }
         }
 
         function editPrompt() {
             const currentPrompt = promptInput.value;
             
-            // Build model selector options
-            let modelOptions = '';
+            // Create DOM elements for edit interface
+            const container = document.createElement('div');
+            
+            const label = document.createElement('div');
+            label.className = 'prompt-label';
+            label.textContent = 'Revise Your Description';
+            
+            const flexCol = document.createElement('div');
+            flexCol.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
+            
+            // Input row
+            const inputRow = document.createElement('div');
+            inputRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = 'editPromptInput';
+            input.value = currentPrompt;
+            input.style.cssText = 'flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;';
+            input.placeholder = 'Enter a refined description...';
+            
+            inputRow.appendChild(input);
+            
+            // Select row
+            const selectRow = document.createElement('div');
+            selectRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+            
+            const select = document.createElement('select');
+            select.id = 'editModelSelect';
+            select.style.cssText = 'flex: 1; padding: 6px 8px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 2px; font-size: 13px;';
+            
             availableModels.forEach(function(model) {
-                const selected = model.id === selectedModelId ? ' selected' : '';
-                modelOptions += '<option value="' + model.id + '"' + selected + '>' + model.name + '</option>';
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                if (model.id === selectedModelId) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
             });
             
-            const editHtml = '<div class="prompt-label">Revise Your Description</div>' +
-                '<div style="display: flex; flex-direction: column; gap: 8px;">' +
-                '<div style="display: flex; gap: 8px; align-items: center;">' +
-                '<input type="text" id="editPromptInput" value="' + currentPrompt + '" ' +
-                'style="flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;" ' +
-                'placeholder="Enter a refined description..." />' +
-                '</div>' +
-                '<div style="display: flex; gap: 8px; align-items: center;">' +
-                '<select id="editModelSelect" ' +
-                'style="flex: 1; padding: 6px 8px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 2px; font-size: 13px;">' +
-                modelOptions +
-                '</select>' +
-                '<button onclick="submitEditedPrompt()" style="padding: 6px 12px; min-width: auto;" title="Generate new candidates with revised prompt and model">' +
-                '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="12" height="12">' +
+            const submitBtn = document.createElement('button');
+            submitBtn.style.cssText = 'padding: 6px 12px; min-width: auto;';
+            submitBtn.title = 'Generate new candidates with revised prompt and model';
+            submitBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="12" height="12">' +
                 '<path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '</svg>' +
-                '</button>' +
-                '<button onclick="cancelEditPrompt()" style="padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);" title="Cancel">Cancel</button>' +
-                '</div>' +
-                '</div>';
+                '</svg>';
+            submitBtn.addEventListener('click', submitEditedPrompt);
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.style.cssText = 'padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);';
+            cancelBtn.title = 'Cancel';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.addEventListener('click', cancelEditPrompt);
+            
+            selectRow.appendChild(select);
+            selectRow.appendChild(submitBtn);
+            selectRow.appendChild(cancelBtn);
+            
+            flexCol.appendChild(inputRow);
+            flexCol.appendChild(selectRow);
+            
+            container.appendChild(label);
+            container.appendChild(flexCol);
 
             const isFinalVisible = !finalSection.classList.contains('hidden');
             const targetDisplay = isFinalVisible && finalPromptDisplay ? finalPromptDisplay : currentPromptDisplay;
 
             if (targetDisplay) {
-                targetDisplay.innerHTML = editHtml;
+                targetDisplay.innerHTML = '';
+                targetDisplay.appendChild(container);
                 setTimeout(function() {
                     const input = document.getElementById('editPromptInput');
                     if (input) {
@@ -1516,13 +1576,9 @@
             }, 2000);
         }
 
-        // Make functions available globally for inline onclick handlers
-        window.classifyWord = classifyWord;
-        window.updateClassification = updateClassification;
-        window.vote = vote;
-        window.editPrompt = editPrompt;
-        window.submitEditedPrompt = submitEditedPrompt;
-        window.cancelEditPrompt = cancelEditPrompt;
+        // Functions no longer need to be global since we use addEventListener instead of inline handlers
+        // Keeping for backwards compatibility or debugging if needed
+        window.copyRegex = copyRegex;
         window.copyRegex = copyRegex;
         window.toLiteralString = toLiteralString;
         window.highlightRegex = highlightRegex;
