@@ -21,6 +21,9 @@ export interface AvailableChatModel {
   family: string;
 }
 
+// Track models that are known to be unsupported so we can hide them from selection once detected
+const unsupportedModelIds = new Set<string>();
+
 /**
  * Error thrown when user has not granted permission to use language models
  */
@@ -59,17 +62,57 @@ export async function getAvailableChatModels(): Promise<AvailableChatModel[]> {
   try {
     // Get all available chat models without filtering
     const models = await vscode.lm.selectChatModels({});
-    
-    return models.map(model => ({
-      id: model.id,
-      name: model.name,
-      vendor: model.vendor,
-      family: model.family
-    }));
+
+    return models
+      .filter(model => {
+        const isUnsupported = unsupportedModelIds.has(model.id);
+        if (isUnsupported) {
+          logger.warn(`Hiding previously unsupported model: ${model.name} (${model.id})`);
+        }
+        return !isUnsupported;
+      })
+      .map(model => ({
+        id: model.id,
+        name: model.name,
+        vendor: model.vendor,
+        family: model.family
+      }));
   } catch (error) {
     logger.warn(`Failed to get available chat models: ${error}`);
     return [];
   }
+}
+
+/**
+ * Wait for chat models to become available, retrying when VS Code notifies of model changes.
+ * This avoids false "no models" warnings while language model extensions finish activating.
+ */
+export async function waitForAvailableChatModels(timeoutMs = 5000): Promise<AvailableChatModel[]> {
+  const existing = await getAvailableChatModels();
+  if (existing.length > 0) {
+    return existing;
+  }
+
+  return await new Promise(resolve => {
+    let disposable: vscode.Disposable;
+    const timer = setTimeout(async () => {
+      disposable.dispose();
+      resolve(await getAvailableChatModels());
+    }, timeoutMs);
+
+    disposable = vscode.lm.onDidChangeChatModels(async () => {
+      const refreshed = await getAvailableChatModels();
+      if (refreshed.length > 0) {
+        clearTimeout(timer);
+        disposable.dispose();
+        resolve(refreshed);
+      }
+    });
+  });
+}
+
+function markModelUnsupported(modelId: string) {
+  unsupportedModelIds.add(modelId);
 }
 
 /**
@@ -233,10 +276,11 @@ export async function generateRegexFromDescription(
     
     // Check for model_not_supported error (e.g., GPT-5 preview)
     const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes('model_not_supported') || 
+    if (errorMessage.includes('model_not_supported') ||
         errorMessage.toLowerCase().includes('model is not supported') ||
         errorMessage.toLowerCase().includes('requested model is not supported')) {
       logger.error(error, `Model not supported: ${model.name}`);
+      markModelUnsupported(model.id);
       throw new ModelNotSupportedError(model.name);
     }
     

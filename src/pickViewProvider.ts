@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PickController, PickState, WordClassification } from './pickController';
-import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, getAvailableChatModels } from './regexService';
+import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, getAvailableChatModels, waitForAvailableChatModels } from './regexService';
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
 import { openIssueReport } from './issueReporter';
@@ -111,8 +111,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
    */
   private async checkAvailableModels() {
     try {
-      const models = await getAvailableChatModels();
-      
+      const models = await waitForAvailableChatModels();
+
       if (models.length === 0) {
         logger.warn('No language models available on startup');
         this.sendMessage({
