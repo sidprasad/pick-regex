@@ -1269,17 +1269,11 @@
 
                 // Create accept button
                 const acceptBtn = createButton('accept', 'Upvote', word);
-                acceptBtn.innerHTML = '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                    '<path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                    '<path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                    '</svg>';
+                acceptBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▲</span>';
 
                 // Create reject button
                 const rejectBtn = createButton('reject', 'Downvote', word);
-                rejectBtn.innerHTML = '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                    '<path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                    '<path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
-                    '</svg>';
+                rejectBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▼</span>';
 
                 // Create unsure button
                 const unsureBtn = createButton('unsure', 'Skip', word);
