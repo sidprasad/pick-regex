@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PickController, PickState, WordClassification } from './pickController';
-import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, getAvailableChatModels, waitForAvailableChatModels } from './regexService';
+import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, getAvailableChatModels, waitForAvailableChatModels, markModelUnsupported } from './regexService';
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
 import { openIssueReport } from './issueReporter';
@@ -235,9 +235,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
         // Check for model_not_supported in error message (fallback if error class doesn't match)
         const errorMessage = error instanceof Error ? error.message : String(error);
-        if (errorMessage.includes('model_not_supported') || 
+        if (errorMessage.includes('model_not_supported') ||
             errorMessage.toLowerCase().includes('model is not supported')) {
           logger.error(error, 'Model not supported (detected from message)');
+          markModelUnsupported(modelId);
           const msg = 'The selected model is not currently supported. Please try a different model.';
           vscode.window.showErrorMessage(msg, 'Select Different Model').then(selection => {
             if (selection === 'Select Different Model') {

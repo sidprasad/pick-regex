@@ -129,7 +129,11 @@ async function selectUsableChatModels(): Promise<vscode.LanguageModelChat[]> {
   }
 }
 
-function markModelUnsupported(modelId: string) {
+export function markModelUnsupported(modelId?: string) {
+  if (!modelId) {
+    return;
+  }
+
   unsupportedModelIds.add(modelId);
 }
 
