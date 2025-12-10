@@ -94,7 +94,9 @@ Avoid placing sensitive information in prompts if this is a concern.
 
 # Contributing
 
-Pull requests are welcome, but *please* do **not** spam us with poorly-tested, AI-generated PRs. Please first thoroughly test any changes, and convince us that you have done so. You can make a PR at https://github.com/sidprasad/pick-regex
+We welcome pull requests. Please ensure that any proposed changes are well tested and that you can clearly describe how you validated them. Thoughtful, carefully evaluated contributions are especially appreciated.
+
+You can submit a pull request at https://github.com/sidprasad/pick-regex
 
 Development workflow:
 
