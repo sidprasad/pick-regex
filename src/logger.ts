@@ -3,7 +3,6 @@ import type * as vscodeType from 'vscode';
 // vscode is unavailable in plain node test runs; fall back to a console-only logger.
 let vscode: typeof import('vscode') | undefined;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   vscode = require('vscode');
 } catch {
   vscode = undefined;

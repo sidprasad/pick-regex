@@ -221,7 +221,9 @@ export class RegexAnalyzer {
       for (const word of rb.enumerate()) {
         if (!excluded.has(word)) {
           words.push(word);
-          if (words.length >= count) break;
+          if (words.length >= count) {
+            break;
+          }
         }
       }
       

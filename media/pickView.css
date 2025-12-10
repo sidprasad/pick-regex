@@ -141,6 +141,20 @@
             border: 1px solid var(--vscode-panel-border);
         }
 
+        .prompt-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+            position: relative;
+        }
+
+        .prompt-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
         h2 {
             margin-top: 0;
             color: var(--vscode-titleBar-activeForeground);
@@ -202,6 +216,20 @@
             background: transparent;
             border: 1px solid transparent;
             color: var(--vscode-foreground);
+        }
+
+        .icon-btn.subtle {
+            background: var(--vscode-editor-background);
+            border-color: var(--vscode-panel-border);
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .icon-btn.subtle:hover,
+        .icon-btn.subtle:focus-visible {
+            background: var(--vscode-input-background);
+            color: var(--vscode-foreground);
+            border-color: var(--vscode-focusBorder);
+            outline: none;
         }
 
         .icon-btn.small {
@@ -877,6 +905,66 @@
 
         .display-menu.hidden {
             display: none;
+        }
+
+        .history-menu {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 6px);
+            background: var(--vscode-panel-background, var(--vscode-editor-background));
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 8px;
+            padding: 8px;
+            min-width: 280px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+            z-index: 150;
+        }
+
+        .history-menu.hidden {
+            display: none;
+        }
+
+        .history-menu__header {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--vscode-descriptionForeground);
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+
+        .history-menu__items {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .history-item-btn {
+            text-align: left;
+            width: 100%;
+            background: var(--vscode-input-background);
+            color: var(--vscode-foreground);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 13px;
+            line-height: 1.3;
+            white-space: normal;
+            cursor: pointer;
+        }
+
+        .history-item-btn:hover,
+        .history-item-btn:focus-visible {
+            background: var(--vscode-inputOption-hoverBackground, var(--vscode-input-background));
+            border-color: var(--vscode-focusBorder);
+            outline: none;
+        }
+
+        .history-empty {
+            color: var(--vscode-descriptionForeground);
+            font-style: italic;
+            font-size: 12px;
         }
 
         .menu-row {
