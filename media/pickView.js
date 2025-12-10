@@ -387,7 +387,7 @@
 
         // Escape for inline onclick usage
         function escapeForOnclick(str) {
-            return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
 
         /**
