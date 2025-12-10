@@ -32,6 +32,9 @@
         const finalPromptDisplay = document.getElementById('finalPromptDisplay');
         const reportIssueBtn = document.getElementById('reportIssueBtn');
         const diffToggle = document.getElementById('diffToggle');
+        const recentPromptsBtn = document.getElementById('recentPromptsBtn');
+        const recentPromptsMenu = document.getElementById('recentPromptsMenu');
+        const recentPromptList = document.getElementById('recentPromptList');
 
         // Model selector elements
         const modelSelect = document.getElementById('modelSelect');
@@ -52,6 +55,9 @@
         // Persisted webview state (used to avoid repeatedly showing the splash)
         let viewState = vscode.getState() || {};
         const hasAcknowledgedSplash = Boolean(viewState.splashAcknowledged);
+        let promptHistory = Array.isArray(viewState.promptHistory)
+            ? viewState.promptHistory.slice(0, 5)
+            : [];
         
         // Random placeholder rotation
         const placeholders = [
@@ -139,6 +145,79 @@
         // Initialize body data attributes
         document.body.setAttribute('data-literal-mode', literalMode.toString());
         document.body.setAttribute('data-diff-mode', diffMode.toString());
+
+        function persistViewState() {
+            viewState = { ...viewState, promptHistory: promptHistory.slice(0, 5) };
+            vscode.setState(viewState);
+        }
+
+        function addPromptToHistory(prompt) {
+            const trimmed = (prompt || '').trim();
+            if (!trimmed) {
+                return;
+            }
+
+            const deduped = promptHistory.filter(p => p !== trimmed);
+            deduped.unshift(trimmed);
+            promptHistory = deduped.slice(0, 5);
+            persistViewState();
+        }
+
+        function renderPromptHistory() {
+            if (!recentPromptList) {
+                return;
+            }
+
+            recentPromptList.innerHTML = '';
+
+            if (promptHistory.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'history-empty';
+                empty.textContent = 'No recent prompts yet.';
+                recentPromptList.appendChild(empty);
+                return;
+            }
+
+            promptHistory.forEach(function(prompt) {
+                const button = document.createElement('button');
+                button.className = 'history-item-btn';
+                button.type = 'button';
+                const truncated = prompt.length > 140 ? prompt.slice(0, 137) + '…' : prompt;
+                button.textContent = truncated;
+                button.title = prompt;
+                button.addEventListener('click', function() {
+                    if (promptInput) {
+                        promptInput.value = prompt;
+                        promptInput.focus();
+                    }
+                    updatePromptDisplay(prompt);
+                    toggleHistoryMenu(false);
+                });
+                recentPromptList.appendChild(button);
+            });
+        }
+
+        function toggleHistoryMenu(forceOpen) {
+            if (!recentPromptsMenu || !recentPromptsBtn) {
+                return;
+            }
+
+            const isHidden = recentPromptsMenu.classList.contains('hidden');
+            const shouldOpen = forceOpen ?? isHidden;
+
+            if (shouldOpen) {
+                renderPromptHistory();
+                recentPromptsMenu.classList.remove('hidden');
+                recentPromptsBtn.setAttribute('aria-expanded', 'true');
+                const firstItem = recentPromptList ? recentPromptList.querySelector('.history-item-btn') : null;
+                if (firstItem) {
+                    setTimeout(() => firstItem.focus(), 0);
+                }
+            } else {
+                recentPromptsMenu.classList.add('hidden');
+                recentPromptsBtn.setAttribute('aria-expanded', 'false');
+            }
+        }
 
         /**
          * Update the model selector dropdown with available models
@@ -254,14 +333,15 @@
             const editModelSelect = document.getElementById('editModelSelect');
             const newPrompt = editInput.value.trim();
             const newModelId = editModelSelect ? editModelSelect.value : selectedModelId;
-            
+
             if (newPrompt) {
                 promptInput.value = newPrompt;
+                addPromptToHistory(newPrompt);
                 updatePromptDisplay(newPrompt);
                 const modelChanged = previousModelId && previousModelId !== newModelId;
-                vscode.postMessage({ 
-                    type: 'refineCandidates', 
-                    prompt: newPrompt, 
+                vscode.postMessage({
+                    type: 'refineCandidates',
+                    prompt: newPrompt,
                     modelId: newModelId,
                     modelChanged: modelChanged,
                     previousModelId: previousModelId
@@ -501,6 +581,7 @@
         generateBtn.addEventListener('click', function() {
             const prompt = promptInput.value.trim();
             if (prompt) {
+                addPromptToHistory(prompt);
                 updatePromptDisplay(prompt);
                 vscode.postMessage({ type: 'generateCandidates', prompt: prompt, modelId: selectedModelId });
                 previousModelId = selectedModelId;
@@ -583,6 +664,13 @@
             });
         }
 
+        if (recentPromptsBtn) {
+            recentPromptsBtn.addEventListener('click', function(e) {
+                toggleHistoryMenu();
+                e.stopPropagation();
+            });
+        }
+
         if (displayOptionsBtn && displayOptionsMenu) {
             displayOptionsBtn.addEventListener('click', function(e) {
                 const isOpen = !displayOptionsMenu.classList.contains('hidden');
@@ -601,21 +689,41 @@
             });
 
             window.addEventListener('click', function(ev) {
-                if (!displayOptionsMenu.classList.contains('hidden')) {
-                    const target = ev.target;
-                    if (!displayOptionsMenu.contains(target) && target !== displayOptionsBtn) {
-                        displayOptionsMenu.classList.add('hidden');
-                        displayOptionsBtn.setAttribute('aria-expanded', 'false');
-                    }
+                const target = ev.target;
+
+                if (!displayOptionsMenu.classList.contains('hidden') &&
+                    !displayOptionsMenu.contains(target) &&
+                    target !== displayOptionsBtn) {
+                    displayOptionsMenu.classList.add('hidden');
+                    displayOptionsBtn.setAttribute('aria-expanded', 'false');
+                }
+
+                if (recentPromptsMenu && !recentPromptsMenu.classList.contains('hidden') &&
+                    !recentPromptsMenu.contains(target) &&
+                    target !== recentPromptsBtn) {
+                    toggleHistoryMenu(false);
                 }
             });
 
             window.addEventListener('keydown', function(ev) {
+                if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && ev.key.toLowerCase() === 'h') {
+                    ev.preventDefault();
+                    toggleHistoryMenu(true);
+                    return;
+                }
+
                 if (ev.key === 'Escape') {
                     if (!displayOptionsMenu.classList.contains('hidden')) {
                         displayOptionsMenu.classList.add('hidden');
                         displayOptionsBtn.setAttribute('aria-expanded', 'false');
                         displayOptionsBtn.focus();
+                        return;
+                    }
+                    if (recentPromptsMenu && !recentPromptsMenu.classList.contains('hidden')) {
+                        toggleHistoryMenu(false);
+                        if (recentPromptsBtn) {
+                            recentPromptsBtn.focus();
+                        }
                         return;
                     }
                     const candidatesModal = document.getElementById('candidatesHelpModal');
