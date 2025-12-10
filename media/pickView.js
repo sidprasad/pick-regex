@@ -284,11 +284,21 @@
             
             if (currentPromptDisplay) {
                 currentPromptDisplay.innerHTML = '';
-                currentPromptDisplay.appendChild(container.cloneNode(true));
+                const clone1 = container.cloneNode(true);
+                const btn1 = clone1.querySelector('.icon-btn');
+                if (btn1) {
+                    btn1.addEventListener('click', editPrompt);
+                }
+                currentPromptDisplay.appendChild(clone1);
             }
             if (finalPromptDisplay) {
                 finalPromptDisplay.innerHTML = '';
-                finalPromptDisplay.appendChild(container.cloneNode(true));
+                const clone2 = container.cloneNode(true);
+                const btn2 = clone2.querySelector('.icon-btn');
+                if (btn2) {
+                    btn2.addEventListener('click', editPrompt);
+                }
+                finalPromptDisplay.appendChild(clone2);
             }
         }
 
@@ -382,9 +392,21 @@
 
             // Keep both displays in sync so the revised view is reflected when switching sections
             if (targetDisplay === finalPromptDisplay && currentPromptDisplay) {
-                currentPromptDisplay.innerHTML = editHtml;
+                const clone = container.cloneNode(true);
+                const submitBtn = clone.querySelector('button[title="Generate new candidates with revised prompt and model"]');
+                const cancelBtn = clone.querySelector('button[title="Cancel"]');
+                if (submitBtn) submitBtn.addEventListener('click', submitEditedPrompt);
+                if (cancelBtn) cancelBtn.addEventListener('click', cancelEditPrompt);
+                currentPromptDisplay.innerHTML = '';
+                currentPromptDisplay.appendChild(clone);
             } else if (targetDisplay === currentPromptDisplay && finalPromptDisplay) {
-                finalPromptDisplay.innerHTML = editHtml;
+                const clone = container.cloneNode(true);
+                const submitBtn = clone.querySelector('button[title="Generate new candidates with revised prompt and model"]');
+                const cancelBtn = clone.querySelector('button[title="Cancel"]');
+                if (submitBtn) submitBtn.addEventListener('click', submitEditedPrompt);
+                if (cancelBtn) cancelBtn.addEventListener('click', cancelEditPrompt);
+                finalPromptDisplay.innerHTML = '';
+                finalPromptDisplay.appendChild(clone);
             }
         }
 
