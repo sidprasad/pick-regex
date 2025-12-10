@@ -281,12 +281,17 @@ export class PickController {
    */
   areBothWordsClassified(): boolean {
     if (!this.currentPair) {
+      logger.info('areBothWordsClassified: no current pair');
       return false;
     }
 
     const { word1, word2 } = this.currentPair;
     const word1Classified = this.wordHistory.some(r => r.word === word1);
     const word2Classified = this.wordHistory.some(r => r.word === word2);
+
+    logger.info(
+      `areBothWordsClassified: word1="${word1}" (classified: ${word1Classified}), word2="${word2}" (classified: ${word2Classified})`
+    );
 
     return word1Classified && word2Classified;
   }

@@ -738,6 +738,7 @@
         // Handle messages from extension
         window.addEventListener('message', function(event) {
             const message = event.data;
+            console.log('[PICK Webview] Received message: type="' + message.type + '"', message);
 
             switch (message.type) {
                 case 'status':
@@ -1129,12 +1130,14 @@
         }
 
         function classifyWord(word, classification) {
+            console.log('[PICK Webview] classifyWord called: word="' + word + '" (length: ' + word.length + '), classification="' + classification + '"');
             classifiedWords.add(word);
             vscode.postMessage({
                 type: 'classifyWord',
                 word: word,
                 classification: classification
             });
+            console.log('[PICK Webview] Sent classifyWord message to extension');
 
             const wordCards = document.querySelectorAll('.word-card');
             wordCards.forEach(function(card) {
@@ -1148,6 +1151,7 @@
         }
 
         function showWordPair(pair, status) {
+            console.log('[PICK Webview] showWordPair called: word1="' + pair.word1 + '" (length: ' + pair.word1.length + '), word2="' + pair.word2 + '" (length: ' + pair.word2.length + ')');
             // cache for re-render when toggles change
             lastPair = pair;
             lastStatus = status;
