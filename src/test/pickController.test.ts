@@ -954,7 +954,8 @@ suite('PickController Test Suite', () => {
   suite('Special Character Handling (Regression Tests)', () => {
     test('Should handle words with double quotes in classification', async () => {
       // This test ensures that words containing double quotes can be classified
-      // Previously, double quotes would break the HTML onclick attribute in the webview
+      // Previously, double quotes would break when using inline onclick attributes
+      // Now uses programmatic DOM building with event listeners (no escaping needed)
       const patterns = ['[!"#$%&\'()*,\\-./:;<=>?@[\\]^_`{|}~]{2,}', '!!+"*'];
       await controller.generateCandidates('punctuation test', patterns);
       

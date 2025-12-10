@@ -42,6 +42,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     // Handle messages from the webview
      webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.type) {
+        case 'log':
+          // Forward webview logs to backend logger
+          if (data.level === 'info') {
+            logger.info(`[Webview] ${data.message}`);
+          } else if (data.level === 'warn') {
+            logger.warn(`[Webview] ${data.message}`);
+          } else if (data.level === 'error') {
+            logger.error(`[Webview] ${data.message}`);
+          }
+          break;
         case 'generateCandidates':
           // Don't await - run asynchronously so other messages can be processed
           this.handleGenerateCandidates(data.prompt, data.modelId).catch(error => {

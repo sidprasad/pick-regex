@@ -385,9 +385,15 @@
             return toLiteralString(ch);
         }
 
-        // Escape for inline onclick usage
-        function escapeForOnclick(str) {
-            return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+        /**
+         * Log to backend logger via message passing
+         */
+        function log(level, message) {
+            vscode.postMessage({
+                type: 'log',
+                level: level,
+                message: message
+            });
         }
 
         /**
@@ -738,7 +744,7 @@
         // Handle messages from extension
         window.addEventListener('message', function(event) {
             const message = event.data;
-            console.log('[PICK Webview] Received message: type="' + message.type + '"', message);
+            log('info', 'Received message: type="' + message.type + '"');
 
             switch (message.type) {
                 case 'status':
@@ -1130,14 +1136,14 @@
         }
 
         function classifyWord(word, classification) {
-            console.log('[PICK Webview] classifyWord called: word="' + word + '" (length: ' + word.length + '), classification="' + classification + '"');
+            log('info', 'classifyWord called: word="' + word + '" (length: ' + word.length + '), classification="' + classification + '"');
             classifiedWords.add(word);
             vscode.postMessage({
                 type: 'classifyWord',
                 word: word,
                 classification: classification
             });
-            console.log('[PICK Webview] Sent classifyWord message to extension');
+            log('info', 'Sent classifyWord message to extension');
 
             const wordCards = document.querySelectorAll('.word-card');
             wordCards.forEach(function(card) {
@@ -1151,7 +1157,7 @@
         }
 
         function showWordPair(pair, status) {
-            console.log('[PICK Webview] showWordPair called: word1="' + pair.word1 + '" (length: ' + pair.word1.length + '), word2="' + pair.word2 + '" (length: ' + pair.word2.length + ')');
+            log('info', 'showWordPair called: word1="' + pair.word1 + '" (length: ' + pair.word1.length + '), word2="' + pair.word2 + '" (length: ' + pair.word2.length + ')');
             // cache for re-render when toggles change
             lastPair = pair;
             lastStatus = status;
@@ -1163,7 +1169,11 @@
 
             const diffOps = diffMode ? diffWords(pair.word1, pair.word2) : null;
 
-            function renderWordCard(word, side) {
+            /**
+             * Create a word card element programmatically (DOM-based, not string-based)
+             * This avoids escaping issues with inline onclick handlers
+             */
+            function createWordCard(word, side) {
                 let readable, literal;
                 if (diffOps) {
                     readable = renderWordWithDiff(diffOps, side, false);
@@ -1172,39 +1182,80 @@
                     readable = escapeHtml(word);
                     literal = toLiteralString(word);
                 }
-                const dataWord = escapeHtml(word);
-                const clickWord = escapeForOnclick(word);
 
-                return `
-                <div class="word-card" data-word="${dataWord}">
-                    <div class="word-display">
-                        <span class="word-readable">${readable}</span>
-                        <span class="word-literal">${literal}</span>
-                    </div>
-                    <div class="word-actions">
-                        <button class="btn accept" onclick="classifyWord('${clickWord}', 'accept')" title="Upvote">
-                        <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        </button>
-                        <button class="btn reject" onclick="classifyWord('${clickWord}', 'reject')" title="Downvote">
-                        <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        </button>
-                        <button class="btn unsure" onclick="classifyWord('${clickWord}', 'unsure')" title="Skip">
-                        <svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>
-                        <path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        </button>
-                    </div>
-                </div>`;
+                // Create card container
+                const card = document.createElement('div');
+                card.className = 'word-card';
+                card.setAttribute('data-word', word);
+
+                // Create display section
+                const display = document.createElement('div');
+                display.className = 'word-display';
+                
+                const readableSpan = document.createElement('span');
+                readableSpan.className = 'word-readable';
+                readableSpan.innerHTML = readable;
+                
+                const literalSpan = document.createElement('span');
+                literalSpan.className = 'word-literal';
+                literalSpan.innerHTML = literal;
+                
+                display.appendChild(readableSpan);
+                display.appendChild(literalSpan);
+
+                // Create actions section
+                const actions = document.createElement('div');
+                actions.className = 'word-actions';
+
+                // Create accept button
+                const acceptBtn = createButton('accept', 'Upvote', word);
+                acceptBtn.innerHTML = '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    '<path d="M12 19V7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<path d="M5 12l7-7 7 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '</svg>';
+
+                // Create reject button
+                const rejectBtn = createButton('reject', 'Downvote', word);
+                rejectBtn.innerHTML = '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    '<path d="M12 5v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<path d="M19 12l-7 7-7-7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '</svg>';
+
+                // Create unsure button
+                const unsureBtn = createButton('unsure', 'Skip', word);
+                unsureBtn.innerHTML = '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                    '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+                    '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '</svg>';
+
+                actions.appendChild(acceptBtn);
+                actions.appendChild(rejectBtn);
+                actions.appendChild(unsureBtn);
+
+                card.appendChild(display);
+                card.appendChild(actions);
+
+                return card;
             }
 
-            wordPair.innerHTML = renderWordCard(pair.word1, 'a') + renderWordCard(pair.word2, 'b');
+            /**
+             * Helper function to create a classification button with proper event listener
+             */
+            function createButton(classification, title, word) {
+                const button = document.createElement('button');
+                button.className = 'btn ' + classification;
+                button.title = title;
+                // Attach event listener directly - no escaping needed!
+                button.addEventListener('click', function() {
+                    classifyWord(word, classification);
+                });
+                return button;
+            }
+
+            // Clear and rebuild word pair container
+            wordPair.innerHTML = '';
+            wordPair.appendChild(createWordCard(pair.word1, 'a'));
+            wordPair.appendChild(createWordCard(pair.word2, 'b'));
         }
 
         function updateWordHistory(history) {
