@@ -950,7 +950,7 @@ suite('PickController Test Suite', () => {
   });
 
   // Regression test for issue: Extension Hanging mid vote
-  // https://github.com/sidprasad/pick-regex/issues/[issue-number]
+  // See: https://github.com/sidprasad/pick-regex/issues (Extension Hanging mid vote)
   suite('Special Character Handling (Regression Tests)', () => {
     test('Should handle words with double quotes in classification', async () => {
       // This test ensures that words containing double quotes can be classified
@@ -989,17 +989,18 @@ suite('PickController Test Suite', () => {
     test('Should handle words with various special characters', async () => {
       // Test a comprehensive set of special characters that could break HTML escaping
       const specialChars = [
-        '"',      // Double quote
-        "'",      // Single quote
-        '\\',     // Backslash
-        '&',      // Ampersand
-        '<',      // Less than
-        '>',      // Greater than
-        '\n',     // Newline
-        '\t',     // Tab
-        '!!"',    // The specific case from the bug report
-        '\'"',    // Mixed quotes
-        '\\"\\'   // Escaped characters
+        '"',           // Double quote
+        "'",           // Single quote
+        '\\',          // Backslash
+        '&',           // Ampersand
+        '<',           // Less than
+        '>',           // Greater than
+        '\n',          // Newline
+        '\t',          // Tab
+        '!!"',         // The specific case from the bug report
+        '\'"',         // Mixed quotes
+        'say "hello"', // Realistic example with quotes
+        "can't"        // Realistic example with apostrophe
       ];
       
       const patterns = ['.*'];
