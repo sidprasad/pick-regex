@@ -46,8 +46,25 @@ export class NoModelsAvailableError extends Error {
  */
 export class ModelNotSupportedError extends Error {
   constructor(modelName: string) {
-    super(`The model "${modelName}" is not currently supported. Please try selecting a different model.`);
+    super(`The model "${modelName}" is not currently supported. This could mean:\n\n• The model doesn't exist or has been deprecated\n• The model requires a subscription you don't have\n• The model may require additional workspace permissions or account setup\n\nPlease try selecting a different model from the dropdown.`);
     this.name = 'ModelNotSupportedError';
+  }
+}
+
+/**
+ * Error thrown when a model is listed but not enabled/accessible in this workspace
+ */
+export class ModelNotEnabledError extends Error {
+  constructor(modelName: string, details?: string) {
+    super(
+      `The model "${modelName}" appears in your list but is not currently enabled for this workspace.\n\n` +
+      `${details || 'This may require additional setup or permissions.'}\n\n` +
+      `What you can do:\n` +
+      `• Check if the model requires workspace-specific permissions\n` +
+      `• Verify you're signed in to the correct account\n` +
+      `• Try selecting a different model from the dropdown`
+    );
+    this.name = 'ModelNotEnabledError';
   }
 }
 
@@ -213,42 +230,94 @@ export async function generateRegexFromDescription(
   try {
     response = await model.sendRequest(messages, {}, token);
   } catch (error: unknown) {
-    // Handle permission/authorization errors
+    logger.info(`Caught error in regexService: ${error?.constructor?.name}, message: ${error instanceof Error ? error.message : String(error)}`);
+    
+    // Handle VS Code LanguageModelError with specific error codes
     if (error instanceof vscode.LanguageModelError) {
       const errorCode = error.code;
+      const errorMsg = error.message.toLowerCase();
+      
+      logger.error(error, `Language model error - code: ${errorCode}, message: ${error.message}`);
+      
       // Check for permission-related errors
-      // LanguageModelError codes are strings like 'NoPermissions', 'Blocked', etc.
       if (errorCode === 'NoPermissions' || 
           errorCode === 'Blocked' ||
-          error.message.toLowerCase().includes('permission') ||
-          error.message.toLowerCase().includes('not allowed')) {
-        logger.error(error, 'Permission denied for language model access');
+          errorMsg.includes('permission') ||
+          errorMsg.includes('not allowed')) {
         throw new PermissionRequiredError(
           'You must grant permission for PICK to use language models. ' +
           'A permission dialog should appear - please click "Allow" to continue. ' +
           'If no dialog appears, you may need to sign in to your language model provider.'
         );
       }
+      
+      // Check for model not available/enabled in workspace
+      if (errorMsg.includes('not available') ||
+          errorMsg.includes('not enabled') ||
+          errorMsg.includes('not accessible') ||
+          errorMsg.includes('not active')) {
+        throw new ModelNotEnabledError(
+          model.name,
+          'The model may require additional workspace permissions or account setup.'
+        );
+      }
+      
+      // Check for model not found
+      if (errorMsg.includes('not found') || errorMsg.includes('does not exist')) {
+        throw new ModelNotSupportedError(model.name);
+      }
     }
     
-    // Check for model_not_supported error (e.g., GPT-5 preview)
+    // Check for model_not_supported error (e.g., backend doesn't support this model)
     const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.info(`Checking error message for model_not_supported: "${errorMessage.substring(0, 200)}"`);
+    
     if (errorMessage.includes('model_not_supported') || 
         errorMessage.toLowerCase().includes('model is not supported') ||
         errorMessage.toLowerCase().includes('requested model is not supported')) {
-      logger.error(error, `Model not supported: ${model.name}`);
+      logger.error(error, `Model not supported by backend: ${model.name}`);
+      logger.info(`About to throw ModelNotSupportedError for model: ${model.name}`);
       throw new ModelNotSupportedError(model.name);
     }
     
     // Re-throw other errors
+    logger.error(error, `Unexpected error during model.sendRequest for ${model.name}`);
     throw error;
   }
 
   let fullText = '';
-  for await (const chunk of response.stream) {
-    if (chunk instanceof vscode.LanguageModelTextPart) {
-      fullText += chunk.value;
+  try {
+    for await (const chunk of response.stream) {
+      if (chunk instanceof vscode.LanguageModelTextPart) {
+        fullText += chunk.value;
+      }
     }
+  } catch (error: unknown) {
+    logger.info(`Caught error during stream iteration: ${error?.constructor?.name}`);
+    
+    // Check for model_not_supported error during streaming
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('model_not_supported') || 
+        errorMessage.toLowerCase().includes('model is not supported') ||
+        errorMessage.toLowerCase().includes('requested model is not supported')) {
+      logger.error(error, `Model not supported by backend (during streaming): ${model.name}`);
+      throw new ModelNotSupportedError(model.name);
+    }
+    
+    // Check for model not available/enabled
+    if (errorMessage.toLowerCase().includes('not available') ||
+        errorMessage.toLowerCase().includes('not enabled') ||
+        errorMessage.toLowerCase().includes('not accessible') ||
+        errorMessage.toLowerCase().includes('not active')) {
+      throw new ModelNotEnabledError(
+        model.name,
+        'The model may require additional workspace permissions or account setup.'
+      );
+    }
+    
+    // Re-throw other streaming errors
+    logger.error(error, `Unexpected error during stream iteration for ${model.name}`);
+    throw error;
   }
 
   // Try to find a JSON object in the response (defensive parsing)

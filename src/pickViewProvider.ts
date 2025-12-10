@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PickController, PickState, WordClassification } from './pickController';
-import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, getAvailableChatModels } from './regexService';
+import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, ModelNotEnabledError, getAvailableChatModels } from './regexService';
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
 import { openIssueReport } from './issueReporter';
@@ -187,6 +187,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           logger.info(`Candidate ${i + 1}: ${c.regex} (confidence: ${c.confidence ?? 'N/A'}) - ${c.explanation}`);
         });
       } catch (error) {
+        // Debug logging to see what type of error we're getting
+        logger.info(`Caught error type: ${error?.constructor?.name}, instanceof ModelNotSupportedError: ${error instanceof ModelNotSupportedError}`);
+        
         // Check if it was cancelled
         if (this.cancellationTokenSource.token.isCancellationRequested) {
           logger.info('Candidate generation was cancelled by user');
@@ -218,14 +221,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
         if (error instanceof ModelNotSupportedError) {
           logger.error(error, 'Model not supported');
-          vscode.window.showErrorMessage(
-            error.message,
-            'Select Different Model'
-          ).then(selection => {
-            if (selection === 'Select Different Model') {
-              this.checkAvailableModels();
-            }
+          this.sendMessage({
+            type: 'error',
+            message: error.message
           });
+          return;
+        }
+
+        if (error instanceof ModelNotEnabledError) {
+          logger.error(error, 'Model not enabled/accessible');
           this.sendMessage({
             type: 'error',
             message: error.message
@@ -719,14 +723,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
         if (error instanceof ModelNotSupportedError) {
           logger.error(error, 'Model not supported');
-          vscode.window.showErrorMessage(
-            error.message,
-            'Select Different Model'
-          ).then(selection => {
-            if (selection === 'Select Different Model') {
-              this.checkAvailableModels();
-            }
+          this.sendMessage({
+            type: 'error',
+            message: error.message
           });
+          return;
+        }
+
+        if (error instanceof ModelNotEnabledError) {
+          logger.error(error, 'Model not enabled/accessible');
           this.sendMessage({
             type: 'error',
             message: error.message

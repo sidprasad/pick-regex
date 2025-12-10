@@ -956,8 +956,16 @@
             // statusCancelBtn needs explicit hiding since showSection doesn't manage it
             statusCancelBtn.classList.add('hidden');
             
-            // Show the error message
-            errorSection.textContent = message;
+            // Show the error message with better formatting
+            // Check if message has multiple lines or paragraphs
+            const formattedMessage = message
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .map(line => `<p style="margin: 8px 0;">${escapeHtml(line)}</p>`)
+                .join('');
+            
+            errorSection.innerHTML = formattedMessage || escapeHtml(message);
             errorSection.classList.remove('hidden');
         }
 
