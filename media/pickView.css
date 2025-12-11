@@ -1060,35 +1060,50 @@
 
         .regex-syntax {
             font-family: monospace;
-            font-size: 1.1em;
-            line-height: 1.4;
+            font-size: 1.05em;
+            line-height: 1.35;
+            white-space: pre;
+            background: transparent;
+            color: var(--vscode-editor-foreground);
         }
 
-        .regex-meta {
-            color: var(--vscode-textLink-foreground, #3794ff);
-            font-weight: bold;
-        }
-
-        .regex-group {
-            color: var(--vscode-charts-green, #89d185);
-        }
-
-        .regex-class {
+        /* Prism token theming for regex */
+        .regex-syntax .token.char-class,
+        .regex-syntax .token.char-set {
             color: var(--vscode-charts-orange, #f48771);
         }
 
-        .regex-quantifier {
-            /* Use a darker, more visible color for quantifiers in light mode */
-            color: var(--vscode-symbolIcon-numberForeground, #0e639c);
-            font-weight: 500;
+        .regex-syntax .token.char-class-negation,
+        .regex-syntax .token.range,
+        .regex-syntax .token.range-punctuation,
+        .regex-syntax .token.operator,
+        .regex-syntax .token.keyword,
+        .regex-syntax .token.anchor,
+        .regex-syntax .token.alternation {
+            color: var(--vscode-symbolIcon-keywordForeground, #c586c0);
+            font-weight: 600;
         }
 
-        .regex-escape {
+        .regex-syntax .token.quantifier,
+        .regex-syntax .token.number {
+            color: var(--vscode-symbolIcon-numberForeground, #0e639c);
+            font-weight: 600;
+        }
+
+        .regex-syntax .token.escape,
+        .regex-syntax .token.special-escape {
             color: var(--vscode-charts-yellow, #cca700);
         }
 
-        .regex-literal {
-            color: var(--vscode-editor-foreground);
+        .regex-syntax .token.variable,
+        .regex-syntax .token.group-name,
+        .regex-syntax .token.backreference {
+            color: var(--vscode-charts-blue, #0078d4);
+            font-weight: 600;
+        }
+
+        .regex-syntax .token.punctuation {
+            color: var(--vscode-descriptionForeground);
         }
 
         /* Ensure copy buttons and icons are visible in light themes */

@@ -1115,12 +1115,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     const splashPath = path.join(this.extensionUri.fsPath, 'media', 'pickSplash.html');
     const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'pickView.js'));
     const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'pickView.css'));
+    const prismCoreUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'vendor', 'prism-core.min.js'));
+    const prismRegexUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'vendor', 'prism-regex.min.js'));
     
     try {
       const splashHtml = fs.readFileSync(splashPath, 'utf8');
       let html = fs.readFileSync(htmlPath, 'utf8');
       // Inject the CSS, JS, and splash partial into the HTML
       html = html.replace('<!--CSS_URI_PLACEHOLDER-->', cssUri.toString());
+      html = html.replace('<!--PRISM_CORE_URI_PLACEHOLDER-->', prismCoreUri.toString());
+      html = html.replace('<!--PRISM_REGEX_URI_PLACEHOLDER-->', prismRegexUri.toString());
       html = html.replace('<!--JS_URI_PLACEHOLDER-->', jsUri.toString());
       html = html.replace('<!--SPLASH_HTML_PLACEHOLDER-->', splashHtml);
       return html;

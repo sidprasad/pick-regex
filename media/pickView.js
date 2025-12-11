@@ -599,41 +599,17 @@
                 return '';
             }
 
-            pattern = pattern.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-            let result = '';
-            let i = 0;
-
-            while (i < pattern.length) {
-                const char = pattern[i];
-
-                if ('^$*+?|{}[]()\\'.includes(char)) {
-                    if (char === '\\' && i + 1 < pattern.length) {
-                        const nextChar = pattern[i + 1];
-                        result += '<span class="regex-escape">\\' + nextChar + '</span>';
-                        i += 2;
-                    } else if (char === '[' && pattern.substr(i).match(/^\[.*?\]/)) {
-                        const match = pattern.substr(i).match(/^\[.*?\]/)[0];
-                        result += '<span class="regex-class">' + match + '</span>';
-                        i += match.length;
-                    } else if (char === '(' && pattern.substr(i).match(/^\([^)]*\)/)) {
-                        const match = pattern.substr(i).match(/^\([^)]*\)/)[0];
-                        result += '<span class="regex-group">' + match + '</span>';
-                        i += match.length;
-                    } else if ('*+?{'.includes(char)) {
-                        result += '<span class="regex-quantifier">' + char + '</span>';
-                        i++;
-                    } else {
-                        result += '<span class="regex-meta">' + char + '</span>';
-                        i++;
-                    }
-                } else {
-                    result += '<span class="regex-literal">' + char + '</span>';
-                    i++;
+            if (window.Prism && Prism.languages && Prism.languages.regex) {
+                try {
+                    const highlighted = Prism.highlight(pattern, Prism.languages.regex, 'regex');
+                    return '<code class="regex-syntax language-regex">' + highlighted + '</code>';
+                } catch (err) {
+                    log('warn', 'Prism highlight failed: ' + String(err));
                 }
             }
 
-            return '<span class="regex-syntax">' + result + '</span>';
+            // Fallback: simple escaped text if Prism isn't available
+            return '<code class="regex-syntax">' + escapeHtml(pattern) + '</code>';
         }
 
         function createEquivalentSection(equivalents) {
