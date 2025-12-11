@@ -504,8 +504,15 @@
         }
 
         .candidate-item.eliminated {
-            opacity: 0.5;
-            text-decoration: line-through;
+            opacity: 0.82;
+            border-style: dashed;
+            border-color: color-mix(in srgb, var(--pick-reject-color) 45%, var(--vscode-panel-border));
+            background: color-mix(in srgb, var(--pick-reject-color) 12%, var(--vscode-editor-background));
+        }
+
+        .candidate-item.eliminated .candidate-pattern {
+            text-decoration: none;
+            color: var(--vscode-descriptionForeground);
         }
 
         .candidate-item.active {
@@ -514,6 +521,7 @@
             border-left: none;
             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
         }
+
 
         .equivalent-toggle {
             padding: 6px 8px;
@@ -567,6 +575,31 @@
             padding: 2px 6px;
             border-radius: 10px;
             font-size: 0.85em;
+        }
+
+        .badge.positive {
+            background: var(--pick-accept-color);
+            color: var(--vscode-foreground);
+        }
+
+        .badge.negative {
+            background: var(--pick-reject-color);
+            color: var(--vscode-foreground);
+        }
+
+        /* When a candidate is eliminated, downvotes pop while upvotes fade */
+        .candidate-item.eliminated .badge.positive {
+            opacity: 0.45;
+            background: color-mix(in srgb, var(--pick-accept-color) 18%, var(--vscode-badge-background));
+            transform: scale(0.94);
+        }
+
+        .candidate-item.eliminated .badge.negative {
+            background: color-mix(in srgb, var(--pick-reject-color) 82%, var(--vscode-editor-background));
+            color: var(--vscode-foreground);
+            font-weight: 700;
+            transform: scale(1.08);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--pick-reject-color) 55%, transparent);
         }
 
         .final-result {

@@ -1134,13 +1134,11 @@
                     '</svg>';
 
                 const posBadge = document.createElement('span');
-                posBadge.className = 'badge';
-                posBadge.style.background = '#4caf50';
+                posBadge.className = 'badge positive';
                 posBadge.textContent = '✓ ' + c.positiveVotes;
 
                 const negBadge = document.createElement('span');
-                negBadge.className = 'badge';
-                negBadge.style.background = '#f44336';
+                negBadge.className = 'badge negative';
                 negBadge.textContent = '✗ ' + c.negativeVotes;
 
                 votesContainer.appendChild(copyBtn);
@@ -1229,19 +1227,16 @@
                     '</svg>';
                 
                 const posVoteBadge = document.createElement('span');
-                posVoteBadge.className = 'badge';
-                posVoteBadge.style.background = '#4caf50';
+                posVoteBadge.className = 'badge positive';
                 posVoteBadge.textContent = '✓ ' + c.positiveVotes;
                 
                 const negVoteBadge = document.createElement('span');
-                negVoteBadge.className = 'badge';
-                negVoteBadge.style.background = '#f44336';
+                negVoteBadge.className = 'badge negative';
                 negVoteBadge.textContent = '✗ ' + c.negativeVotes;
 
                 votesDiv.appendChild(copyBtn);
                 votesDiv.appendChild(posVoteBadge);
                 votesDiv.appendChild(negVoteBadge);
-
                 header.appendChild(patternSpan);
                 header.appendChild(votesDiv);
                 div.appendChild(header);
@@ -1547,13 +1542,11 @@
                 });
                 
                 const positiveBadge = document.createElement('span');
-                positiveBadge.className = 'badge';
-                positiveBadge.style.background = '#4caf50';
+                positiveBadge.className = 'badge positive';
                 positiveBadge.textContent = '✓ ' + c.positiveVotes;
                 
                 const negativeBadge = document.createElement('span');
-                negativeBadge.className = 'badge';
-                negativeBadge.style.background = '#f44336';
+                negativeBadge.className = 'badge negative';
                 negativeBadge.textContent = '✗ ' + c.negativeVotes;
                 
                 votesDiv.appendChild(copyBtn);
