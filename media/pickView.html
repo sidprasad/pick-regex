@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PICK - Regex Builder</title>
     <link rel="stylesheet" href="<!--CSS_URI_PLACEHOLDER-->">
+    <script src="<!--PRISM_CORE_URI_PLACEHOLDER-->" defer></script>
+    <script src="<!--PRISM_REGEX_URI_PLACEHOLDER-->" defer></script>
 </head>
 
 <body>
@@ -38,6 +40,9 @@
     <select id="modelSelect" style="flex: 1; padding: 4px 8px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 2px; font-size: 12px; height: 28px;">
       <option value="">Loading models...</option>
     </select>
+    <button id="refreshModelsBtn" class="icon-btn small" title="Refresh model list" aria-label="Refresh model list" style="padding: 4px 6px; height: 28px; font-size: 14px;">
+      🔄
+    </button>
   </div>
 
   <p style="margin: 0 0 6px 0; font-size: 1.05rem; font-weight: 500;">

@@ -39,6 +39,7 @@
         // Model selector elements
         const modelSelect = document.getElementById('modelSelect');
         const modelSelectorRow = document.getElementById('modelSelectorRow');
+        const refreshModelsBtn = document.getElementById('refreshModelsBtn');
 
         // Splash screen elements
         const splashScreen = document.getElementById('splashScreen');
@@ -120,6 +121,11 @@
             modelSelect.addEventListener('change', function() {
                 selectedModelId = modelSelect.value;
             });
+        }
+        
+        // Handle refresh models button
+        if (refreshModelsBtn) {
+            refreshModelsBtn.addEventListener('click', refreshModels);
         }
         
         const wordPair = document.getElementById('wordPair');
@@ -252,6 +258,36 @@
             });
         }
 
+        /**
+         * Request the extension to refresh the model list
+         */
+        function refreshModels() {
+            if (!refreshModelsBtn) {
+                return;
+            }
+            
+            // Disable button and show loading state
+            refreshModelsBtn.disabled = true;
+            const originalTitle = refreshModelsBtn.title;
+            refreshModelsBtn.title = 'Refreshing...';
+            
+            // Update dropdown to show loading state
+            if (modelSelect) {
+                modelSelect.innerHTML = '<option value="">Refreshing models...</option>';
+                modelSelect.disabled = true;
+            }
+            
+            // Request model refresh from extension
+            vscode.postMessage({ type: 'checkModels' });
+            
+            // Re-enable button after a short delay
+            setTimeout(function() {
+                refreshModelsBtn.disabled = false;
+                refreshModelsBtn.title = originalTitle;
+            }, 1000);
+        }
+
+
         // Helper function to update prompt display
         function updatePromptDisplay(prompt) {
             // Create DOM elements instead of HTML string
@@ -321,7 +357,7 @@
             
             const input = document.createElement('input');
             input.type = 'text';
-            input.id = 'editPromptInput';
+            input.className = 'editPromptInput'; // Use class instead of ID to avoid duplicates
             input.value = currentPrompt;
             input.style.cssText = 'flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;';
             input.placeholder = 'Enter a refined description...';
@@ -333,7 +369,7 @@
             selectRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
             
             const select = document.createElement('select');
-            select.id = 'editModelSelect';
+            select.className = 'editModelSelect'; // Use class instead of ID to avoid duplicates
             select.style.cssText = 'flex: 1; padding: 6px 8px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 2px; font-size: 13px;';
             
             availableModels.forEach(function(model) {
@@ -346,13 +382,36 @@
                 select.appendChild(option);
             });
             
+            // Create submit handler that captures the values from this specific input/select
+            const handleSubmit = function() {
+                const newPrompt = input.value.trim();
+                const newModelId = select.value || selectedModelId;
+
+                if (newPrompt) {
+                    promptInput.value = newPrompt;
+                    addPromptToHistory(newPrompt);
+                    updatePromptDisplay(newPrompt);
+                    const modelChanged = previousModelId && previousModelId !== newModelId;
+                    vscode.postMessage({
+                        type: 'refineCandidates',
+                        prompt: newPrompt,
+                        modelId: newModelId,
+                        modelChanged: modelChanged,
+                        previousModelId: previousModelId
+                    });
+                    selectedModelId = newModelId;
+                    previousModelId = newModelId;
+                    showSection('loading');
+                }
+            };
+            
             const submitBtn = document.createElement('button');
             submitBtn.style.cssText = 'padding: 6px 12px; min-width: auto;';
             submitBtn.title = 'Generate new candidates with revised prompt and model';
             submitBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="12" height="12">' +
                 '<path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
                 '</svg>';
-            submitBtn.addEventListener('click', submitEditedPrompt);
+            submitBtn.addEventListener('click', handleSubmit);
             
             const cancelBtn = document.createElement('button');
             cancelBtn.style.cssText = 'padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);';
@@ -377,42 +436,114 @@
                 targetDisplay.innerHTML = '';
                 targetDisplay.appendChild(container);
                 setTimeout(function() {
-                    const input = document.getElementById('editPromptInput');
-                    if (input) {
-                        input.focus();
-                        input.addEventListener('keypress', function(e) {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                submitEditedPrompt();
-                            }
-                        });
-                    }
+                    input.focus();
+                    input.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSubmit();
+                        }
+                    });
                 }, 10);
             }
 
-            // Keep both displays in sync so the revised view is reflected when switching sections
+            // Keep both displays in sync - create a clone with its own submit handler
             if (targetDisplay === finalPromptDisplay && currentPromptDisplay) {
                 const clone = container.cloneNode(true);
-                const submitBtn = clone.querySelector('button[title="Generate new candidates with revised prompt and model"]');
-                const cancelBtn = clone.querySelector('button[title="Cancel"]');
-                if (submitBtn) submitBtn.addEventListener('click', submitEditedPrompt);
-                if (cancelBtn) cancelBtn.addEventListener('click', cancelEditPrompt);
+                const cloneInput = clone.querySelector('.editPromptInput');
+                const cloneSelect = clone.querySelector('.editModelSelect');
+                const cloneSubmitBtn = clone.querySelector('button[title="Generate new candidates with revised prompt and model"]');
+                const cloneCancelBtn = clone.querySelector('button[title="Cancel"]');
+                
+                // Create a separate handler for the clone that uses its own input/select
+                const cloneHandleSubmit = function() {
+                    const newPrompt = cloneInput.value.trim();
+                    const newModelId = cloneSelect.value || selectedModelId;
+
+                    if (newPrompt) {
+                        promptInput.value = newPrompt;
+                        addPromptToHistory(newPrompt);
+                        updatePromptDisplay(newPrompt);
+                        const modelChanged = previousModelId && previousModelId !== newModelId;
+                        vscode.postMessage({
+                            type: 'refineCandidates',
+                            prompt: newPrompt,
+                            modelId: newModelId,
+                            modelChanged: modelChanged,
+                            previousModelId: previousModelId
+                        });
+                        selectedModelId = newModelId;
+                        previousModelId = newModelId;
+                        showSection('loading');
+                    }
+                };
+                
+                if (cloneSubmitBtn) cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
+                if (cloneCancelBtn) cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                if (cloneInput) {
+                    cloneInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            cloneHandleSubmit();
+                        }
+                    });
+                }
+                
                 currentPromptDisplay.innerHTML = '';
                 currentPromptDisplay.appendChild(clone);
             } else if (targetDisplay === currentPromptDisplay && finalPromptDisplay) {
                 const clone = container.cloneNode(true);
-                const submitBtn = clone.querySelector('button[title="Generate new candidates with revised prompt and model"]');
-                const cancelBtn = clone.querySelector('button[title="Cancel"]');
-                if (submitBtn) submitBtn.addEventListener('click', submitEditedPrompt);
-                if (cancelBtn) cancelBtn.addEventListener('click', cancelEditPrompt);
+                const cloneInput = clone.querySelector('.editPromptInput');
+                const cloneSelect = clone.querySelector('.editModelSelect');
+                const cloneSubmitBtn = clone.querySelector('button[title="Generate new candidates with revised prompt and model"]');
+                const cloneCancelBtn = clone.querySelector('button[title="Cancel"]');
+                
+                // Create a separate handler for the clone that uses its own input/select
+                const cloneHandleSubmit = function() {
+                    const newPrompt = cloneInput.value.trim();
+                    const newModelId = cloneSelect.value || selectedModelId;
+
+                    if (newPrompt) {
+                        promptInput.value = newPrompt;
+                        addPromptToHistory(newPrompt);
+                        updatePromptDisplay(newPrompt);
+                        const modelChanged = previousModelId && previousModelId !== newModelId;
+                        vscode.postMessage({
+                            type: 'refineCandidates',
+                            prompt: newPrompt,
+                            modelId: newModelId,
+                            modelChanged: modelChanged,
+                            previousModelId: previousModelId
+                        });
+                        selectedModelId = newModelId;
+                        previousModelId = newModelId;
+                        showSection('loading');
+                    }
+                };
+                
+                if (cloneSubmitBtn) cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
+                if (cloneCancelBtn) cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                if (cloneInput) {
+                    cloneInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            cloneHandleSubmit();
+                        }
+                    });
+                }
+                
                 finalPromptDisplay.innerHTML = '';
                 finalPromptDisplay.appendChild(clone);
             }
         }
 
         function submitEditedPrompt() {
-            const editInput = document.getElementById('editPromptInput');
-            const editModelSelect = document.getElementById('editModelSelect');
+            // This function is no longer needed as submit handlers are created inline
+            // Keeping for backwards compatibility in case it's called elsewhere
+            const editInput = document.querySelector('.editPromptInput');
+            const editModelSelect = document.querySelector('.editModelSelect');
+            if (!editInput) {
+                return;
+            }
             const newPrompt = editInput.value.trim();
             const newModelId = editModelSelect ? editModelSelect.value : selectedModelId;
 
@@ -563,41 +694,17 @@
                 return '';
             }
 
-            pattern = pattern.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-            let result = '';
-            let i = 0;
-
-            while (i < pattern.length) {
-                const char = pattern[i];
-
-                if ('^$*+?|{}[]()\\'.includes(char)) {
-                    if (char === '\\' && i + 1 < pattern.length) {
-                        const nextChar = pattern[i + 1];
-                        result += '<span class="regex-escape">\\' + nextChar + '</span>';
-                        i += 2;
-                    } else if (char === '[' && pattern.substr(i).match(/^\[.*?\]/)) {
-                        const match = pattern.substr(i).match(/^\[.*?\]/)[0];
-                        result += '<span class="regex-class">' + match + '</span>';
-                        i += match.length;
-                    } else if (char === '(' && pattern.substr(i).match(/^\([^)]*\)/)) {
-                        const match = pattern.substr(i).match(/^\([^)]*\)/)[0];
-                        result += '<span class="regex-group">' + match + '</span>';
-                        i += match.length;
-                    } else if ('*+?{'.includes(char)) {
-                        result += '<span class="regex-quantifier">' + char + '</span>';
-                        i++;
-                    } else {
-                        result += '<span class="regex-meta">' + char + '</span>';
-                        i++;
-                    }
-                } else {
-                    result += '<span class="regex-literal">' + char + '</span>';
-                    i++;
+            if (window.Prism && Prism.languages && Prism.languages.regex) {
+                try {
+                    const highlighted = Prism.highlight(pattern, Prism.languages.regex, 'regex');
+                    return '<code class="regex-syntax language-regex">' + highlighted + '</code>';
+                } catch (err) {
+                    log('warn', 'Prism highlight failed: ' + String(err));
                 }
             }
 
-            return '<span class="regex-syntax">' + result + '</span>';
+            // Fallback: simple escaped text if Prism isn't available
+            return '<code class="regex-syntax">' + escapeHtml(pattern) + '</code>';
         }
 
         function createEquivalentSection(equivalents) {
@@ -898,6 +1005,9 @@
                 case 'reset':
                     resetUI(message.preserveClassifications);
                     break;
+                case 'resetLocalState':
+                    clearLocalState();
+                    break;
                 case 'cancelled':
                     handleCancelled(message.message);
                     break;
@@ -924,6 +1034,28 @@
                 inlineCancelBtn.classList.remove('hidden');
                 statusCancelBtn.classList.remove('hidden');
                 generateBtn.classList.add('hidden');
+            }
+        }
+
+        function clearLocalState() {
+            // Reset in-memory and persisted state
+            promptHistory = [];
+            viewState = {};
+            vscode.setState(viewState);
+
+            // Reset recent prompts UI
+            renderPromptHistory();
+            if (recentPromptsMenu) {
+                recentPromptsMenu.classList.add('hidden');
+                if (recentPromptsBtn) {
+                    recentPromptsBtn.setAttribute('aria-expanded', 'false');
+                }
+            }
+
+            // Show the splash again
+            if (splashScreen) {
+                splashScreen.classList.remove('hidden');
+                splashScreen.setAttribute('aria-hidden', 'false');
             }
         }
 
@@ -1168,13 +1300,11 @@
                 const info = createCandidateInfo(c);
 
                 const posBadge = document.createElement('span');
-                posBadge.className = 'badge';
-                posBadge.style.background = '#4caf50';
+                posBadge.className = 'badge positive';
                 posBadge.textContent = '✓ ' + c.positiveVotes;
 
                 const negBadge = document.createElement('span');
-                negBadge.className = 'badge';
-                negBadge.style.background = '#f44336';
+                negBadge.className = 'badge negative';
                 negBadge.textContent = '✗ ' + c.negativeVotes;
 
                 votesContainer.appendChild(copyBtn);
@@ -1270,19 +1400,16 @@
                     '</svg>';
 
                 const posVoteBadge = document.createElement('span');
-                posVoteBadge.className = 'badge';
-                posVoteBadge.style.background = '#4caf50';
+                posVoteBadge.className = 'badge positive';
                 posVoteBadge.textContent = '✓ ' + c.positiveVotes;
                 
                 const negVoteBadge = document.createElement('span');
-                negVoteBadge.className = 'badge';
-                negVoteBadge.style.background = '#f44336';
+                negVoteBadge.className = 'badge negative';
                 negVoteBadge.textContent = '✗ ' + c.negativeVotes;
 
                 votesDiv.appendChild(copyBtn);
                 votesDiv.appendChild(posVoteBadge);
                 votesDiv.appendChild(negVoteBadge);
-
                 header.appendChild(patternSpan);
                 header.appendChild(votesDiv);
                 div.appendChild(header);
@@ -1542,6 +1669,9 @@
 
         function showNoRegexFound(message, candidateDetails, inWords, outWords) {
             showSection('final');
+            if (statusMessage) {
+                statusMessage.innerHTML = '';
+            }
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
@@ -1592,13 +1722,11 @@
                 });
                 
                 const positiveBadge = document.createElement('span');
-                positiveBadge.className = 'badge';
-                positiveBadge.style.background = '#4caf50';
+                positiveBadge.className = 'badge positive';
                 positiveBadge.textContent = '✓ ' + c.positiveVotes;
                 
                 const negativeBadge = document.createElement('span');
-                negativeBadge.className = 'badge';
-                negativeBadge.style.background = '#f44336';
+                negativeBadge.className = 'badge negative';
                 negativeBadge.textContent = '✗ ' + c.negativeVotes;
                 
                 votesDiv.appendChild(copyBtn);
@@ -1637,7 +1765,14 @@
                 : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as OUT</div>';
 
             if (candidateDetails && candidateDetails.length > 0) {
+                // Remove any previously inserted candidates note to avoid duplicates
+                const existingCandidatesNote = document.querySelector('.candidates-eliminated-note');
+                if (existingCandidatesNote) {
+                    existingCandidatesNote.remove();
+                }
+                
                 const candidatesNote = document.createElement('div');
+                candidatesNote.className = 'candidates-eliminated-note';
                 candidatesNote.style.cssText = 'margin-top: 20px; padding: 10px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px;';
                 
                 const header = document.createElement('div');
@@ -1667,6 +1802,13 @@
                 }
             }
             classifiedWords.clear();
+            
+            // Remove any candidates note elements from previous sessions
+            const existingCandidatesNote = document.querySelector('.candidates-eliminated-note');
+            if (existingCandidatesNote) {
+                existingCandidatesNote.remove();
+            }
+            
             showSection('prompt');
             if (statusMessage) {
                 statusMessage.innerHTML = '';
@@ -1693,5 +1835,8 @@
         window.copyRegex = copyRegex;
         window.toLiteralString = toLiteralString;
         window.highlightRegex = highlightRegex;
+        
+        // Notify the extension that the webview is ready
+        vscode.postMessage({ type: 'webviewReady' });
     };
 })();

@@ -5,7 +5,7 @@
   "publisher": "SiddharthaPrasad",
   "icon": "images/icon.png",
   "license": "MIT",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "repository": {
     "type": "git",
     "url": "https://github.com/sidprasad/pick-regex"
@@ -120,6 +120,7 @@
     "vsce": "^2.9.0"
   },
   "dependencies": {
-    "@gruhn/regex-utils": "^2.7.3"
+    "@gruhn/regex-utils": "^2.7.3",
+    "prismjs": "^1.30.0"
   }
 }
