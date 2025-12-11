@@ -549,6 +549,47 @@
             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
         }
 
+        .candidate-info {
+            margin-top: 4px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid var(--vscode-panel-border);
+            background: var(--vscode-input-background);
+            color: var(--vscode-descriptionForeground);
+            font-family: var(--vscode-font-family);
+            line-height: 1.4;
+        }
+
+        .candidate-info-row {
+            display: flex;
+            gap: 6px;
+            align-items: baseline;
+        }
+
+        .candidate-info-source {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 6px;
+        }
+
+        .candidate-info strong {
+            color: var(--vscode-foreground);
+        }
+
+        .candidate-info-btn {
+            min-width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 1px solid var(--vscode-panel-border);
+            background: transparent;
+            color: var(--vscode-descriptionForeground);
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+        }
+
 
         .equivalent-toggle {
             padding: 6px 8px;

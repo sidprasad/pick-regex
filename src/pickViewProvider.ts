@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PickController, PickState, WordClassification } from './pickController';
-import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, ModelNotEnabledError, getAvailableChatModels } from './regexService';
+import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, ModelNotEnabledError, getAvailableChatModels, RegexCandidate } from './regexService';
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
 import { openIssueReport } from './issueReporter';
@@ -178,10 +178,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
       this.cancellationTokenSource = new vscode.CancellationTokenSource();
       
-      let candidates: string[] = [];
+      let candidates: RegexCandidate[] = [];
       try {
         const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId);
-        candidates = result.candidates.map(c => c.regex);
+        candidates = result.candidates;
         logger.info(`Generated ${candidates.length} candidates from LLM`);
 
         // Log each candidate with explanation
@@ -288,21 +288,22 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       // Filter out invalid regexes and regexes with unsupported syntax
-      const validCandidates: string[] = [];
-      for (const regex of candidates) {
+      const validCandidates: RegexCandidate[] = [];
+      for (const candidate of candidates) {
+        const regex = candidate.regex;
         const isValid = this.analyzer.isValidRegex(regex);
         if (!isValid) {
           logger.warn(`Filtered out invalid regex: "${regex}"`);
           continue;
         }
-        
+
         const hasSupported = await this.analyzer.hasSupportedSyntax(regex);
         if (!hasSupported) {
           logger.warn(`Filtered out regex with unsupported syntax: "${regex}"`);
           continue;
         }
-        
-        validCandidates.push(regex);
+
+        validCandidates.push(candidate);
       }
 
       if (validCandidates.length === 0) {
@@ -322,7 +323,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       let uniqueCandidates: string[] = [];
       let equivalenceMap: Map<string, string[]> = new Map();
       try {
-        const deduped = await this.filterEquivalentRegexes(validCandidates);
+        const deduped = await this.filterEquivalentRegexes(validCandidates.map(c => c.regex));
         uniqueCandidates = deduped.uniqueRegexes;
         equivalenceMap = deduped.equivalenceMap;
       } catch (error) {
@@ -376,7 +377,23 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
       // Initialize controller with unique candidates
       this.sendMessage({ type: 'status', message: 'Determining elimination thresholds...' });
-      await this.controller.generateCandidates(prompt, uniqueCandidates, equivalenceMap, (current, total) => {
+      const candidateMeta = new Map<string, RegexCandidate>();
+      validCandidates.forEach(candidate => {
+        if (!candidateMeta.has(candidate.regex)) {
+          candidateMeta.set(candidate.regex, candidate);
+        }
+      });
+
+      const seeds = uniqueCandidates.map(regex => {
+        const meta = candidateMeta.get(regex);
+        return {
+          pattern: regex,
+          explanation: meta?.explanation,
+          confidence: meta?.confidence
+        };
+      });
+
+      await this.controller.generateCandidates(prompt, seeds, equivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
         this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
       });
@@ -699,10 +716,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
       this.cancellationTokenSource = new vscode.CancellationTokenSource();
       
-      let candidates: string[] = [];
+      let candidates: RegexCandidate[] = [];
       try {
         const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId);
-        candidates = result.candidates.map(c => c.regex);
+        candidates = result.candidates;
         logger.info(`Generated ${candidates.length} candidates from LLM for refinement`);
 
         // Log each candidate with explanation
@@ -806,21 +823,22 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       // Filter out invalid regexes and regexes with unsupported syntax
-      const validCandidates: string[] = [];
-      for (const regex of candidates) {
+      const validCandidates: RegexCandidate[] = [];
+      for (const candidate of candidates) {
+        const regex = candidate.regex;
         const isValid = this.analyzer.isValidRegex(regex);
         if (!isValid) {
           logger.warn(`Filtered out invalid regex: "${regex}"`);
           continue;
         }
-        
+
         const hasSupported = await this.analyzer.hasSupportedSyntax(regex);
         if (!hasSupported) {
           logger.warn(`Filtered out regex with unsupported syntax: "${regex}"`);
           continue;
         }
-        
-        validCandidates.push(regex);
+
+        validCandidates.push(candidate);
       }
 
       if (validCandidates.length === 0) {
@@ -840,7 +858,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       let uniqueCandidates: string[] = [];
       let equivalenceMap: Map<string, string[]> = new Map();
       try {
-        const deduped = await this.filterEquivalentRegexes(validCandidates);
+        const deduped = await this.filterEquivalentRegexes(validCandidates.map(c => c.regex));
         uniqueCandidates = deduped.uniqueRegexes;
         equivalenceMap = deduped.equivalenceMap;
       } catch (error) {
@@ -900,7 +918,23 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         });
       }
       this.sendMessage({ type: 'status', message: 'Determining elimination thresholds...' });
-      await this.controller.refineCandidates(prompt, uniqueCandidates, equivalenceMap, (current, total) => {
+      const candidateMeta = new Map<string, RegexCandidate>();
+      validCandidates.forEach(candidate => {
+        if (!candidateMeta.has(candidate.regex)) {
+          candidateMeta.set(candidate.regex, candidate);
+        }
+      });
+
+      const seeds = uniqueCandidates.map(regex => {
+        const meta = candidateMeta.get(regex);
+        return {
+          pattern: regex,
+          explanation: meta?.explanation,
+          confidence: meta?.confidence
+        };
+      });
+
+      await this.controller.refineCandidates(prompt, seeds, equivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
         this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
       });
