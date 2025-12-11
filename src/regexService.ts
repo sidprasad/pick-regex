@@ -77,12 +77,21 @@ export async function getAvailableChatModels(): Promise<AvailableChatModel[]> {
     // Get all available chat models without filtering
     const models = await vscode.lm.selectChatModels({});
     
-    return models.map(model => ({
-      id: model.id,
-      name: model.name,
-      vendor: model.vendor,
-      family: model.family
-    }));
+    // Use a Map to deduplicate by model ID
+    const uniqueModels = new Map<string, AvailableChatModel>();
+    
+    models.forEach(model => {
+      if (!uniqueModels.has(model.id)) {
+        uniqueModels.set(model.id, {
+          id: model.id,
+          name: model.name,
+          vendor: model.vendor,
+          family: model.family
+        });
+      }
+    });
+    
+    return Array.from(uniqueModels.values());
   } catch (error) {
     logger.warn(`Failed to get available chat models: ${error}`);
     return [];

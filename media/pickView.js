@@ -39,6 +39,7 @@
         // Model selector elements
         const modelSelect = document.getElementById('modelSelect');
         const modelSelectorRow = document.getElementById('modelSelectorRow');
+        const refreshModelsBtn = document.getElementById('refreshModelsBtn');
 
         // Splash screen elements
         const splashScreen = document.getElementById('splashScreen');
@@ -120,6 +121,11 @@
             modelSelect.addEventListener('change', function() {
                 selectedModelId = modelSelect.value;
             });
+        }
+        
+        // Handle refresh models button
+        if (refreshModelsBtn) {
+            refreshModelsBtn.addEventListener('click', refreshModels);
         }
         
         const wordPair = document.getElementById('wordPair');
@@ -251,6 +257,36 @@
                 modelSelect.appendChild(option);
             });
         }
+
+        /**
+         * Request the extension to refresh the model list
+         */
+        function refreshModels() {
+            if (!refreshModelsBtn) {
+                return;
+            }
+            
+            // Disable button and show loading state
+            refreshModelsBtn.disabled = true;
+            const originalTitle = refreshModelsBtn.title;
+            refreshModelsBtn.title = 'Refreshing...';
+            
+            // Update dropdown to show loading state
+            if (modelSelect) {
+                modelSelect.innerHTML = '<option value="">Refreshing models...</option>';
+                modelSelect.disabled = true;
+            }
+            
+            // Request model refresh from extension
+            vscode.postMessage({ type: 'checkModels' });
+            
+            // Re-enable button after a short delay
+            setTimeout(function() {
+                refreshModelsBtn.disabled = false;
+                refreshModelsBtn.title = originalTitle;
+            }, 1000);
+        }
+
 
         // Helper function to update prompt display
         function updatePromptDisplay(prompt) {
@@ -1605,5 +1641,8 @@
         window.copyRegex = copyRegex;
         window.toLiteralString = toLiteralString;
         window.highlightRegex = highlightRegex;
+        
+        // Notify the extension that the webview is ready
+        vscode.postMessage({ type: 'webviewReady' });
     };
 })();
