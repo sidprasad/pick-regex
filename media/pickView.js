@@ -1058,7 +1058,7 @@
             const infoBtn = document.createElement('button');
             infoBtn.type = 'button';
             infoBtn.className = 'icon-btn candidate-info-btn';
-            infoBtn.title = 'Show model explanation and confidence';
+            infoBtn.title = 'Show LLM-provided explanation and confidence';
             infoBtn.textContent = '?';
             infoBtn.setAttribute('aria-expanded', 'false');
 
@@ -1066,10 +1066,15 @@
             infoPanel.className = 'candidate-info hidden';
             infoPanel.setAttribute('role', 'note');
 
+            const infoSource = document.createElement('div');
+            infoSource.className = 'candidate-info-source';
+            infoSource.textContent = 'Model-generated (LLM) notes — may be inaccurate.';
+            infoPanel.appendChild(infoSource);
+
             const explanationRow = document.createElement('div');
             explanationRow.className = 'candidate-info-row';
             const explanationLabel = document.createElement('strong');
-            explanationLabel.textContent = 'Explanation: ';
+            explanationLabel.textContent = 'LLM explanation: ';
             const explanationText = document.createElement('span');
             explanationText.textContent = candidate.explanation || 'No explanation provided by the model.';
             explanationRow.appendChild(explanationLabel);
@@ -1081,7 +1086,7 @@
                 const confidenceRow = document.createElement('div');
                 confidenceRow.className = 'candidate-info-row';
                 const confidenceLabel = document.createElement('strong');
-                confidenceLabel.textContent = 'Confidence: ';
+                confidenceLabel.textContent = 'LLM confidence: ';
                 const confidenceValue = document.createElement('span');
                 confidenceValue.textContent = confidenceText;
                 confidenceRow.appendChild(confidenceLabel);

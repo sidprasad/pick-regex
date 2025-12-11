@@ -532,6 +532,14 @@
             align-items: baseline;
         }
 
+        .candidate-info-source {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 6px;
+        }
+
         .candidate-info strong {
             color: var(--vscode-foreground);
         }
