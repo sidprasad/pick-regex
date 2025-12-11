@@ -1592,6 +1592,9 @@
 
         function showNoRegexFound(message, candidateDetails, inWords, outWords) {
             showSection('final');
+            if (statusMessage) {
+                statusMessage.innerHTML = '';
+            }
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
