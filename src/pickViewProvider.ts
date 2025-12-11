@@ -36,12 +36,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
 
-    // Check for available language models when view is loaded
-    this.checkAvailableModels();
-
     // Handle messages from the webview
      webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.type) {
+        case 'webviewReady':
+          // Webview is initialized and ready to receive messages
+          logger.info('Webview initialized and ready');
+          await this.checkAvailableModels();
+          break;
         case 'log':
           // Forward webview logs to backend logger
           if (data.level === 'info') {
