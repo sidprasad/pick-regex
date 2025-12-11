@@ -1585,7 +1585,14 @@
                 : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as OUT</div>';
 
             if (candidateDetails && candidateDetails.length > 0) {
+                // Remove any previously inserted candidates note to avoid duplicates
+                const existingCandidatesNote = document.querySelector('.candidates-eliminated-note');
+                if (existingCandidatesNote) {
+                    existingCandidatesNote.remove();
+                }
+                
                 const candidatesNote = document.createElement('div');
+                candidatesNote.className = 'candidates-eliminated-note';
                 candidatesNote.style.cssText = 'margin-top: 20px; padding: 10px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px;';
                 
                 const header = document.createElement('div');
@@ -1615,6 +1622,13 @@
                 }
             }
             classifiedWords.clear();
+            
+            // Remove any candidates note elements from previous sessions
+            const existingCandidatesNote = document.querySelector('.candidates-eliminated-note');
+            if (existingCandidatesNote) {
+                existingCandidatesNote.remove();
+            }
+            
             showSection('prompt');
             if (statusMessage) {
                 statusMessage.innerHTML = '';
