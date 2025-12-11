@@ -1,7 +1,7 @@
         :root {
             /* Use theme-aware fallbacks; these adapt automatically in VS Code webviews */
-            --pick-accept-color: var(--vscode-terminal-ansiGreen, #16a34a);
-            --pick-reject-color: var(--vscode-terminal-ansiRed, #ef4444);
+            --pick-accept-color: var(--vscode-charts-blue, #0078d4);
+            --pick-reject-color: var(--vscode-charts-orange, #f59e0b);
             --pick-muted-color: var(--vscode-descriptionForeground);
             /* make classification icons larger by default so Up/Down are prominent */
             --pick-icon-size: 18px;
@@ -18,7 +18,9 @@
         .splash-screen {
             position: fixed;
             inset: 0;
-            background: color-mix(in srgb, var(--vscode-editor-background) 55%, transparent);
+            background: radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--pick-accept-color) 12%, transparent), transparent 45%),
+                        radial-gradient(circle at 80% 10%, color-mix(in srgb, var(--pick-reject-color) 10%, transparent), transparent 50%),
+                        color-mix(in srgb, var(--vscode-editor-background) 55%, transparent);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -31,27 +33,41 @@
             width: 100%;
             background: var(--vscode-editor-background);
             border: 1px solid var(--vscode-panel-border);
-            border-radius: 10px;
+            border-radius: 12px;
             box-shadow: 0 12px 35px rgba(0, 0, 0, 0.25);
             padding: 18px 20px 16px 20px;
+            position: relative;
+        }
+
+        .splash-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 2px;
+            background: linear-gradient(120deg, color-mix(in srgb, var(--pick-accept-color) 70%, transparent), color-mix(in srgb, var(--pick-reject-color) 70%, transparent));
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask-composite: exclude;
+            pointer-events: none;
         }
 
         .splash-card h3 {
             margin: 0 0 8px 0;
-            font-size: 15px;
-            color: var(--vscode-titleBar-activeForeground);
+            font-size: 16px;
+            color: var(--pick-accept-color);
         }
 
         .splash-pill {
             display: inline-block;
             padding: 4px 10px;
             border-radius: 999px;
-            background: var(--vscode-input-background);
-            color: var(--vscode-descriptionForeground);
+            background: color-mix(in srgb, var(--pick-accept-color) 18%, var(--vscode-input-background));
+            color: var(--pick-accept-color);
             text-transform: uppercase;
             letter-spacing: 0.06em;
             font-size: 11px;
             margin: 0 0 8px 0;
+            border: 1px solid color-mix(in srgb, var(--pick-accept-color) 40%, transparent);
         }
 
         .splash-lede {
@@ -80,9 +96,20 @@
 
         .splash-block {
             border: 1px solid var(--vscode-panel-border);
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 10px 12px;
             background: var(--vscode-editorWidget-background, var(--vscode-input-background));
+            position: relative;
+            overflow: hidden;
+        }
+
+        .splash-block::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            border-left: 4px solid color-mix(in srgb, var(--pick-reject-color) 65%, transparent);
+            opacity: 0.7;
         }
 
         .splash-steps,
@@ -113,16 +140,16 @@
 
         .quiet {
             background: transparent;
-            color: var(--vscode-descriptionForeground);
+            color: var(--pick-reject-color);
             border: 1px solid transparent;
             height: 32px;
             padding: 4px 10px;
         }
 
         .quiet:hover {
-            background: var(--vscode-input-background);
-            color: var(--vscode-foreground);
-            border-color: var(--vscode-panel-border);
+            background: color-mix(in srgb, var(--pick-reject-color) 12%, var(--vscode-input-background));
+            color: var(--pick-reject-color);
+            border-color: color-mix(in srgb, var(--pick-reject-color) 35%, var(--vscode-panel-border));
         }
 
         .splash-screen.hidden {
@@ -504,8 +531,15 @@
         }
 
         .candidate-item.eliminated {
-            opacity: 0.5;
-            text-decoration: line-through;
+            opacity: 0.82;
+            border-style: dashed;
+            border-color: color-mix(in srgb, var(--pick-reject-color) 45%, var(--vscode-panel-border));
+            background: color-mix(in srgb, var(--pick-reject-color) 12%, var(--vscode-editor-background));
+        }
+
+        .candidate-item.eliminated .candidate-pattern {
+            text-decoration: none;
+            color: var(--vscode-descriptionForeground);
         }
 
         .candidate-item.active {
@@ -514,6 +548,7 @@
             border-left: none;
             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
         }
+
 
         .equivalent-toggle {
             padding: 6px 8px;
@@ -569,6 +604,31 @@
             font-size: 0.85em;
         }
 
+        .badge.positive {
+            background: var(--pick-accept-color);
+            color: var(--vscode-foreground);
+        }
+
+        .badge.negative {
+            background: var(--pick-reject-color);
+            color: var(--vscode-foreground);
+        }
+
+        /* When a candidate is eliminated, downvotes pop while upvotes fade */
+        .candidate-item.eliminated .badge.positive {
+            opacity: 0.45;
+            background: color-mix(in srgb, var(--pick-accept-color) 18%, var(--vscode-badge-background));
+            transform: scale(0.94);
+        }
+
+        .candidate-item.eliminated .badge.negative {
+            background: color-mix(in srgb, var(--pick-reject-color) 82%, var(--vscode-editor-background));
+            color: var(--vscode-foreground);
+            font-weight: 700;
+            transform: scale(1.08);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--pick-reject-color) 55%, transparent);
+        }
+
         .final-result {
             text-align: center;
         }
@@ -603,11 +663,11 @@
         }
 
         .example-box.in {
-            border-left: 3px solid #4caf50;
+            border-left: 3px solid var(--pick-accept-color);
         }
 
         .example-box.out {
-            border-left: 3px solid #f44336;
+            border-left: 3px solid var(--pick-reject-color);
         }
 
         .example-item {
@@ -719,13 +779,13 @@
         }
 
         .word-card.classified-accept {
-            border-color: #4caf50;
-            background: rgba(76, 175, 80, 0.1);
+            border-color: var(--pick-accept-color);
+            background: color-mix(in srgb, var(--pick-accept-color) 16%, transparent);
         }
 
         .word-card.classified-reject {
-            border-color: #f44336;
-            background: rgba(244, 67, 54, 0.1);
+            border-color: var(--pick-reject-color);
+            background: color-mix(in srgb, var(--pick-reject-color) 16%, transparent);
         }
 
         .word-card.classified-unsure {
@@ -1027,35 +1087,50 @@
 
         .regex-syntax {
             font-family: monospace;
-            font-size: 1.1em;
-            line-height: 1.4;
+            font-size: 1.05em;
+            line-height: 1.35;
+            white-space: pre;
+            background: transparent;
+            color: var(--vscode-editor-foreground);
         }
 
-        .regex-meta {
-            color: var(--vscode-textLink-foreground, #3794ff);
-            font-weight: bold;
-        }
-
-        .regex-group {
-            color: var(--vscode-charts-green, #89d185);
-        }
-
-        .regex-class {
+        /* Prism token theming for regex */
+        .regex-syntax .token.char-class,
+        .regex-syntax .token.char-set {
             color: var(--vscode-charts-orange, #f48771);
         }
 
-        .regex-quantifier {
-            /* Use a darker, more visible color for quantifiers in light mode */
-            color: var(--vscode-symbolIcon-numberForeground, #0e639c);
-            font-weight: 500;
+        .regex-syntax .token.char-class-negation,
+        .regex-syntax .token.range,
+        .regex-syntax .token.range-punctuation,
+        .regex-syntax .token.operator,
+        .regex-syntax .token.keyword,
+        .regex-syntax .token.anchor,
+        .regex-syntax .token.alternation {
+            color: var(--vscode-symbolIcon-keywordForeground, #c586c0);
+            font-weight: 600;
         }
 
-        .regex-escape {
+        .regex-syntax .token.quantifier,
+        .regex-syntax .token.number {
+            color: var(--vscode-symbolIcon-numberForeground, #0e639c);
+            font-weight: 600;
+        }
+
+        .regex-syntax .token.escape,
+        .regex-syntax .token.special-escape {
             color: var(--vscode-charts-yellow, #cca700);
         }
 
-        .regex-literal {
-            color: var(--vscode-editor-foreground);
+        .regex-syntax .token.variable,
+        .regex-syntax .token.group-name,
+        .regex-syntax .token.backreference {
+            color: var(--vscode-charts-blue, #0078d4);
+            font-weight: 600;
+        }
+
+        .regex-syntax .token.punctuation {
+            color: var(--vscode-descriptionForeground);
         }
 
         /* Ensure copy buttons and icons are visible in light themes */

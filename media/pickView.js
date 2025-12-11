@@ -599,41 +599,17 @@
                 return '';
             }
 
-            pattern = pattern.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-            let result = '';
-            let i = 0;
-
-            while (i < pattern.length) {
-                const char = pattern[i];
-
-                if ('^$*+?|{}[]()\\'.includes(char)) {
-                    if (char === '\\' && i + 1 < pattern.length) {
-                        const nextChar = pattern[i + 1];
-                        result += '<span class="regex-escape">\\' + nextChar + '</span>';
-                        i += 2;
-                    } else if (char === '[' && pattern.substr(i).match(/^\[.*?\]/)) {
-                        const match = pattern.substr(i).match(/^\[.*?\]/)[0];
-                        result += '<span class="regex-class">' + match + '</span>';
-                        i += match.length;
-                    } else if (char === '(' && pattern.substr(i).match(/^\([^)]*\)/)) {
-                        const match = pattern.substr(i).match(/^\([^)]*\)/)[0];
-                        result += '<span class="regex-group">' + match + '</span>';
-                        i += match.length;
-                    } else if ('*+?{'.includes(char)) {
-                        result += '<span class="regex-quantifier">' + char + '</span>';
-                        i++;
-                    } else {
-                        result += '<span class="regex-meta">' + char + '</span>';
-                        i++;
-                    }
-                } else {
-                    result += '<span class="regex-literal">' + char + '</span>';
-                    i++;
+            if (window.Prism && Prism.languages && Prism.languages.regex) {
+                try {
+                    const highlighted = Prism.highlight(pattern, Prism.languages.regex, 'regex');
+                    return '<code class="regex-syntax language-regex">' + highlighted + '</code>';
+                } catch (err) {
+                    log('warn', 'Prism highlight failed: ' + String(err));
                 }
             }
 
-            return '<span class="regex-syntax">' + result + '</span>';
+            // Fallback: simple escaped text if Prism isn't available
+            return '<code class="regex-syntax">' + escapeHtml(pattern) + '</code>';
         }
 
         function createEquivalentSection(equivalents) {
@@ -934,6 +910,9 @@
                 case 'reset':
                     resetUI(message.preserveClassifications);
                     break;
+                case 'resetLocalState':
+                    clearLocalState();
+                    break;
                 case 'cancelled':
                     handleCancelled(message.message);
                     break;
@@ -960,6 +939,28 @@
                 inlineCancelBtn.classList.remove('hidden');
                 statusCancelBtn.classList.remove('hidden');
                 generateBtn.classList.add('hidden');
+            }
+        }
+
+        function clearLocalState() {
+            // Reset in-memory and persisted state
+            promptHistory = [];
+            viewState = {};
+            vscode.setState(viewState);
+
+            // Reset recent prompts UI
+            renderPromptHistory();
+            if (recentPromptsMenu) {
+                recentPromptsMenu.classList.add('hidden');
+                if (recentPromptsBtn) {
+                    recentPromptsBtn.setAttribute('aria-expanded', 'false');
+                }
+            }
+
+            // Show the splash again
+            if (splashScreen) {
+                splashScreen.classList.remove('hidden');
+                splashScreen.setAttribute('aria-hidden', 'false');
             }
         }
 
@@ -1134,13 +1135,11 @@
                     '</svg>';
 
                 const posBadge = document.createElement('span');
-                posBadge.className = 'badge';
-                posBadge.style.background = '#4caf50';
+                posBadge.className = 'badge positive';
                 posBadge.textContent = '✓ ' + c.positiveVotes;
 
                 const negBadge = document.createElement('span');
-                negBadge.className = 'badge';
-                negBadge.style.background = '#f44336';
+                negBadge.className = 'badge negative';
                 negBadge.textContent = '✗ ' + c.negativeVotes;
 
                 votesContainer.appendChild(copyBtn);
@@ -1229,19 +1228,16 @@
                     '</svg>';
                 
                 const posVoteBadge = document.createElement('span');
-                posVoteBadge.className = 'badge';
-                posVoteBadge.style.background = '#4caf50';
+                posVoteBadge.className = 'badge positive';
                 posVoteBadge.textContent = '✓ ' + c.positiveVotes;
                 
                 const negVoteBadge = document.createElement('span');
-                negVoteBadge.className = 'badge';
-                negVoteBadge.style.background = '#f44336';
+                negVoteBadge.className = 'badge negative';
                 negVoteBadge.textContent = '✗ ' + c.negativeVotes;
 
                 votesDiv.appendChild(copyBtn);
                 votesDiv.appendChild(posVoteBadge);
                 votesDiv.appendChild(negVoteBadge);
-
                 header.appendChild(patternSpan);
                 header.appendChild(votesDiv);
                 div.appendChild(header);
@@ -1547,13 +1543,11 @@
                 });
                 
                 const positiveBadge = document.createElement('span');
-                positiveBadge.className = 'badge';
-                positiveBadge.style.background = '#4caf50';
+                positiveBadge.className = 'badge positive';
                 positiveBadge.textContent = '✓ ' + c.positiveVotes;
                 
                 const negativeBadge = document.createElement('span');
-                negativeBadge.className = 'badge';
-                negativeBadge.style.background = '#f44336';
+                negativeBadge.className = 'badge negative';
                 negativeBadge.textContent = '✗ ' + c.negativeVotes;
                 
                 votesDiv.appendChild(copyBtn);

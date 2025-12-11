@@ -120,6 +120,7 @@
     "vsce": "^2.9.0"
   },
   "dependencies": {
-    "@gruhn/regex-utils": "^2.7.3"
+    "@gruhn/regex-utils": "^2.7.3",
+    "prismjs": "^1.30.0"
   }
 }
