@@ -4,11 +4,19 @@ import { logger } from './logger';
 
 interface CandidateRegex {
   pattern: string;
+  explanation?: string;
+  confidence?: number;
   negativeVotes: number;
   positiveVotes: number;
   eliminated: boolean;
   eliminationThreshold: number;
   equivalents: string[];
+}
+
+interface CandidateSeed {
+  pattern: string;
+  explanation?: string;
+  confidence?: number;
 }
 
 export interface WordPair {
@@ -69,8 +77,8 @@ export class PickController {
    * Start the process with a user prompt
    */
   async generateCandidates(
-    prompt: string, 
-    candidatePatterns: string[], 
+    prompt: string,
+    candidatePatterns: Array<string | CandidateSeed>,
     equivalenceMap: Map<string, string[]> = new Map(),
     progressCallback?: (current: number, total: number) => void
   ): Promise<void> {
@@ -79,17 +87,25 @@ export class PickController {
     this.currentPrompt = prompt;
 
     // Initialize candidates
-    this.candidates = candidatePatterns.map(pattern => ({
-      pattern,
+    const normalizedCandidates: CandidateSeed[] = candidatePatterns.map(candidate =>
+      typeof candidate === 'string'
+        ? { pattern: candidate }
+        : candidate
+    );
+
+    this.candidates = normalizedCandidates.map(candidate => ({
+      pattern: candidate.pattern,
+      explanation: candidate.explanation,
+      confidence: candidate.confidence,
       negativeVotes: 0,
       positiveVotes: 0,
       eliminated: false,
       eliminationThreshold: this.thresholdVotes,
-      equivalents: equivalenceMap.get(pattern) ?? []
+      equivalents: equivalenceMap.get(candidate.pattern) ?? []
     }));
     logger.info(`Initialized ${this.candidates.length} candidate regexes.`);
 
-    await this.autoAdjustThreshold(candidatePatterns, progressCallback);
+    await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
 
     this.usedWords.clear();
     this.wordHistory = [];
@@ -102,8 +118,8 @@ export class PickController {
    * This allows users to iterate on their prompt without losing their work
    */
   async refineCandidates(
-    newPrompt: string, 
-    newCandidatePatterns: string[], 
+    newPrompt: string,
+    newCandidatePatterns: Array<string | CandidateSeed>,
     equivalenceMap: Map<string, string[]> = new Map(),
     progressCallback?: (current: number, total: number) => void
   ): Promise<void> {
@@ -113,20 +129,28 @@ export class PickController {
     this.currentPrompt = newPrompt;
 
     // Initialize new candidates
-    this.candidates = newCandidatePatterns.map(pattern => ({
-      pattern,
+    const normalizedCandidates: CandidateSeed[] = newCandidatePatterns.map(candidate =>
+      typeof candidate === 'string'
+        ? { pattern: candidate }
+        : candidate
+    );
+
+    this.candidates = normalizedCandidates.map(candidate => ({
+      pattern: candidate.pattern,
+      explanation: candidate.explanation,
+      confidence: candidate.confidence,
       negativeVotes: 0,
       positiveVotes: 0,
       eliminated: false,
       eliminationThreshold: this.thresholdVotes,
-      equivalents: equivalenceMap.get(pattern) ?? []
+      equivalents: equivalenceMap.get(candidate.pattern) ?? []
     }));
     logger.info(`Initialized ${this.candidates.length} new candidate regexes.`);
 
     // Re-apply existing classifications to new candidates
     this.recalculateVotes();
 
-    await this.autoAdjustThreshold(newCandidatePatterns, progressCallback);
+    await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
 
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state after refinement.');
@@ -561,6 +585,8 @@ export class PickController {
     threshold: number;
     candidateDetails: Array<{
       pattern: string;
+      explanation?: string;
+      confidence?: number;
       negativeVotes: number;
       positiveVotes: number;
       eliminated: boolean;
@@ -577,6 +603,8 @@ export class PickController {
       threshold: this.thresholdVotes,
       candidateDetails: this.candidates.map(c => ({
         pattern: c.pattern,
+        explanation: c.explanation,
+        confidence: c.confidence,
         negativeVotes: c.negativeVotes,
         positiveVotes: c.positiveVotes,
         eliminated: c.eliminated,

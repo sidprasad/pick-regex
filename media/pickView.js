@@ -1038,6 +1038,69 @@
                 '</div>';
         }
 
+        function formatConfidence(confidence) {
+            if (!Number.isFinite(confidence)) {
+                return null;
+            }
+
+            if (confidence > 1) {
+                return confidence.toFixed(2);
+            }
+
+            return Math.round(confidence * 100) + '%';
+        }
+
+        function createCandidateInfo(candidate) {
+            if (!candidate || (!candidate.explanation && candidate.confidence === undefined)) {
+                return null;
+            }
+
+            const infoBtn = document.createElement('button');
+            infoBtn.type = 'button';
+            infoBtn.className = 'icon-btn candidate-info-btn';
+            infoBtn.title = 'Show model explanation and confidence';
+            infoBtn.textContent = '?';
+            infoBtn.setAttribute('aria-expanded', 'false');
+
+            const infoPanel = document.createElement('div');
+            infoPanel.className = 'candidate-info hidden';
+            infoPanel.setAttribute('role', 'note');
+
+            const explanationRow = document.createElement('div');
+            explanationRow.className = 'candidate-info-row';
+            const explanationLabel = document.createElement('strong');
+            explanationLabel.textContent = 'Explanation: ';
+            const explanationText = document.createElement('span');
+            explanationText.textContent = candidate.explanation || 'No explanation provided by the model.';
+            explanationRow.appendChild(explanationLabel);
+            explanationRow.appendChild(explanationText);
+            infoPanel.appendChild(explanationRow);
+
+            const confidenceText = formatConfidence(candidate.confidence);
+            if (confidenceText) {
+                const confidenceRow = document.createElement('div');
+                confidenceRow.className = 'candidate-info-row';
+                const confidenceLabel = document.createElement('strong');
+                confidenceLabel.textContent = 'Confidence: ';
+                const confidenceValue = document.createElement('span');
+                confidenceValue.textContent = confidenceText;
+                confidenceRow.appendChild(confidenceLabel);
+                confidenceRow.appendChild(confidenceValue);
+                infoPanel.appendChild(confidenceRow);
+            }
+
+            infoBtn.onclick = function() {
+                const isHidden = infoPanel.classList.contains('hidden');
+                infoPanel.classList.toggle('hidden');
+                infoBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+                if (!isHidden) {
+                    infoBtn.focus();
+                }
+            };
+
+            return { button: infoBtn, panel: infoPanel };
+        }
+
         function updateCandidates(candidates, threshold) {
             candidatesList.innerHTML = '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">' +
                 '<h4 style="margin:0">Regex Candidates</h4>' +
@@ -1097,6 +1160,8 @@
                     '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
                     '</svg>';
 
+                const info = createCandidateInfo(c);
+
                 const posBadge = document.createElement('span');
                 posBadge.className = 'badge';
                 posBadge.style.background = '#4caf50';
@@ -1108,12 +1173,19 @@
                 negBadge.textContent = '✗ ' + c.negativeVotes;
 
                 votesContainer.appendChild(copyBtn);
+                if (info) {
+                    votesContainer.appendChild(info.button);
+                }
                 votesContainer.appendChild(posBadge);
                 votesContainer.appendChild(negBadge);
 
                 header.appendChild(patternSpan);
                 header.appendChild(votesContainer);
                 div.appendChild(header);
+
+                if (info) {
+                    div.appendChild(info.panel);
+                }
 
                 const equivalents = createEquivalentSection(c.equivalents);
                 if (equivalents) {
@@ -1179,6 +1251,8 @@
                 votesDiv.className = 'candidate-votes';
                 votesDiv.style.cssText = 'display:flex; gap:8px; align-items:center;';
 
+                const info = createCandidateInfo(c);
+
                 const copyBtn = document.createElement('button');
                 copyBtn.className = 'btn copy';
                 copyBtn.setAttribute('data-pattern', encodeURIComponent(c.pattern));
@@ -1191,7 +1265,7 @@
                     '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
                     '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
                     '</svg>';
-                
+
                 const posVoteBadge = document.createElement('span');
                 posVoteBadge.className = 'badge';
                 posVoteBadge.style.background = '#4caf50';
@@ -1203,12 +1277,19 @@
                 negVoteBadge.textContent = '✗ ' + c.negativeVotes;
 
                 votesDiv.appendChild(copyBtn);
+                if (info) {
+                    votesDiv.appendChild(info.button);
+                }
                 votesDiv.appendChild(posVoteBadge);
                 votesDiv.appendChild(negVoteBadge);
 
                 header.appendChild(patternSpan);
                 header.appendChild(votesDiv);
                 div.appendChild(header);
+
+                if (info) {
+                    div.appendChild(info.panel);
+                }
 
                 const equivalents = createEquivalentSection(c.equivalents);
                 if (equivalents) {
@@ -1521,12 +1602,19 @@
                 negativeBadge.textContent = '✗ ' + c.negativeVotes;
                 
                 votesDiv.appendChild(copyBtn);
+                if (info) {
+                    votesDiv.appendChild(info.button);
+                }
                 votesDiv.appendChild(positiveBadge);
                 votesDiv.appendChild(negativeBadge);
-                
+
                 item.appendChild(patternSpan);
                 item.appendChild(votesDiv);
-                
+
+                if (info) {
+                    item.appendChild(info.panel);
+                }
+
                 detailsContainer.appendChild(item);
             });
 
