@@ -1138,6 +1138,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * Clear any persisted webview state (prompt history, splash acknowledgement).
+   * Invoked by the reset command so the splash and history reset alongside global storage.
+   */
+  public resetLocalWebviewState() {
+    this.sendMessage({ type: 'resetLocalState' });
+  }
+
   // Separated clipboard access for easier stubbing in tests
   private async copyToClipboard(text: string) {
     return vscode.env.clipboard.writeText(text);

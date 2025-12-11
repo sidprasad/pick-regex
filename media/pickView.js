@@ -910,6 +910,9 @@
                 case 'reset':
                     resetUI(message.preserveClassifications);
                     break;
+                case 'resetLocalState':
+                    clearLocalState();
+                    break;
                 case 'cancelled':
                     handleCancelled(message.message);
                     break;
@@ -936,6 +939,28 @@
                 inlineCancelBtn.classList.remove('hidden');
                 statusCancelBtn.classList.remove('hidden');
                 generateBtn.classList.add('hidden');
+            }
+        }
+
+        function clearLocalState() {
+            // Reset in-memory and persisted state
+            promptHistory = [];
+            viewState = {};
+            vscode.setState(viewState);
+
+            // Reset recent prompts UI
+            renderPromptHistory();
+            if (recentPromptsMenu) {
+                recentPromptsMenu.classList.add('hidden');
+                if (recentPromptsBtn) {
+                    recentPromptsBtn.setAttribute('aria-expanded', 'false');
+                }
+            }
+
+            // Show the splash again
+            if (splashScreen) {
+                splashScreen.classList.remove('hidden');
+                splashScreen.setAttribute('aria-hidden', 'false');
             }
         }
 
