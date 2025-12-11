@@ -1178,9 +1178,6 @@
                 negBadge.textContent = '✗ ' + c.negativeVotes;
 
                 votesContainer.appendChild(copyBtn);
-                if (info) {
-                    votesContainer.appendChild(info.button);
-                }
                 votesContainer.appendChild(posBadge);
                 votesContainer.appendChild(negBadge);
 
@@ -1188,14 +1185,15 @@
                 header.appendChild(votesContainer);
                 div.appendChild(header);
 
-                if (info) {
-                    div.appendChild(info.panel);
-                }
-
                 const equivalents = createEquivalentSection(c.equivalents);
                 if (equivalents) {
                     votesContainer.appendChild(equivalents.toggle);
                     div.appendChild(equivalents.list);
+                }
+
+                if (info) {
+                    votesContainer.appendChild(info.button);
+                    div.appendChild(info.panel);
                 }
 
                 candidatesList.appendChild(div);
@@ -1282,9 +1280,6 @@
                 negVoteBadge.textContent = '✗ ' + c.negativeVotes;
 
                 votesDiv.appendChild(copyBtn);
-                if (info) {
-                    votesDiv.appendChild(info.button);
-                }
                 votesDiv.appendChild(posVoteBadge);
                 votesDiv.appendChild(negVoteBadge);
 
@@ -1292,14 +1287,14 @@
                 header.appendChild(votesDiv);
                 div.appendChild(header);
 
-                if (info) {
-                    div.appendChild(info.panel);
-                }
-
                 const equivalents = createEquivalentSection(c.equivalents);
                 if (equivalents) {
                     votesDiv.appendChild(equivalents.toggle);
                     div.appendChild(equivalents.list);
+                }
+                if (info) {
+                    votesDiv.appendChild(info.button);
+                    div.appendChild(info.panel);
                 }
                 candidatesList.appendChild(div);
             });
