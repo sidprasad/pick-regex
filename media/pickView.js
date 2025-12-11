@@ -357,7 +357,7 @@
             
             const input = document.createElement('input');
             input.type = 'text';
-            input.id = 'editPromptInput';
+            input.className = 'editPromptInput'; // Use class instead of ID to avoid duplicates
             input.value = currentPrompt;
             input.style.cssText = 'flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;';
             input.placeholder = 'Enter a refined description...';
@@ -369,7 +369,7 @@
             selectRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
             
             const select = document.createElement('select');
-            select.id = 'editModelSelect';
+            select.className = 'editModelSelect'; // Use class instead of ID to avoid duplicates
             select.style.cssText = 'flex: 1; padding: 6px 8px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); border-radius: 2px; font-size: 13px;';
             
             availableModels.forEach(function(model) {
@@ -382,13 +382,36 @@
                 select.appendChild(option);
             });
             
+            // Create submit handler that captures the values from this specific input/select
+            const handleSubmit = function() {
+                const newPrompt = input.value.trim();
+                const newModelId = select.value || selectedModelId;
+
+                if (newPrompt) {
+                    promptInput.value = newPrompt;
+                    addPromptToHistory(newPrompt);
+                    updatePromptDisplay(newPrompt);
+                    const modelChanged = previousModelId && previousModelId !== newModelId;
+                    vscode.postMessage({
+                        type: 'refineCandidates',
+                        prompt: newPrompt,
+                        modelId: newModelId,
+                        modelChanged: modelChanged,
+                        previousModelId: previousModelId
+                    });
+                    selectedModelId = newModelId;
+                    previousModelId = newModelId;
+                    showSection('loading');
+                }
+            };
+            
             const submitBtn = document.createElement('button');
             submitBtn.style.cssText = 'padding: 6px 12px; min-width: auto;';
             submitBtn.title = 'Generate new candidates with revised prompt and model';
             submitBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="12" height="12">' +
                 '<path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
                 '</svg>';
-            submitBtn.addEventListener('click', submitEditedPrompt);
+            submitBtn.addEventListener('click', handleSubmit);
             
             const cancelBtn = document.createElement('button');
             cancelBtn.style.cssText = 'padding: 6px 12px; min-width: auto; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);';
@@ -413,42 +436,114 @@
                 targetDisplay.innerHTML = '';
                 targetDisplay.appendChild(container);
                 setTimeout(function() {
-                    const input = document.getElementById('editPromptInput');
-                    if (input) {
-                        input.focus();
-                        input.addEventListener('keypress', function(e) {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                submitEditedPrompt();
-                            }
-                        });
-                    }
+                    input.focus();
+                    input.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSubmit();
+                        }
+                    });
                 }, 10);
             }
 
-            // Keep both displays in sync so the revised view is reflected when switching sections
+            // Keep both displays in sync - create a clone with its own submit handler
             if (targetDisplay === finalPromptDisplay && currentPromptDisplay) {
                 const clone = container.cloneNode(true);
-                const submitBtn = clone.querySelector('button[title="Generate new candidates with revised prompt and model"]');
-                const cancelBtn = clone.querySelector('button[title="Cancel"]');
-                if (submitBtn) submitBtn.addEventListener('click', submitEditedPrompt);
-                if (cancelBtn) cancelBtn.addEventListener('click', cancelEditPrompt);
+                const cloneInput = clone.querySelector('.editPromptInput');
+                const cloneSelect = clone.querySelector('.editModelSelect');
+                const cloneSubmitBtn = clone.querySelector('button[title="Generate new candidates with revised prompt and model"]');
+                const cloneCancelBtn = clone.querySelector('button[title="Cancel"]');
+                
+                // Create a separate handler for the clone that uses its own input/select
+                const cloneHandleSubmit = function() {
+                    const newPrompt = cloneInput.value.trim();
+                    const newModelId = cloneSelect.value || selectedModelId;
+
+                    if (newPrompt) {
+                        promptInput.value = newPrompt;
+                        addPromptToHistory(newPrompt);
+                        updatePromptDisplay(newPrompt);
+                        const modelChanged = previousModelId && previousModelId !== newModelId;
+                        vscode.postMessage({
+                            type: 'refineCandidates',
+                            prompt: newPrompt,
+                            modelId: newModelId,
+                            modelChanged: modelChanged,
+                            previousModelId: previousModelId
+                        });
+                        selectedModelId = newModelId;
+                        previousModelId = newModelId;
+                        showSection('loading');
+                    }
+                };
+                
+                if (cloneSubmitBtn) cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
+                if (cloneCancelBtn) cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                if (cloneInput) {
+                    cloneInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            cloneHandleSubmit();
+                        }
+                    });
+                }
+                
                 currentPromptDisplay.innerHTML = '';
                 currentPromptDisplay.appendChild(clone);
             } else if (targetDisplay === currentPromptDisplay && finalPromptDisplay) {
                 const clone = container.cloneNode(true);
-                const submitBtn = clone.querySelector('button[title="Generate new candidates with revised prompt and model"]');
-                const cancelBtn = clone.querySelector('button[title="Cancel"]');
-                if (submitBtn) submitBtn.addEventListener('click', submitEditedPrompt);
-                if (cancelBtn) cancelBtn.addEventListener('click', cancelEditPrompt);
+                const cloneInput = clone.querySelector('.editPromptInput');
+                const cloneSelect = clone.querySelector('.editModelSelect');
+                const cloneSubmitBtn = clone.querySelector('button[title="Generate new candidates with revised prompt and model"]');
+                const cloneCancelBtn = clone.querySelector('button[title="Cancel"]');
+                
+                // Create a separate handler for the clone that uses its own input/select
+                const cloneHandleSubmit = function() {
+                    const newPrompt = cloneInput.value.trim();
+                    const newModelId = cloneSelect.value || selectedModelId;
+
+                    if (newPrompt) {
+                        promptInput.value = newPrompt;
+                        addPromptToHistory(newPrompt);
+                        updatePromptDisplay(newPrompt);
+                        const modelChanged = previousModelId && previousModelId !== newModelId;
+                        vscode.postMessage({
+                            type: 'refineCandidates',
+                            prompt: newPrompt,
+                            modelId: newModelId,
+                            modelChanged: modelChanged,
+                            previousModelId: previousModelId
+                        });
+                        selectedModelId = newModelId;
+                        previousModelId = newModelId;
+                        showSection('loading');
+                    }
+                };
+                
+                if (cloneSubmitBtn) cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
+                if (cloneCancelBtn) cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                if (cloneInput) {
+                    cloneInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            cloneHandleSubmit();
+                        }
+                    });
+                }
+                
                 finalPromptDisplay.innerHTML = '';
                 finalPromptDisplay.appendChild(clone);
             }
         }
 
         function submitEditedPrompt() {
-            const editInput = document.getElementById('editPromptInput');
-            const editModelSelect = document.getElementById('editModelSelect');
+            // This function is no longer needed as submit handlers are created inline
+            // Keeping for backwards compatibility in case it's called elsewhere
+            const editInput = document.querySelector('.editPromptInput');
+            const editModelSelect = document.querySelector('.editModelSelect');
+            if (!editInput) {
+                return;
+            }
             const newPrompt = editInput.value.trim();
             const newModelId = editModelSelect ? editModelSelect.value : selectedModelId;
 
@@ -1493,6 +1588,9 @@
 
         function showNoRegexFound(message, candidateDetails, inWords, outWords) {
             showSection('final');
+            if (statusMessage) {
+                statusMessage.innerHTML = '';
+            }
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');

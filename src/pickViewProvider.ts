@@ -435,12 +435,28 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       logger.info(`Active candidates: ${activeCount}`);
       
       if (activeCount === 0) {
-        // No candidates left - show error
+        // No candidates left - check if we're in a refinement scenario
+        const wordHistory = this.controller.getWordHistory();
+        const hasClassifications = wordHistory.length > 0;
+        
         logger.warn('No active candidates remaining, cannot generate next pair');
-        this.sendMessage({ 
-          type: 'error', 
-          message: 'No active candidates remaining' 
-        });
+        
+        if (hasClassifications) {
+          // This happened after re-applying classifications during refinement
+          this.sendMessage({ 
+            type: 'noRegexFound',
+            message: `All ${this.controller.getStatus().totalCandidates} candidate regexes were eliminated after re-applying your ${wordHistory.length} previous classification${wordHistory.length === 1 ? '' : 's'}. Try revising your prompt or starting fresh.`,
+            candidateDetails: this.controller.getStatus().candidateDetails,
+            wordsIn: wordHistory.filter(r => r.classification === 'accept').map(r => r.word),
+            wordsOut: wordHistory.filter(r => r.classification === 'reject').map(r => r.word)
+          });
+        } else {
+          // This is an unexpected error with no classifications
+          this.sendMessage({ 
+            type: 'error', 
+            message: 'No active candidates remaining. Please try generating candidates again.' 
+          });
+        }
         return;
       }
 
@@ -877,6 +893,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       // Refine candidates with preserved classifications
+      if (sessionData.wordHistory.length > 0) {
+        this.sendMessage({ 
+          type: 'status', 
+          message: `Re-applying your ${sessionData.wordHistory.length} previous classification${sessionData.wordHistory.length === 1 ? '' : 's'} to new candidates...` 
+        });
+      }
       this.sendMessage({ type: 'status', message: 'Determining elimination thresholds...' });
       await this.controller.refineCandidates(prompt, uniqueCandidates, equivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
