@@ -1586,6 +1586,13 @@
                 }
             }
             classifiedWords.clear();
+            
+            // Remove any candidates note elements from previous sessions
+            const existingCandidatesNote = document.querySelector('.candidates-eliminated-note');
+            if (existingCandidatesNote) {
+                existingCandidatesNote.remove();
+            }
+            
             showSection('prompt');
             if (statusMessage) {
                 statusMessage.innerHTML = '';
