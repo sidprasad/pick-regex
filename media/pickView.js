@@ -136,8 +136,8 @@
         const wordsIn = document.getElementById('wordsIn');
         const wordsOut = document.getElementById('wordsOut');
 
-        // Track literal mode state
-        let literalMode = true;
+        // Track literal mode state (off by default)
+        let literalMode = false;
         // Track diff view state (off by default)
         let diffMode = false;
 
