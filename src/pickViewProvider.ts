@@ -14,6 +14,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private controller: PickController;
   private analyzer = createRegexAnalyzer();
   private cancellationTokenSource?: vscode.CancellationTokenSource;
+  private activeHeartbeat?: { stop: () => void };
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -265,6 +266,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       } finally {
         heartbeat.stop();
+      }
+
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled after model responded (before validation)');
+        this.sendMessage({
+          type: 'cancelled',
+          message: 'Operation cancelled by user.'
+        });
+        return;
       }
 
       if (candidates.length === 0) {
@@ -819,6 +829,15 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         heartbeat.stop();
       }
 
+      if (this.cancellationTokenSource?.token.isCancellationRequested) {
+        logger.info('Operation cancelled after model responded (refinement, before validation)');
+        this.sendMessage({
+          type: 'cancelled',
+          message: 'Operation cancelled by user.'
+        });
+        return;
+      }
+
       if (candidates.length === 0) {
         this.sendMessage({
           type: 'error',
@@ -1009,6 +1028,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       // Don't dispose or set to undefined yet - ongoing operations still need to check isCancellationRequested
       // The token will be disposed and replaced when a new operation starts
     }
+    this.stopActiveHeartbeat();
     
     // Reset controller state
     this.controller.reset(false);
@@ -1177,10 +1197,26 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
    * Periodically surface a status heartbeat to the webview while waiting for LLM responses.
    */
   private startModelHeartbeat(message: string, intervalMs = 8000): { stop: () => void } {
+    this.stopActiveHeartbeat();
+
     const interval = setInterval(() => this.sendMessage({ type: 'status', message }), intervalMs);
-    return {
-      stop: () => clearInterval(interval)
+    const stop = () => {
+      clearInterval(interval);
+      if (this.activeHeartbeat && this.activeHeartbeat.stop === stop) {
+        this.activeHeartbeat = undefined;
+      }
     };
+
+    const heartbeat = { stop };
+    this.activeHeartbeat = heartbeat;
+    return heartbeat;
+  }
+
+  private stopActiveHeartbeat() {
+    if (this.activeHeartbeat) {
+      this.activeHeartbeat.stop();
+      this.activeHeartbeat = undefined;
+    }
   }
 
   private getHtmlForWebview(webview: vscode.Webview) {
