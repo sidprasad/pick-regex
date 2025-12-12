@@ -1557,10 +1557,17 @@
             }
 
             historyItems.innerHTML = '';
+
+            const applyHistoryTone = function(element, classification) {
+                element.classList.remove('history-item--accept', 'history-item--reject', 'history-item--unsure');
+                element.classList.add('history-item--' + classification);
+            };
+
             history.forEach(function(item, index) {
                 // Create history item container
                 const historyItem = document.createElement('div');
                 historyItem.className = 'history-item';
+                applyHistoryTone(historyItem, item.classification);
 
                 // Create word display section
                 const contentDiv = document.createElement('div');
@@ -1671,6 +1678,7 @@
                 
                 // Attach event listener for classification change
                 select.addEventListener('change', function() {
+                    applyHistoryTone(historyItem, this.value);
                     updateClassification(index, this.value);
                 });
                 

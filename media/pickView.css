@@ -357,6 +357,18 @@
             font-size: 0.98em;
         }
 
+        .word-card.classified-accept .word-display,
+        .word-card.classified-accept .word-readable,
+        .word-card.classified-accept .word-literal {
+            color: var(--pick-accept-color);
+        }
+
+        .word-card.classified-reject .word-display,
+        .word-card.classified-reject .word-readable,
+        .word-card.classified-reject .word-literal {
+            color: var(--pick-reject-color);
+        }
+
         .word-actions {
             display: inline-flex;
             gap: 6px;
@@ -638,36 +650,36 @@
         }
 
         .badge {
-            background: var(--vscode-badge-background);
-            color: var(--vscode-badge-foreground);
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 0.85em;
+            background: transparent;
+            color: inherit;
+            padding: 0;
+            border-radius: 0;
+            font-size: 0.95em;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
 
         .badge.positive {
-            background: var(--pick-accept-color);
-            color: var(--vscode-foreground);
+            color: var(--pick-accept-color);
         }
 
         .badge.negative {
-            background: var(--pick-reject-color);
-            color: var(--vscode-foreground);
+            color: var(--pick-reject-color);
         }
 
         /* When a candidate is eliminated, downvotes pop while upvotes fade */
         .candidate-item.eliminated .badge.positive {
-            opacity: 0.45;
-            background: color-mix(in srgb, var(--pick-accept-color) 18%, var(--vscode-badge-background));
-            transform: scale(0.94);
+            opacity: 0.6;
+            color: color-mix(in srgb, var(--pick-accept-color) 55%, var(--vscode-descriptionForeground));
+            transform: none;
         }
 
         .candidate-item.eliminated .badge.negative {
-            background: color-mix(in srgb, var(--pick-reject-color) 82%, var(--vscode-editor-background));
-            color: var(--vscode-foreground);
-            font-weight: 700;
-            transform: scale(1.08);
-            box-shadow: 0 0 0 1px color-mix(in srgb, var(--pick-reject-color) 55%, transparent);
+            color: color-mix(in srgb, var(--pick-reject-color) 75%, var(--vscode-foreground));
+            font-weight: 800;
+            transform: none;
         }
 
         .final-result {
@@ -705,10 +717,24 @@
 
         .example-box.in {
             border-left: 3px solid var(--pick-accept-color);
+            color: var(--pick-accept-color);
         }
 
         .example-box.out {
             border-left: 3px solid var(--pick-reject-color);
+            color: var(--pick-reject-color);
+        }
+
+        .example-box.in .word-display,
+        .example-box.in .word-readable,
+        .example-box.in .word-literal {
+            color: var(--pick-accept-color);
+        }
+
+        .example-box.out .word-display,
+        .example-box.out .word-readable,
+        .example-box.out .word-literal {
+            color: var(--pick-reject-color);
         }
 
         .example-item {
@@ -822,11 +848,13 @@
         .word-card.classified-accept {
             border-color: var(--pick-accept-color);
             background: color-mix(in srgb, var(--pick-accept-color) 16%, transparent);
+            color: var(--pick-accept-color);
         }
 
         .word-card.classified-reject {
             border-color: var(--pick-reject-color);
             background: color-mix(in srgb, var(--pick-reject-color) 16%, transparent);
+            color: var(--pick-reject-color);
         }
 
         .word-card.classified-unsure {
@@ -903,6 +931,18 @@
         .classification-badge.unsure {
             background: var(--pick-muted-color);
             color: var(--vscode-foreground);
+        }
+
+        .history-item--accept .history-word {
+            color: var(--pick-accept-color);
+        }
+
+        .history-item--reject .history-word {
+            color: var(--pick-reject-color);
+        }
+
+        .history-item--unsure .history-word {
+            color: var(--pick-muted-color);
         }
 
         .history-matches {
@@ -1172,7 +1212,7 @@
         /* Prism token theming for regex */
         .regex-syntax .token.char-class,
         .regex-syntax .token.char-set {
-            color: var(--vscode-charts-orange, #f48771);
+            color: var(--vscode-charts-purple, #bb80b3);
         }
 
         .regex-syntax .token.char-class-negation,
