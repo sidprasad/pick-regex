@@ -80,6 +80,18 @@
           "minimum": 1,
           "description": "Number of negative votes required to eliminate a candidate regex"
         },
+        "pick.maxClassifications": {
+          "type": "number",
+          "default": 50,
+          "minimum": 10,
+          "description": "Maximum number of word classifications before forcing termination"
+        },
+        "pick.maxPairsWithoutProgress": {
+          "type": "number",
+          "default": 10,
+          "minimum": 3,
+          "description": "Maximum number of consecutive word pairs without eliminating a candidate before forcing termination"
+        },
         "pick.surveyPromptEnabled": {
           "type": "boolean",
           "default": true,

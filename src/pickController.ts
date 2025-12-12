@@ -57,13 +57,21 @@ export class PickController {
   private finalRegex: string | null = null;
   private wordHistory: WordClassificationRecord[] = [];
   private currentPrompt: string = '';
+  private pairsWithoutProgress = 0;
+  private lastActiveCandidateCount = 0;
+  private maxClassifications = 50;
+  private maxPairsWithoutProgress = 10;
+  private searchTimeoutMs = 2000;
+  private searchPoolSize = 30;
 
   constructor() {
     this.analyzer = createRegexAnalyzer();
     // Read threshold from configuration
     const config = vscode.workspace.getConfiguration('pick');
     this.thresholdVotes = config.get<number>('eliminationThreshold', 2);
-    logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}`);
+    this.maxClassifications = config.get<number>('maxClassifications', 50);
+    this.maxPairsWithoutProgress = config.get<number>('maxPairsWithoutProgress', 10);
+    logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}`);
   }
 
   /**
@@ -182,10 +190,21 @@ export class PickController {
       throw new Error('No active candidates to generate pairs');
     }
 
+    // If we're making no progress, increase search parameters to find harder distinguishing words
+    if (this.pairsWithoutProgress > 0 && this.pairsWithoutProgress % 3 === 0) {
+      this.searchTimeoutMs = Math.min(this.searchTimeoutMs * 2, 16000);
+      this.searchPoolSize = Math.min(this.searchPoolSize * 2, 200);
+      logger.info(
+        `No progress after ${this.pairsWithoutProgress} pairs. Increasing search parameters: timeout=${this.searchTimeoutMs}ms, poolSize=${this.searchPoolSize}`
+      );
+    }
+
     try {
       const result = await this.analyzer.generateTwoDistinguishingWords(
         activeCandidates,
-        Array.from(this.usedWords)
+        Array.from(this.usedWords),
+        this.searchTimeoutMs,
+        this.searchPoolSize
       );
 
       this.currentPair = {
@@ -334,6 +353,19 @@ export class PickController {
     const activeCandidates = this.getActiveCandidates();
     const activeCount = activeCandidates.length;
 
+    // Check if we made progress (eliminated at least one candidate)
+    if (activeCount < this.lastActiveCandidateCount) {
+      this.pairsWithoutProgress = 0;
+    } else if (this.lastActiveCandidateCount > 0) {
+      this.pairsWithoutProgress++;
+    }
+    this.lastActiveCandidateCount = activeCount;
+
+    // Check termination conditions
+    const totalClassifications = this.wordHistory.length;
+    const reachedMaxClassifications = totalClassifications >= this.maxClassifications;
+    const staleProgress = this.pairsWithoutProgress >= this.maxPairsWithoutProgress;
+
     if (activeCount === 1) {
       // Check if user has accepted a word that matches this regex
       const remainingRegex = activeCandidates[0];
@@ -347,13 +379,60 @@ export class PickController {
         // User has accepted a word IN the remaining regex - we're done!
         this.state = PickState.FINAL_RESULT;
         this.finalRegex = remainingRegex;
+        logger.info(`Converged to single candidate: "${remainingRegex}"`);
       }
     } else if (activeCount === 0) {
       // All eliminated - NO REGEX IS CORRECT
       this.state = PickState.FINAL_RESULT;
       this.finalRegex = null;
+      logger.info('All candidates eliminated - no correct regex found');
+    } else if (reachedMaxClassifications) {
+      // Hit maximum classification limit - force termination
+      this.state = PickState.FINAL_RESULT;
+      const best = this.selectBestCandidate();
+      this.finalRegex = best;
+      logger.info(`Reached maximum classifications (${totalClassifications}/${this.maxClassifications}). Forcing termination with best candidate: "${best}"`);
+    } else if (staleProgress && activeCount > 1) {
+      // No progress for too many pairs - candidates are indistinguishable
+      this.state = PickState.FINAL_RESULT;
+      const best = this.selectBestCandidate();
+      this.finalRegex = best;
+      logger.info(`No progress after ${this.pairsWithoutProgress} consecutive pairs. Forcing termination with best candidate: "${best}"`);
     }
     // When there's 1 candidate but no accepted word yet, continue showing pairs
+  }
+
+  /**
+   * Select the best candidate from active or all candidates
+   */
+  private selectBestCandidate(): string {
+    const activeCandidates = this.candidates.filter(c => !c.eliminated);
+    
+    if (activeCandidates.length === 0) {
+      // Pick best from all candidates
+      const best = this.candidates.reduce((prev, curr) => {
+        if (curr.positiveVotes > prev.positiveVotes) {
+          return curr;
+        }
+        if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
+          return curr;
+        }
+        return prev;
+      });
+      return best.pattern;
+    } else {
+      // Pick best from active candidates
+      const best = activeCandidates.reduce((prev, curr) => {
+        if (curr.positiveVotes > prev.positiveVotes) {
+          return curr;
+        }
+        if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
+          return curr;
+        }
+        return prev;
+      });
+      return best.pattern;
+    }
   }
 
   /**
@@ -505,6 +584,10 @@ export class PickController {
     this.state = PickState.INITIAL;
     this.currentPair = null;
     this.finalRegex = null;
+    this.pairsWithoutProgress = 0;
+    this.lastActiveCandidateCount = 0;
+    this.searchTimeoutMs = 2000;
+    this.searchPoolSize = 30;
     
     if (!preserveClassifications) {
       this.usedWords.clear();
