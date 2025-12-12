@@ -34,43 +34,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback?: T): Promise<
   });
 }
 
-/**
- * Check if a regex pattern is likely to cause cache overflow
- * Heuristics: large Unicode ranges, long patterns, complex quantifiers
- */
-function isLikelyComplexPattern(pattern: string): boolean {
-  // Check for large Unicode ranges
-  if (/\\u[0-9A-Fa-f]{4}-\\u[0-9A-Fa-f]{4}/.test(pattern)) {
-    const ranges = pattern.match(/\\u([0-9A-Fa-f]{4})-\\u([0-9A-Fa-f]{4})/g);
-    if (ranges) {
-      for (const range of ranges) {
-        const [start, end] = range.match(/\\u([0-9A-Fa-f]{4})/g) || [];
-        if (start && end) {
-          const startCode = parseInt(start.slice(2), 16);
-          const endCode = parseInt(end.slice(2), 16);
-          if (endCode - startCode > 1000) { // Range > 1000 chars
-            return true;
-          }
-        }
-      }
-    }
-  }
-  
-  // Very long patterns
-  if (pattern.length > 100) {
-    return true;
-  }
-  
-  // Multiple nested groups or alternations
-  const groupDepth = (pattern.match(/\(/g) || []).length;
-  const alternations = (pattern.match(/\|/g) || []).length;
-  if (groupDepth > 5 || alternations > 10) {
-    return true;
-  }
-  
-  return false;
-}
-
 export interface WordPairResult {
   wordIn: string;
   wordNotIn: string;
@@ -119,31 +82,21 @@ export class RegexAnalyzer {
   isValidRegex(pattern: string): boolean {
     try {
       new RegExp(`^${pattern}$`);
-    // Skip complex patterns - assume not equivalent (conservative)
-    if (isLikelyComplexPattern(regexA) || isLikelyComplexPattern(regexB)) {
-      logger.info(`Skipping equivalence check for likely complex patterns: '${regexA}' vs '${regexB}'`);
+      return true;
+    } catch {
       return false;
     }
-    
+  }
+
+  /**
+   * Check if a pattern uses syntax supported by @gruhn/regex-utils
+   */
+  async hasSupportedSyntax(pattern: string): Promise<boolean> {
+    if (!this.isValidRegex(pattern)) {
+      return false;
+    }
     try {
-      // Wrap in timeout to prevent hanging
-      return await withTimeout(
-        (async () => {
-          const rbA = await createRb(regexA);
-          const rbB = await createRb(regexB);
-          
-          // Compute symmetric difference
-          const diffAB = rbA.without(rbB);
-          const diffBA = rbB.without(rbA);
-          
-          return diffAB.isEmpty() && diffBA.isEmpty();
-        })(),
-        3000, // 3 second timeout
-        false // Assume not equivalent on timeout
-      );
-    } catch (error) {
-      if (isCacheOverflowError(error)) {
-        logger.warn(`Regex too complex for equivalence check: '${regexA}' vs '${regexB}'`);      await createRb(pattern);
+      await createRb(pattern);
       return true;
     } catch {
       return false;
@@ -177,31 +130,16 @@ export class RegexAnalyzer {
       return diffAB.isEmpty() && diffBA.isEmpty();
     } catch (error) {
       if (isCacheOverflowError(error)) {
-
         logger.warn(`Regex too complex for equivalence check: '${regexA}' vs '${regexB}'`);
-        logger.warn(`@gruhn/regex-utils CacheOverflowError during computation: ${String(error)}`);
-
         return false;
-    // Skip complex patterns
-    if (isLikelyComplexPattern(regexA) || isLikelyComplexPattern(regexB)) {
-      logger.info(`Skipping count for likely complex patterns: '${regexA}' \\ '${regexB}'`);
-      return undefined;
+      }
+      throw error;
     }
-    
-    try {
-      return await withTimeout(
-        (async () => {
-          const rbA = await createRb(regexA);
-          const rbB = await createRb(regexB);
-          return rbA.without(rbB).size();
-        })(),
-        2000,
-        undefined
-      );
-    } catch (error) {
-      if (isCacheOverflowError(error)) {
-        logger.warn(`Regex too complex for set difference: '${regexA}' \\ '${regexB}'`);
+  }
 
+  /**
+   * Get the size of the set difference A \ B (words in A but not B)
+   * Returns undefined if infinite or too complex to compute
    */
   async countWordsInANotInB(regexA: string, regexB: string): Promise<bigint | undefined> {
     try {
@@ -211,7 +149,7 @@ export class RegexAnalyzer {
     } catch (error) {
       if (isCacheOverflowError(error)) {
         logger.warn(`Regex too complex for set difference: '${regexA}' \\ '${regexB}'`);
-        logger.warn(`@gruhn/regex-utils CacheOverflowError during computation: ${String(error)}`);        return undefined;
+        return undefined;
       }
       throw error;
     }
@@ -260,7 +198,6 @@ export class RegexAnalyzer {
     } catch (error) {
       if (isCacheOverflowError(error)) {
         logger.warn(`Regex too complex for word pair generation: '${regex}'`);
-        logger.warn(`@gruhn/regex-utils CacheOverflowError during computation: ${String(error)}`);
         return { wordIn: 'test', wordNotIn: 'invalid', explanation: 'Regex too complex' };
       }
       throw new Error(`Failed to generate word pair: ${error}`);
