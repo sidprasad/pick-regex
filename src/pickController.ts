@@ -60,7 +60,7 @@ export class PickController {
   private pairsWithoutProgress = 0;
   private lastActiveCandidateCount = 0;
   private maxClassifications = 50;
-  private maxPairsWithoutProgress = 10;
+  private maxPairsWithoutProgress = 2;
   private searchTimeoutMs = 2000;
   private searchPoolSize = 30;
 
@@ -70,7 +70,7 @@ export class PickController {
     const config = vscode.workspace.getConfiguration('pick');
     this.thresholdVotes = config.get<number>('eliminationThreshold', 2);
     this.maxClassifications = config.get<number>('maxClassifications', 50);
-    this.maxPairsWithoutProgress = config.get<number>('maxPairsWithoutProgress', 10);
+    this.maxPairsWithoutProgress = config.get<number>('maxPairsWithoutProgress', 2);
     logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}`);
   }
 
@@ -191,12 +191,13 @@ export class PickController {
     }
 
     // If we're making no progress, increase search parameters to find harder distinguishing words
-    if (this.pairsWithoutProgress > 0 && this.pairsWithoutProgress % 3 === 0) {
+    if (this.pairsWithoutProgress > 0) {
       this.searchTimeoutMs = Math.min(this.searchTimeoutMs * 2, 16000);
       this.searchPoolSize = Math.min(this.searchPoolSize * 2, 200);
       logger.info(
         `No progress after ${this.pairsWithoutProgress} pairs. Increasing search parameters: timeout=${this.searchTimeoutMs}ms, poolSize=${this.searchPoolSize}`
       );
+      // Counter will reset only when we actually make progress (eliminate a candidate)
     }
 
     try {
@@ -395,7 +396,7 @@ export class PickController {
     } else if (staleProgress && activeCount > 1) {
       // No progress for too many pairs - candidates are indistinguishable
       this.state = PickState.FINAL_RESULT;
-      const best = this.selectBestCandidate();
+      const best = this.selectBestCandidate(); (max ${this.maxPairsWithoutProgress}). The remaining candidates are very similar and difficult to distinguish
       this.finalRegex = best;
       logger.info(`No progress after ${this.pairsWithoutProgress} consecutive pairs. Forcing termination with best candidate: "${best}"`);
     }
