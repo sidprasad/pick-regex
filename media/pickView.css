@@ -239,6 +239,9 @@
 
         .examples-body {
             padding: 0 14px 14px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
         .examples-grid {
@@ -271,12 +274,6 @@
 
         .examples-label.negative {
             color: var(--pick-reject-color);
-        }
-
-        .examples-controls {
-            display: flex;
-            gap: 8px;
-            align-items: center;
         }
 
         .example-text-input {
@@ -334,6 +331,47 @@
         .examples-hint {
             font-size: 12px;
             color: var(--vscode-descriptionForeground);
+        }
+
+        .example-entry-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            background: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
+        }
+
+        .examples-vote-buttons {
+            display: inline-flex;
+            gap: 8px;
+        }
+
+        .vote-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--vscode-button-border, transparent);
+            background: color-mix(in srgb, var(--vscode-button-secondaryBackground) 75%, transparent);
+            color: var(--vscode-button-secondaryForeground);
+            cursor: pointer;
+        }
+
+        .vote-btn .codicon {
+            font-size: 14px;
+        }
+
+        .vote-btn.positive {
+            background: color-mix(in srgb, var(--pick-accept-color) 18%, var(--vscode-button-secondaryBackground));
+            color: var(--pick-accept-color);
+        }
+
+        .vote-btn.negative {
+            background: color-mix(in srgb, var(--pick-reject-color) 18%, var(--vscode-button-secondaryBackground));
+            color: var(--pick-reject-color);
         }
 
         .prompt-actions {

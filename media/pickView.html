@@ -103,7 +103,7 @@
     <button id="examplesToggle" class="examples-card__header" type="button" aria-expanded="false">
       <div>
         <div class="examples-label">Examples</div>
-        <div class="examples-subtitle">Add single words to pre-test your regex.</div>
+        <div class="examples-subtitle">Vote on a word to pre-test your regex.</div>
       </div>
       <div class="examples-header-actions">
         <div class="examples-header-badge" aria-hidden="true">Optional</div>
@@ -111,37 +111,37 @@
       </div>
     </button>
 
-    <div class="examples-body" aria-label="Example entry columns">
-      <div class="examples-column">
-        <div class="examples-label positive">Positive (should match)</div>
-        <div class="examples-controls">
-          <input
-            type="text"
-            id="positiveExampleInput"
-            class="example-text-input"
-            placeholder="Type a word and press Enter"
-            aria-label="Add a word that the regex should match"
-          />
-          <button id="addPositiveExampleBtn" class="ghost" type="button">Add +ve example</button>
+    <div class="examples-body" aria-label="Example entry and votes">
+      <div class="example-entry-row">
+        <input
+          type="text"
+          id="exampleInput"
+          class="example-text-input"
+          placeholder="Type a word"
+          aria-label="Type a word to upvote or downvote"
+        />
+        <div class="examples-vote-buttons">
+          <button id="upvoteExampleBtn" class="vote-btn positive" type="button" title="Upvote: should match">
+            <span class="codicon codicon-thumbsup" aria-hidden="true"></span>
+            <span class="btn-label">Upvote</span>
+          </button>
+          <button id="downvoteExampleBtn" class="vote-btn negative" type="button" title="Downvote: should not match">
+            <span class="codicon codicon-thumbsdown" aria-hidden="true"></span>
+            <span class="btn-label">Downvote</span>
+          </button>
         </div>
-        <div class="examples-chip-row" id="positiveExamplesList" aria-live="polite"></div>
-        <div class="examples-hint">Single words only.</div>
       </div>
 
-      <div class="examples-column">
-        <div class="examples-label negative">Negative (should NOT match)</div>
-        <div class="examples-controls">
-          <input
-            type="text"
-            id="negativeExampleInput"
-            class="example-text-input"
-            placeholder="Type a word and press Enter"
-            aria-label="Add a word that the regex should NOT match"
-          />
-          <button id="addNegativeExampleBtn" class="ghost" type="button">Add -ve example</button>
+      <div class="examples-grid">
+        <div class="examples-column">
+          <div class="examples-label positive">Upvoted</div>
+          <div class="examples-chip-row" id="positiveExamplesList" aria-live="polite"></div>
         </div>
-        <div class="examples-chip-row" id="negativeExamplesList" aria-live="polite"></div>
-        <div class="examples-hint">Rejects prune bad candidates quickly.</div>
+
+        <div class="examples-column">
+          <div class="examples-label negative">Downvoted</div>
+          <div class="examples-chip-row" id="negativeExamplesList" aria-live="polite"></div>
+        </div>
       </div>
     </div>
   </div>

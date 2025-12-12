@@ -48,10 +48,9 @@
 
         // Additional UI Elements
         const promptInput = document.getElementById('promptInput');
-        const positiveExampleInput = document.getElementById('positiveExampleInput');
-        const negativeExampleInput = document.getElementById('negativeExampleInput');
-        const addPositiveExampleBtn = document.getElementById('addPositiveExampleBtn');
-        const addNegativeExampleBtn = document.getElementById('addNegativeExampleBtn');
+        const exampleInput = document.getElementById('exampleInput');
+        const upvoteExampleBtn = document.getElementById('upvoteExampleBtn');
+        const downvoteExampleBtn = document.getElementById('downvoteExampleBtn');
         const positiveExamplesList = document.getElementById('positiveExamplesList');
         const negativeExamplesList = document.getElementById('negativeExamplesList');
         const examplesCard = document.getElementById('examplesCard');
@@ -97,22 +96,28 @@
             renderExampleList(negativeExamplesList, negativeExamples, 'negative');
         }
 
-        function addExample(type) {
-            const isPositive = type === 'positive';
-            const input = isPositive ? positiveExampleInput : negativeExampleInput;
-            const destination = isPositive ? positiveExamples : negativeExamples;
-
-            if (!input) {
+        function classifyExampleInput(isPositive) {
+            if (!exampleInput) {
                 return;
             }
 
-            const value = (input.value || '').trim();
+            const value = (exampleInput.value || '').trim();
             if (!value) {
                 return;
             }
 
+            const existingPositive = positiveExamples.indexOf(value);
+            if (existingPositive !== -1) {
+                positiveExamples.splice(existingPositive, 1);
+            }
+            const existingNegative = negativeExamples.indexOf(value);
+            if (existingNegative !== -1) {
+                negativeExamples.splice(existingNegative, 1);
+            }
+
+            const destination = isPositive ? positiveExamples : negativeExamples;
             destination.push(value);
-            input.value = '';
+            exampleInput.value = '';
             renderExamples();
 
             const shouldClassifyImmediately = lastStatus && lastStatus.totalCandidates > 0;
@@ -221,28 +226,19 @@
             refreshModelsBtn.addEventListener('click', refreshModels);
         }
 
-        if (addPositiveExampleBtn) {
-            addPositiveExampleBtn.addEventListener('click', () => addExample('positive'));
+        if (upvoteExampleBtn) {
+            upvoteExampleBtn.addEventListener('click', () => classifyExampleInput(true));
         }
 
-        if (addNegativeExampleBtn) {
-            addNegativeExampleBtn.addEventListener('click', () => addExample('negative'));
+        if (downvoteExampleBtn) {
+            downvoteExampleBtn.addEventListener('click', () => classifyExampleInput(false));
         }
 
-        if (positiveExampleInput) {
-            positiveExampleInput.addEventListener('keypress', function(e) {
+        if (exampleInput) {
+            exampleInput.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    addExample('positive');
-                }
-            });
-        }
-
-        if (negativeExampleInput) {
-            negativeExampleInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addExample('negative');
+                    classifyExampleInput(true);
                 }
             });
         }
