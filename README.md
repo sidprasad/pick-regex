@@ -106,6 +106,14 @@ Development workflow:
 
 ---
 
+# FAQ
+
+**Can I edit the generated examples?**
+
+Not directly. Examples are tied to each candidate regex so PICK can track your votes accurately. If an example sparks a better idea, revise your prompt and run PICK again—the extension will regenerate candidates and examples from the updated prompt while keeping your prior classifications where possible.
+
+---
+
 # Credits
 
 PICK is a collaboration between Siddhartha Prasad, Skyler Austen, Kathi Fisler, and Shriram Krishnamurthi. Siddhartha is the primary author of this version of the tool.
