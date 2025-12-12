@@ -80,7 +80,9 @@ export class PickController {
     prompt: string,
     candidatePatterns: Array<string | CandidateSeed>,
     equivalenceMap: Map<string, string[]> = new Map(),
-    progressCallback?: (current: number, total: number) => void
+    progressCallback?: (current: number, total: number) => void,
+    positiveExamples: string[] = [],
+    negativeExamples: string[] = []
   ): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Generating candidates for prompt: ${prompt}`);
@@ -109,6 +111,8 @@ export class PickController {
 
     this.usedWords.clear();
     this.wordHistory = [];
+
+    this.applyUserExamples(positiveExamples, negativeExamples);
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state.');
   }
@@ -121,7 +125,9 @@ export class PickController {
     newPrompt: string,
     newCandidatePatterns: Array<string | CandidateSeed>,
     equivalenceMap: Map<string, string[]> = new Map(),
-    progressCallback?: (current: number, total: number) => void
+    progressCallback?: (current: number, total: number) => void,
+    positiveExamples: string[] = [],
+    negativeExamples: string[] = []
   ): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Refining candidates with new prompt: ${newPrompt}`);
@@ -152,8 +158,44 @@ export class PickController {
 
     await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
 
+    this.applyUserExamples(positiveExamples, negativeExamples);
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state after refinement.');
+  }
+
+  private applyUserExamples(positiveExamples: string[], negativeExamples: string[]): void {
+    const accepted = positiveExamples.map(example => example.trim()).filter(example => example.length > 0);
+    const rejected = negativeExamples.map(example => example.trim()).filter(example => example.length > 0);
+
+    if (accepted.length === 0 && rejected.length === 0) {
+      return;
+    }
+
+    logger.info(`Applying ${accepted.length} positive and ${rejected.length} negative user-provided example(s).`);
+
+    for (const word of accepted) {
+      const matchingRegexes = this.applyClassification(word, WordClassification.ACCEPT);
+      this.usedWords.add(word);
+      this.wordHistory.push({
+        word,
+        classification: WordClassification.ACCEPT,
+        timestamp: Date.now(),
+        matchingRegexes
+      });
+    }
+
+    for (const word of rejected) {
+      const matchingRegexes = this.applyClassification(word, WordClassification.REJECT);
+      this.usedWords.add(word);
+      this.wordHistory.push({
+        word,
+        classification: WordClassification.REJECT,
+        timestamp: Date.now(),
+        matchingRegexes
+      });
+    }
+
+    this.checkFinalState();
   }
 
   /**
@@ -208,6 +250,48 @@ export class PickController {
     }
   }
 
+  private applyClassification(word: string, classification: WordClassification): string[] {
+    const matchingPatterns = new Set<string>();
+
+    for (const candidate of this.candidates) {
+      if (candidate.eliminated) {
+        continue;
+      }
+
+      const matches = this.analyzer.verifyMatch(word, candidate.pattern);
+      if (matches) {
+        matchingPatterns.add(candidate.pattern);
+      }
+
+      if (classification === WordClassification.ACCEPT) {
+        if (matches) {
+          candidate.positiveVotes++;
+        } else {
+          candidate.negativeVotes++;
+          if (candidate.negativeVotes >= candidate.eliminationThreshold) {
+            candidate.eliminated = true;
+            logger.info(
+              `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (failed to match accepted word "${word}" with threshold ${candidate.eliminationThreshold}).`
+            );
+          }
+        }
+      } else if (classification === WordClassification.REJECT) {
+        if (matches) {
+          candidate.negativeVotes++;
+          if (candidate.negativeVotes >= candidate.eliminationThreshold) {
+            candidate.eliminated = true;
+            logger.info(
+              `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (incorrectly matched rejected word "${word}" with threshold ${candidate.eliminationThreshold}).`
+            );
+          }
+        }
+      }
+      // If UNSURE, don't update any votes
+    }
+
+    return Array.from(matchingPatterns);
+  }
+
   /**
    * Classify a word as Accept, Reject, or Unsure
    * @param word The word to classify
@@ -223,10 +307,7 @@ export class PickController {
       throw new Error('Word is not in the current pair');
     }
 
-    // Get matching regexes for this word
-    const matchingRegexes = this.candidates
-      .filter(c => !c.eliminated && this.analyzer.verifyMatch(word, c.pattern))
-      .map(c => c.pattern);
+    const matchingRegexes = this.applyClassification(word, classification);
 
     // Record classification
     this.wordHistory.push({
@@ -235,66 +316,6 @@ export class PickController {
       timestamp: Date.now(),
       matchingRegexes
     });
-
-    // Process classification
-    if (classification === WordClassification.ACCEPT) {
-      // ACCEPT means: this word SHOULD match the target pattern
-      // - Positive vote for candidates that DO match (they're correct)
-      // - Negative vote for candidates that DON'T match (they're wrong - missing this word)
-      logger.info(
-        `Classified "${word}" as ACCEPT. Updating ${this.candidates.length} candidates.`
-      );
-      for (const candidate of this.candidates) {
-        if (candidate.eliminated) {
-          continue;
-        }
-        const matches = this.analyzer.verifyMatch(word, candidate.pattern);
-        
-        if (matches) {
-          // Candidate correctly matches the accepted word
-          candidate.positiveVotes++;
-        } else {
-          // Candidate fails to match the accepted word - it's missing something it should have
-          candidate.negativeVotes++;
-          
-          // Eliminate if threshold reached
-          if (candidate.negativeVotes >= candidate.eliminationThreshold) {
-            candidate.eliminated = true;
-            logger.info(
-              `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (failed to match accepted word "${word}" with threshold ${candidate.eliminationThreshold}).`
-            );
-          }
-        }
-      }
-    } else if (classification === WordClassification.REJECT) {
-      // REJECT means: this word should NOT match the target pattern
-      // - Negative vote for candidates that DO match (they're wrong - accepting bad input)
-      // - No vote for candidates that DON'T match (neutral - just doing their job)
-      logger.info(
-        `Classified "${word}" as REJECT. Applying elimination threshold ${this.thresholdVotes}.`
-      );
-      for (const candidate of this.candidates) {
-        if (candidate.eliminated) {
-          continue;
-        }
-        const matches = this.analyzer.verifyMatch(word, candidate.pattern);
-        
-        if (matches) {
-          // Candidate incorrectly matches the rejected word
-          candidate.negativeVotes++;
-
-          // Eliminate if threshold reached
-          if (candidate.negativeVotes >= candidate.eliminationThreshold) {
-            candidate.eliminated = true;
-            logger.info(
-              `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (incorrectly matched rejected word "${word}" with threshold ${candidate.eliminationThreshold}).`
-            );
-          }
-        }
-        // If doesn't match: no vote (correctly rejecting is neutral/expected)
-      }
-    }
-    // If UNSURE, don't update any votes
 
     // Check if we need to transition to final result
     this.checkFinalState();
@@ -396,22 +417,7 @@ export class PickController {
 
     // Replay all classifications
     for (const record of this.wordHistory) {
-      if (record.classification === WordClassification.ACCEPT) {
-        for (const candidate of this.candidates) {
-          if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
-            candidate.positiveVotes++;
-          }
-        }
-      } else if (record.classification === WordClassification.REJECT) {
-        for (const candidate of this.candidates) {
-          if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
-            candidate.negativeVotes++;
-            if (candidate.negativeVotes >= candidate.eliminationThreshold) {
-              candidate.eliminated = true;
-            }
-          }
-        }
-      }
+      record.matchingRegexes = this.applyClassification(record.word, record.classification);
     }
 
     logger.info('Finished recalculating votes. Checking final state.');

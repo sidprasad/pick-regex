@@ -176,6 +176,44 @@
             position: relative;
         }
 
+        .examples-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .examples-column {
+            flex: 1;
+            min-width: 240px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .examples-label {
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--vscode-foreground);
+        }
+
+        .example-input {
+            width: 100%;
+            min-height: 88px;
+            padding: 8px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            resize: vertical;
+            font-family: var(--vscode-editor-font-family);
+        }
+
+        .examples-hint {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+        }
+
         .prompt-actions {
             display: inline-flex;
             align-items: center;

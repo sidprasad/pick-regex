@@ -48,6 +48,8 @@
 
         // Additional UI Elements
         const promptInput = document.getElementById('promptInput');
+        const positiveExamplesInput = document.getElementById('positiveExamplesInput');
+        const negativeExamplesInput = document.getElementById('negativeExamplesInput');
         const generateBtn = document.getElementById('generateBtn');
         const resetBtn = document.getElementById('resetBtn');
         const startFreshBtn = document.getElementById('startFreshBtn');
@@ -156,6 +158,24 @@
         function persistViewState() {
             viewState = { ...viewState, promptHistory: promptHistory.slice(0, 5) };
             vscode.setState(viewState);
+        }
+
+        function parseExamples(input) {
+            if (!input) {
+                return [];
+            }
+            return input.value
+                .split(/\r?\n/)
+                .map(item => item.trim())
+                .filter(Boolean);
+        }
+
+        function getPositiveExamples() {
+            return parseExamples(positiveExamplesInput);
+        }
+
+        function getNegativeExamples() {
+            return parseExamples(negativeExamplesInput);
         }
 
         function addPromptToHistory(prompt) {
@@ -398,7 +418,9 @@
                         prompt: newPrompt,
                         modelId: newModelId,
                         modelChanged: modelChanged,
-                        previousModelId: previousModelId
+                        previousModelId: previousModelId,
+                        positiveExamples: getPositiveExamples(),
+                        negativeExamples: getNegativeExamples()
                     });
                     selectedModelId = newModelId;
                     previousModelId = newModelId;
@@ -470,7 +492,9 @@
                             prompt: newPrompt,
                             modelId: newModelId,
                             modelChanged: modelChanged,
-                            previousModelId: previousModelId
+                            previousModelId: previousModelId,
+                            positiveExamples: getPositiveExamples(),
+                            negativeExamples: getNegativeExamples()
                         });
                         selectedModelId = newModelId;
                         previousModelId = newModelId;
@@ -513,7 +537,9 @@
                             prompt: newPrompt,
                             modelId: newModelId,
                             modelChanged: modelChanged,
-                            previousModelId: previousModelId
+                            previousModelId: previousModelId,
+                            positiveExamples: getPositiveExamples(),
+                            negativeExamples: getNegativeExamples()
                         });
                         selectedModelId = newModelId;
                         previousModelId = newModelId;
@@ -558,7 +584,9 @@
                     prompt: newPrompt,
                     modelId: newModelId,
                     modelChanged: modelChanged,
-                    previousModelId: previousModelId
+                    previousModelId: previousModelId,
+                    positiveExamples: getPositiveExamples(),
+                    negativeExamples: getNegativeExamples()
                 });
                 selectedModelId = newModelId;
                 previousModelId = newModelId;
@@ -872,7 +900,13 @@
             if (prompt) {
                 addPromptToHistory(prompt);
                 updatePromptDisplay(prompt);
-                vscode.postMessage({ type: 'generateCandidates', prompt: prompt, modelId: selectedModelId });
+                vscode.postMessage({
+                    type: 'generateCandidates',
+                    prompt: prompt,
+                    modelId: selectedModelId,
+                    positiveExamples: getPositiveExamples(),
+                    negativeExamples: getNegativeExamples()
+                });
                 previousModelId = selectedModelId;
                 showSection('loading');
             }

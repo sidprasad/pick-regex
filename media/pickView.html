@@ -99,6 +99,29 @@
     </div>
   </div>
 
+  <div class="examples-grid" aria-label="Optional examples to test the regex">
+    <div class="examples-column">
+      <div class="examples-label">Positive examples (should match)</div>
+      <textarea
+        id="positiveExamplesInput"
+        class="example-input"
+        placeholder="One example per line"
+        aria-label="Examples that the regex should match"
+      ></textarea>
+      <div class="examples-hint">We'll pre-test candidates against these.</div>
+    </div>
+    <div class="examples-column">
+      <div class="examples-label">Negative examples (should NOT match)</div>
+      <textarea
+        id="negativeExamplesInput"
+        class="example-input"
+        placeholder="One example per line"
+        aria-label="Examples that the regex should NOT match"
+      ></textarea>
+      <div class="examples-hint">Used immediately to eliminate bad fits.</div>
+    </div>
+  </div>
+
 
         <!-- Voting Section -->
         <div id="votingSection" class="section hidden">

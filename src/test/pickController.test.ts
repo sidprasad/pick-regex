@@ -24,6 +24,26 @@ suite('PickController Test Suite', () => {
     assert.strictEqual(status.activeCandidates, 3);
   });
 
+  test('Should apply user-provided examples when generating candidates', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    await controller.generateCandidates('test prompt', patterns, new Map(), undefined, ['abc'], ['123']);
+
+    const status = controller.getStatus();
+    const letterCandidate = status.candidateDetails.find(c => c.pattern === '[a-z]+');
+    const numberCandidate = status.candidateDetails.find(c => c.pattern === '[0-9]+');
+
+    assert.ok(letterCandidate);
+    assert.ok(numberCandidate);
+
+    assert.strictEqual(letterCandidate?.positiveVotes, 1, 'Letter pattern should get a positive vote for matching the positive example');
+    assert.strictEqual(letterCandidate?.negativeVotes, 0, 'Letter pattern should not be penalized by the positive example');
+    assert.strictEqual(numberCandidate?.negativeVotes, 1, 'Number pattern should be penalized for missing the positive example');
+    assert.strictEqual(numberCandidate?.positiveVotes, 0);
+
+    assert.strictEqual(status.wordHistory.length, 2, 'Positive and negative examples should be recorded in history');
+    assert.strictEqual(controller.getState(), PickState.VOTING);
+  });
+
   test('Should track word classifications', async () => {
     const patterns = ['[a-z]+', '[0-9]+'];
     await controller.generateCandidates('test', patterns);
@@ -249,6 +269,25 @@ suite('PickController Test Suite', () => {
     assert.strictEqual(controller.getActiveCandidateCount(), 2);
     const status = controller.getStatus();
     assert.strictEqual(status.candidateDetails.some(c => c.pattern === '[a-z]{3}'), true);
+  });
+
+  test('Should apply user examples during refinement', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    await controller.generateCandidates('initial prompt', patterns);
+
+    await controller.refineCandidates('refined prompt', patterns, new Map(), undefined, ['matchme'], ['987']);
+
+    const status = controller.getStatus();
+    const letterCandidate = status.candidateDetails.find(c => c.pattern === '[a-z]+');
+    const numberCandidate = status.candidateDetails.find(c => c.pattern === '[0-9]+');
+
+    assert.ok(letterCandidate);
+    assert.ok(numberCandidate);
+
+    assert.strictEqual(letterCandidate?.positiveVotes, 1, 'Positive refinement example should reward matching candidates');
+    assert.ok((numberCandidate?.negativeVotes ?? 0) >= 1, 'Negative and missed positive examples should penalize the number pattern');
+    assert.strictEqual(status.wordHistory.length, 2, 'Refinement examples should be added to history');
+    assert.strictEqual(numberCandidate?.eliminated, true, 'Penalized candidate should be eliminated when reaching threshold');
   });
 
   test('Should apply preserved classifications to new candidates during refinement', async () => {
