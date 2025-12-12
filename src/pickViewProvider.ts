@@ -87,6 +87,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'vote':
           this.handleVote(data.acceptedWord);
           break;
+        case 'classifyExample':
+          await this.handleClassifyExample(data.word, data.classification);
+          break;
         case 'reset':
           this.handleReset(data.preserveClassifications);
           break;
@@ -569,7 +572,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private async handleClassifyWord(word: string, classification: string) {
     try {
       logger.info(`handleClassifyWord called: word="${word}" (length: ${word.length}), classification="${classification}"`);
-      
+
       const classificationEnum = classification as WordClassification;
       this.controller.classifyWord(word, classificationEnum);
       
@@ -614,6 +617,32 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.sendMessage({
         type: 'error',
         message: `Error classifying word: ${error}`
+      });
+    }
+  }
+
+  private async handleClassifyExample(word: string, classification: string) {
+    try {
+      const classificationEnum = classification as WordClassification;
+      this.controller.classifyExampleWord(word, classificationEnum);
+
+      const status = this.controller.getStatus();
+      const state = this.controller.getState();
+
+      if (state === PickState.FINAL_RESULT) {
+        await this.handleFinalResult();
+        return;
+      }
+
+      this.sendMessage({
+        type: 'classificationUpdated',
+        status
+      });
+    } catch (error) {
+      logger.error(error, 'Error classifying example word');
+      this.sendMessage({
+        type: 'error',
+        message: `Error classifying example word: ${error}`
       });
     }
   }

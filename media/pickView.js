@@ -114,6 +114,15 @@
             destination.push(value);
             input.value = '';
             renderExamples();
+
+            const shouldClassifyImmediately = lastStatus && lastStatus.totalCandidates > 0;
+            if (shouldClassifyImmediately) {
+                vscode.postMessage({
+                    type: 'classifyExample',
+                    word: value,
+                    classification: isPositive ? 'accept' : 'reject'
+                });
+            }
         }
 
         function getPositiveExamples() {
@@ -1398,10 +1407,10 @@
             // Clear any existing error messages first
             errorSection.classList.add('hidden');
             statusBar.classList.add('hidden');
-            
+
             showSection('voting');
             updateCandidates(candidates, status.threshold);
-            updateWordHistory(status.wordHistory);
+            updateWordHistory(status.wordHistory, status.totalCandidates);
 
             wordPair.innerHTML = '<div style="text-align: center; padding: 20px; background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); border-radius: 4px;">' +
                 '<h3>Unable to generate more words</h3>' +
@@ -1668,8 +1677,9 @@
         }
 
         function updateStatus(status) {
+            lastStatus = status;
             updateCandidates(status.candidateDetails, status.threshold);
-            updateWordHistory(status.wordHistory);
+            updateWordHistory(status.wordHistory, status.totalCandidates);
             const fallbackMatches = lastPairMatches && lastPair
                 ? new Map([
                     [lastPair.word1, Array.isArray(lastPairMatches.word1) ? lastPairMatches.word1 : []],
@@ -1711,7 +1721,7 @@
 
             showSection('voting');
             updateCandidates(status.candidateDetails, status.threshold);
-            updateWordHistory(status.wordHistory);
+            updateWordHistory(status.wordHistory, status.totalCandidates);
             showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
 
             const diffOps = diffMode ? diffWords(pair.word1, pair.word2) : null;
@@ -1806,7 +1816,7 @@
             decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
         }
 
-        function updateWordHistory(history) {
+        function updateWordHistory(history, totalCandidates) {
             closeMatchPopovers();
 
             if (!history || history.length === 0) {
@@ -1865,6 +1875,7 @@
                 matchesHeader.className = 'history-matches__header';
 
                 const matchCount = item.matchingRegexes.length;
+                const showSeed = typeof totalCandidates === 'number' && totalCandidates === 0;
 
                 if (matchCount > 0) {
                     const toggleButton = document.createElement('button');
@@ -1907,7 +1918,7 @@
                     matchesDiv.appendChild(details);
                 } else {
                     const matchesSummary = document.createElement('span');
-                    matchesSummary.textContent = 'No candidates matched this word';
+                    matchesSummary.textContent = showSeed ? 'Seed' : 'No candidates matched this word';
                     matchesHeader.appendChild(matchesSummary);
                     matchesDiv.appendChild(matchesHeader);
                 }
@@ -2033,7 +2044,7 @@
 
             if (status) {
                 updateCandidatesWithWinner(status.candidateDetails, status.threshold, regex);
-                updateWordHistory(status.wordHistory);
+                updateWordHistory(status.wordHistory, status.totalCandidates);
             }
 
             showStatusWithoutCancel('Classification complete! Selected regex highlighted below.');

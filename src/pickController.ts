@@ -175,7 +175,7 @@ export class PickController {
     logger.info(`Applying ${accepted.length} positive and ${rejected.length} negative user-provided example(s).`);
 
     for (const word of accepted) {
-      const matchingRegexes = this.applyClassification(word, WordClassification.ACCEPT, false);
+      const matchingRegexes = this.applyClassification(word, WordClassification.ACCEPT);
       this.usedWords.add(word);
       this.wordHistory.push({
         word,
@@ -215,6 +215,27 @@ export class PickController {
    */
   getActiveCandidateCount(): number {
     return this.candidates.filter(c => !c.eliminated).length;
+  }
+
+  classifyExampleWord(word: string, classification: WordClassification): void {
+    const trimmed = (word || '').trim();
+
+    if (!trimmed) {
+      throw new Error('Cannot classify an empty word');
+    }
+
+    const matchingRegexes = this.applyClassification(trimmed, classification);
+
+    this.wordHistory.push({
+      word: trimmed,
+      classification,
+      timestamp: Date.now(),
+      matchingRegexes,
+      fromExample: true
+    });
+
+    this.usedWords.add(trimmed);
+    this.checkFinalState();
   }
 
   /**
@@ -427,7 +448,7 @@ export class PickController {
       record.matchingRegexes = this.applyClassification(
         record.word,
         record.classification,
-        record.fromExample ? false : true
+        true
       );
     }
 

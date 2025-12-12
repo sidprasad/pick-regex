@@ -44,6 +44,27 @@ suite('PickController Test Suite', () => {
     assert.strictEqual(controller.getState(), PickState.VOTING);
   });
 
+  test('Should classify standalone example words during voting', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    await controller.generateCandidates('test prompt', patterns);
+
+    controller.classifyExampleWord('abc', WordClassification.ACCEPT);
+
+    const status = controller.getStatus();
+    const letterCandidate = status.candidateDetails.find(c => c.pattern === '[a-z]+');
+    const numberCandidate = status.candidateDetails.find(c => c.pattern === '[0-9]+');
+
+    assert.ok(letterCandidate);
+    assert.ok(numberCandidate);
+
+    assert.strictEqual(letterCandidate?.positiveVotes, 1, 'Positive example should count as a vote for matching candidates');
+    assert.strictEqual(numberCandidate?.negativeVotes, 1, 'Positive example should penalize candidates that miss it');
+
+    assert.strictEqual(status.wordHistory.length, 1, 'Example classifications should be recorded in history');
+    assert.strictEqual(status.wordHistory[0].word, 'abc');
+    assert.strictEqual(status.wordHistory[0].classification, WordClassification.ACCEPT);
+  });
+
   test('Should track word classifications', async () => {
     const patterns = ['[a-z]+', '[0-9]+'];
     await controller.generateCandidates('test', patterns);
