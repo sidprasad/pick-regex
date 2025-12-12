@@ -497,7 +497,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.sendMessage({
         type: 'newPair',
         pair,
-        status
+        status,
+        matches: this.getPairMatches(pair, status)
       });
       logger.info('handleRequestNextPair completed successfully');
     } catch (error) {
@@ -530,6 +531,22 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         });
       }
     }
+  }
+
+  /**
+   * Compute which active candidate regexes match each word in the current pair.
+   */
+  private getPairMatches(pair: { word1: string; word2: string }, status: ReturnType<PickController['getStatus']>) {
+    const activeCandidates = status.candidateDetails.filter(c => !c.eliminated);
+    const matchesForWord = (word: string) => 
+      activeCandidates
+        .filter(c => this.analyzer.verifyMatch(word, c.pattern))
+        .map(c => c.pattern);
+
+    return {
+      word1: matchesForWord(pair.word1),
+      word2: matchesForWord(pair.word2)
+    };
   }
 
   private async handleClassifyWord(word: string, classification: string) {

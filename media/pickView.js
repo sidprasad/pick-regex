@@ -144,6 +144,7 @@
         // Keep last shown pair/status for re-rendering when toggles change
         let lastPair = null;
         let lastStatus = null;
+        let lastPairMatches = null;
 
         // Track classified words
         const classifiedWords = new Set();
@@ -1075,7 +1076,7 @@
                     break;
                 case 'newPair':
                     classifiedWords.clear();
-                    showWordPair(message.pair, message.status);
+                    showWordPair(message.pair, message.status, message.matches);
                     break;
                 case 'wordClassified':
                     updateStatus(message.status);
@@ -1532,7 +1533,13 @@
         function updateStatus(status) {
             updateCandidates(status.candidateDetails, status.threshold);
             updateWordHistory(status.wordHistory);
-            decorateWordCardsWithMatches(status.wordHistory);
+            const fallbackMatches = lastPairMatches && lastPair
+                ? new Map([
+                    [lastPair.word1, Array.isArray(lastPairMatches.word1) ? lastPairMatches.word1 : []],
+                    [lastPair.word2, Array.isArray(lastPairMatches.word2) ? lastPairMatches.word2 : []]
+                  ])
+                : undefined;
+            decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
             showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
         }
 
@@ -1557,11 +1564,12 @@
             });
         }
 
-        function showWordPair(pair, status) {
+        function showWordPair(pair, status, pairMatches) {
             log('info', 'showWordPair called: word1="' + pair.word1 + '" (length: ' + pair.word1.length + '), word2="' + pair.word2 + '" (length: ' + pair.word2.length + ')');
             // cache for re-render when toggles change
             lastPair = pair;
             lastStatus = status;
+            lastPairMatches = pairMatches || null;
             closeMatchPopovers();
 
             showSection('voting');
@@ -1652,7 +1660,13 @@
             wordPair.innerHTML = '';
             wordPair.appendChild(createWordCard(pair.word1, 'a'));
             wordPair.appendChild(createWordCard(pair.word2, 'b'));
-            decorateWordCardsWithMatches(status.wordHistory);
+            const fallbackMatches = pairMatches
+                ? new Map([
+                    [pair.word1, Array.isArray(pairMatches.word1) ? pairMatches.word1 : []],
+                    [pair.word2, Array.isArray(pairMatches.word2) ? pairMatches.word2 : []]
+                  ])
+                : undefined;
+            decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
         }
 
         function updateWordHistory(history) {
@@ -1814,18 +1828,16 @@
         /**
          * Add match info buttons to the currently displayed word cards when we have history data.
          */
-        function decorateWordCardsWithMatches(history) {
-            if (!history || history.length === 0) {
-                return;
-            }
-
+        function decorateWordCardsWithMatches(history, fallbackMatches) {
+            const hasHistory = Array.isArray(history) && history.length > 0;
             const cards = document.querySelectorAll('.word-card');
             cards.forEach(function(card) {
                 const word = card.getAttribute('data-word');
-                const record = getHistoryRecordForWord(word, history);
+                const record = hasHistory ? getHistoryRecordForWord(word, history) : null;
+                const hasFallback = fallbackMatches && fallbackMatches.has(word);
 
-                // Remove existing controls if we don't have a record (e.g., brand new pair)
-                if (!record) {
+                // Remove existing controls if we don't have data for this word
+                if (!record && !hasFallback) {
                     const existingBtn = card.querySelector('.word-info-btn');
                     const existingPopover = card.querySelector('.word-match-popover');
                     if (existingBtn) {
@@ -1837,7 +1849,9 @@
                     return;
                 }
 
-                const matches = Array.isArray(record.matchingRegexes) ? record.matchingRegexes : [];
+                const matches = record
+                    ? (Array.isArray(record.matchingRegexes) ? record.matchingRegexes : [])
+                    : (fallbackMatches?.get(word) ?? []);
 
                 const existingBtn = card.querySelector('.word-info-btn');
                 const existingPopover = card.querySelector('.word-match-popover');
