@@ -15,6 +15,14 @@ function isCacheOverflowError(error: unknown): boolean {
 }
 
 /**
+ * Wrap a regex pattern with anchors to match full string.
+ * Uses non-capturing group to handle alternation correctly.
+ */
+function wrapPattern(pattern: string): string {
+  return `^(?:${pattern})$`;
+}
+
+/**
  * Timeout helper - resolves with result or rejects after timeout
  */
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback?: T): Promise<T> {
@@ -56,7 +64,7 @@ type RegexBuilder = ReturnType<Awaited<ReturnType<typeof getRegexUtils>>['RB']>;
 async function createRb(pattern: string): Promise<RegexBuilder> {
   const { RB } = await getRegexUtils();
   try {
-    return RB(new RegExp(`^${pattern}$`));
+    return RB(new RegExp(wrapPattern(pattern)));
   } catch (error) {
     throw new Error(`Unsupported regex syntax for '${pattern}': ${error}`);
   }
@@ -81,7 +89,7 @@ export class RegexAnalyzer {
    */
   isValidRegex(pattern: string): boolean {
     try {
-      new RegExp(`^${pattern}$`);
+      new RegExp(wrapPattern(pattern));
       return true;
     } catch {
       return false;
@@ -108,7 +116,7 @@ export class RegexAnalyzer {
    */
   verifyMatch(word: string, regex: string): boolean {
     try {
-      return new RegExp(`^${regex}$`).test(word);
+      return new RegExp(wrapPattern(regex)).test(word);
     } catch {
       return false;
     }
