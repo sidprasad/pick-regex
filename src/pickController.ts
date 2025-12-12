@@ -396,7 +396,7 @@ export class PickController {
     } else if (staleProgress && activeCount > 1) {
       // No progress for too many pairs - candidates are indistinguishable
       this.state = PickState.FINAL_RESULT;
-      const best = this.selectBestCandidate(); (max ${this.maxPairsWithoutProgress}). The remaining candidates are very similar and difficult to distinguish
+      const best = this.selectBestCandidate(); 
       this.finalRegex = best;
       logger.info(`No progress after ${this.pairsWithoutProgress} consecutive pairs. Forcing termination with best candidate: "${best}"`);
     }
