@@ -48,12 +48,79 @@
 
         // Additional UI Elements
         const promptInput = document.getElementById('promptInput');
-        const positiveExamplesInput = document.getElementById('positiveExamplesInput');
-        const negativeExamplesInput = document.getElementById('negativeExamplesInput');
+        const positiveExampleInput = document.getElementById('positiveExampleInput');
+        const negativeExampleInput = document.getElementById('negativeExampleInput');
+        const addPositiveExampleBtn = document.getElementById('addPositiveExampleBtn');
+        const addNegativeExampleBtn = document.getElementById('addNegativeExampleBtn');
+        const positiveExamplesList = document.getElementById('positiveExamplesList');
+        const negativeExamplesList = document.getElementById('negativeExamplesList');
         const generateBtn = document.getElementById('generateBtn');
         const resetBtn = document.getElementById('resetBtn');
         const startFreshBtn = document.getElementById('startFreshBtn');
         const cancelBtn = inlineCancelBtn;
+
+        const positiveExamples = [];
+        const negativeExamples = [];
+
+        function renderExampleList(targetEl, examples, type) {
+            if (!targetEl) {
+                return;
+            }
+
+            targetEl.innerHTML = '';
+            targetEl.classList.toggle('empty', examples.length === 0);
+
+            examples.forEach((example, index) => {
+                const chip = document.createElement('span');
+                chip.className = `example-chip ${type === 'negative' ? 'negative' : ''}`;
+                chip.textContent = example;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'chip-remove-btn';
+                removeBtn.title = 'Remove example';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.addEventListener('click', () => {
+                    examples.splice(index, 1);
+                    renderExamples();
+                });
+
+                chip.appendChild(removeBtn);
+                targetEl.appendChild(chip);
+            });
+        }
+
+        function renderExamples() {
+            renderExampleList(positiveExamplesList, positiveExamples, 'positive');
+            renderExampleList(negativeExamplesList, negativeExamples, 'negative');
+        }
+
+        function addExample(type) {
+            const isPositive = type === 'positive';
+            const input = isPositive ? positiveExampleInput : negativeExampleInput;
+            const destination = isPositive ? positiveExamples : negativeExamples;
+
+            if (!input) {
+                return;
+            }
+
+            const value = (input.value || '').trim();
+            if (!value) {
+                return;
+            }
+
+            destination.push(value);
+            input.value = '';
+            renderExamples();
+        }
+
+        function getPositiveExamples() {
+            return positiveExamples.slice();
+        }
+
+        function getNegativeExamples() {
+            return negativeExamples.slice();
+        }
 
         // Persisted webview state (used to avoid repeatedly showing the splash)
         let viewState = vscode.getState() || {};
@@ -129,6 +196,34 @@
         if (refreshModelsBtn) {
             refreshModelsBtn.addEventListener('click', refreshModels);
         }
+
+        if (addPositiveExampleBtn) {
+            addPositiveExampleBtn.addEventListener('click', () => addExample('positive'));
+        }
+
+        if (addNegativeExampleBtn) {
+            addNegativeExampleBtn.addEventListener('click', () => addExample('negative'));
+        }
+
+        if (positiveExampleInput) {
+            positiveExampleInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addExample('positive');
+                }
+            });
+        }
+
+        if (negativeExampleInput) {
+            negativeExampleInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addExample('negative');
+                }
+            });
+        }
+
+        renderExamples();
         
         const wordPair = document.getElementById('wordPair');
         const candidatesList = document.getElementById('candidatesList');
@@ -158,24 +253,6 @@
         function persistViewState() {
             viewState = { ...viewState, promptHistory: promptHistory.slice(0, 5) };
             vscode.setState(viewState);
-        }
-
-        function parseExamples(input) {
-            if (!input) {
-                return [];
-            }
-            return input.value
-                .split(/\r?\n/)
-                .map(item => item.trim())
-                .filter(Boolean);
-        }
-
-        function getPositiveExamples() {
-            return parseExamples(positiveExamplesInput);
-        }
-
-        function getNegativeExamples() {
-            return parseExamples(negativeExamplesInput);
         }
 
         function addPromptToHistory(prompt) {
