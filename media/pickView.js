@@ -144,6 +144,7 @@
         // Keep last shown pair/status for re-rendering when toggles change
         let lastPair = null;
         let lastStatus = null;
+        let lastPairMatches = null;
 
         // Track classified words
         const classifiedWords = new Set();
@@ -707,6 +708,99 @@
             return '<code class="regex-syntax">' + escapeHtml(pattern) + '</code>';
         }
 
+        /**
+         * Find the most recent history record for a word.
+         */
+        function getHistoryRecordForWord(word, history) {
+            if (!word || !Array.isArray(history)) {
+                return null;
+            }
+
+            for (let i = history.length - 1; i >= 0; i--) {
+                const record = history[i];
+                if (record && record.word === word) {
+                    return record;
+                }
+            }
+
+            return null;
+        }
+
+        /**
+         * Build a small popover listing regexes that matched a word.
+         */
+        function buildMatchPopover(matches, headingText) {
+            const popover = document.createElement('div');
+            popover.className = 'match-popover hidden';
+
+            const heading = document.createElement('div');
+            heading.className = 'match-popover__title';
+            heading.textContent = headingText || 'Matching regexes';
+            popover.appendChild(heading);
+
+            const body = document.createElement('div');
+            body.className = 'match-popover__body';
+
+            const matchList = Array.isArray(matches) ? matches : [];
+            if (matchList.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'match-popover__empty';
+                empty.textContent = 'No candidates matched this word.';
+                body.appendChild(empty);
+            } else {
+                const list = document.createElement('ul');
+                list.className = 'match-popover__list';
+                matchList.forEach(pattern => {
+                    const li = document.createElement('li');
+                    const code = document.createElement('code');
+                    code.textContent = pattern;
+                    li.appendChild(code);
+                    list.appendChild(li);
+                });
+                body.appendChild(list);
+            }
+
+            popover.appendChild(body);
+            return popover;
+        }
+
+        /**
+         * Close all open match popovers and reset their toggle buttons.
+         */
+        function closeMatchPopovers() {
+            document.querySelectorAll('.match-popover').forEach(pop => pop.classList.add('hidden'));
+            document.querySelectorAll('.match-info-btn').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+        }
+
+        /**
+         * Create a (?)-style toggle button and popover for match info.
+         */
+        function createMatchInfoControls(matches, headingText, extraButtonClass) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'match-info-btn' + (extraButtonClass ? ' ' + extraButtonClass : '');
+            button.setAttribute('aria-expanded', 'false');
+            button.title = 'Show which regexes match this word';
+            button.innerHTML = '?';
+
+            const popover = buildMatchPopover(matches, headingText);
+
+            button.addEventListener('click', function(ev) {
+                ev.stopPropagation();
+                const willOpen = popover.classList.contains('hidden');
+                closeMatchPopovers();
+                if (willOpen) {
+                    popover.classList.remove('hidden');
+                    button.setAttribute('aria-expanded', 'true');
+                } else {
+                    popover.classList.add('hidden');
+                    button.setAttribute('aria-expanded', 'false');
+                }
+            });
+
+            return { button, popover };
+        }
+
         function createEquivalentSection(equivalents) {
             if (!equivalents || equivalents.length === 0) {
                 return null;
@@ -898,6 +992,10 @@
                     target !== recentPromptsBtn) {
                     toggleHistoryMenu(false);
                 }
+
+                if (!target.closest('.match-popover') && !target.closest('.match-info-btn')) {
+                    closeMatchPopovers();
+                }
             });
 
             window.addEventListener('keydown', function(ev) {
@@ -908,6 +1006,11 @@
                 }
 
                 if (ev.key === 'Escape') {
+                    const anyPopoverOpen = document.querySelector('.match-popover:not(.hidden)');
+                    if (anyPopoverOpen) {
+                        closeMatchPopovers();
+                        return;
+                    }
                     if (!displayOptionsMenu.classList.contains('hidden')) {
                         displayOptionsMenu.classList.add('hidden');
                         displayOptionsBtn.setAttribute('aria-expanded', 'false');
@@ -973,7 +1076,7 @@
                     break;
                 case 'newPair':
                     classifiedWords.clear();
-                    showWordPair(message.pair, message.status);
+                    showWordPair(message.pair, message.status, message.matches);
                     break;
                 case 'wordClassified':
                     updateStatus(message.status);
@@ -1430,6 +1533,13 @@
         function updateStatus(status) {
             updateCandidates(status.candidateDetails, status.threshold);
             updateWordHistory(status.wordHistory);
+            const fallbackMatches = lastPairMatches && lastPair
+                ? new Map([
+                    [lastPair.word1, Array.isArray(lastPairMatches.word1) ? lastPairMatches.word1 : []],
+                    [lastPair.word2, Array.isArray(lastPairMatches.word2) ? lastPairMatches.word2 : []]
+                  ])
+                : undefined;
+            decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
             showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
         }
 
@@ -1454,11 +1564,13 @@
             });
         }
 
-        function showWordPair(pair, status) {
+        function showWordPair(pair, status, pairMatches) {
             log('info', 'showWordPair called: word1="' + pair.word1 + '" (length: ' + pair.word1.length + '), word2="' + pair.word2 + '" (length: ' + pair.word2.length + ')');
             // cache for re-render when toggles change
             lastPair = pair;
             lastStatus = status;
+            lastPairMatches = pairMatches || null;
+            closeMatchPopovers();
 
             showSection('voting');
             updateCandidates(status.candidateDetails, status.threshold);
@@ -1548,9 +1660,18 @@
             wordPair.innerHTML = '';
             wordPair.appendChild(createWordCard(pair.word1, 'a'));
             wordPair.appendChild(createWordCard(pair.word2, 'b'));
+            const fallbackMatches = pairMatches
+                ? new Map([
+                    [pair.word1, Array.isArray(pairMatches.word1) ? pairMatches.word1 : []],
+                    [pair.word2, Array.isArray(pairMatches.word2) ? pairMatches.word2 : []]
+                  ])
+                : undefined;
+            decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
         }
 
         function updateWordHistory(history) {
+            closeMatchPopovers();
+
             if (!history || history.length === 0) {
                 historyItems.innerHTML = '<p style="color: var(--vscode-descriptionForeground); font-style: italic;">No words classified yet.</p>';
                 return;
@@ -1567,10 +1688,22 @@
                 // Create history item container
                 const historyItem = document.createElement('div');
                 historyItem.className = 'history-item';
+                historyItem.setAttribute('data-word', item.word);
                 applyHistoryTone(historyItem, item.classification);
+
+                // Quick match info toggle in the top-left corner
+                const matchInfo = createMatchInfoControls(
+                    item.matchingRegexes,
+                    `Matching regexes for "${item.word}"`,
+                    'history-info-btn'
+                );
+                matchInfo.popover.classList.add('history-match-popover');
+                historyItem.appendChild(matchInfo.button);
+                historyItem.appendChild(matchInfo.popover);
 
                 // Create word display section
                 const contentDiv = document.createElement('div');
+                contentDiv.className = 'history-item__content';
                 
                 const wordDisplay = document.createElement('div');
                 wordDisplay.className = 'word-display';
@@ -1689,6 +1822,50 @@
                 historyItem.appendChild(classificationDiv);
                 
                 historyItems.appendChild(historyItem);
+            });
+        }
+
+        /**
+         * Add match info buttons to the currently displayed word cards when we have history data.
+         */
+        function decorateWordCardsWithMatches(history, fallbackMatches) {
+            const hasHistory = Array.isArray(history) && history.length > 0;
+            const cards = document.querySelectorAll('.word-card');
+            cards.forEach(function(card) {
+                const word = card.getAttribute('data-word');
+                const record = hasHistory ? getHistoryRecordForWord(word, history) : null;
+                const hasFallback = fallbackMatches && fallbackMatches.has(word);
+
+                // Remove existing controls if we don't have data for this word
+                if (!record && !hasFallback) {
+                    const existingBtn = card.querySelector('.word-info-btn');
+                    const existingPopover = card.querySelector('.word-match-popover');
+                    if (existingBtn) {
+                        existingBtn.remove();
+                    }
+                    if (existingPopover) {
+                        existingPopover.remove();
+                    }
+                    return;
+                }
+
+                const matches = record
+                    ? (Array.isArray(record.matchingRegexes) ? record.matchingRegexes : [])
+                    : (fallbackMatches?.get(word) ?? []);
+
+                const existingBtn = card.querySelector('.word-info-btn');
+                const existingPopover = card.querySelector('.word-match-popover');
+                if (existingBtn) {
+                    existingBtn.remove();
+                }
+                if (existingPopover) {
+                    existingPopover.remove();
+                }
+
+                const info = createMatchInfoControls(matches, `Matching regexes for "${word}"`, 'word-info-btn');
+                info.popover.classList.add('word-match-popover');
+                card.appendChild(info.button);
+                card.appendChild(info.popover);
             });
         }
 
