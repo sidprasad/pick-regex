@@ -35,6 +35,7 @@ export interface WordClassificationRecord {
   classification: WordClassification;
   timestamp: number;
   matchingRegexes: string[];
+  fromExample?: boolean;
 }
 
 export enum PickState {
@@ -174,13 +175,14 @@ export class PickController {
     logger.info(`Applying ${accepted.length} positive and ${rejected.length} negative user-provided example(s).`);
 
     for (const word of accepted) {
-      const matchingRegexes = this.applyClassification(word, WordClassification.ACCEPT);
+      const matchingRegexes = this.applyClassification(word, WordClassification.ACCEPT, false);
       this.usedWords.add(word);
       this.wordHistory.push({
         word,
         classification: WordClassification.ACCEPT,
         timestamp: Date.now(),
-        matchingRegexes
+        matchingRegexes,
+        fromExample: true
       });
     }
 
@@ -191,7 +193,8 @@ export class PickController {
         word,
         classification: WordClassification.REJECT,
         timestamp: Date.now(),
-        matchingRegexes
+        matchingRegexes,
+        fromExample: true
       });
     }
 
@@ -250,7 +253,11 @@ export class PickController {
     }
   }
 
-  private applyClassification(word: string, classification: WordClassification): string[] {
+  private applyClassification(
+    word: string,
+    classification: WordClassification,
+    penalizeAcceptMisses: boolean = true
+  ): string[] {
     const matchingPatterns = new Set<string>();
 
     for (const candidate of this.candidates) {
@@ -266,7 +273,7 @@ export class PickController {
       if (classification === WordClassification.ACCEPT) {
         if (matches) {
           candidate.positiveVotes++;
-        } else {
+        } else if (penalizeAcceptMisses) {
           candidate.negativeVotes++;
           if (candidate.negativeVotes >= candidate.eliminationThreshold) {
             candidate.eliminated = true;
@@ -417,7 +424,11 @@ export class PickController {
 
     // Replay all classifications
     for (const record of this.wordHistory) {
-      record.matchingRegexes = this.applyClassification(record.word, record.classification);
+      record.matchingRegexes = this.applyClassification(
+        record.word,
+        record.classification,
+        record.fromExample ? false : true
+      );
     }
 
     logger.info('Finished recalculating votes. Checking final state.');
