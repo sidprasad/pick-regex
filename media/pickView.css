@@ -911,6 +911,40 @@
             margin-top: 4px;
         }
 
+        .history-matches__header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .match-toggle-btn {
+            padding: 4px 8px;
+            min-height: 0;
+            height: auto;
+            font-size: 0.9em;
+        }
+
+        .match-details {
+            margin-top: 6px;
+            padding: 8px;
+            border-radius: 6px;
+            background: var(--vscode-textCodeBlock-background);
+            border: 1px solid var(--vscode-panel-border);
+        }
+
+        .match-list {
+            margin: 0;
+            padding-left: 18px;
+            color: var(--vscode-foreground);
+        }
+
+        .match-list li {
+            font-family: monospace;
+            margin: 4px 0;
+            word-break: break-all;
+        }
+
         .threshold-info {
             font-size: 0.9em;
             color: var(--vscode-descriptionForeground);

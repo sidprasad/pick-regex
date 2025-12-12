@@ -1583,8 +1583,58 @@
                 
                 const matchesDiv = document.createElement('div');
                 matchesDiv.className = 'history-matches';
-                matchesDiv.textContent = item.matchingRegexes.length + ' regex(es) match this word';
-                
+
+                const matchesHeader = document.createElement('div');
+                matchesHeader.className = 'history-matches__header';
+
+                const matchCount = item.matchingRegexes.length;
+
+                if (matchCount > 0) {
+                    const toggleButton = document.createElement('button');
+                    toggleButton.type = 'button';
+                    toggleButton.className = 'secondary match-toggle-btn';
+                    toggleButton.textContent = `Show the ${matchCount} matching candidate${matchCount === 1 ? '' : 's'}`;
+                    toggleButton.setAttribute('aria-expanded', 'false');
+
+                    const details = document.createElement('div');
+                    details.className = 'match-details hidden';
+
+                    const list = document.createElement('ul');
+                    list.className = 'match-list';
+
+                    item.matchingRegexes.forEach(pattern => {
+                        const listItem = document.createElement('li');
+                        const code = document.createElement('code');
+                        code.textContent = pattern;
+                        listItem.appendChild(code);
+                        list.appendChild(listItem);
+                    });
+
+                    details.appendChild(list);
+
+                    toggleButton.addEventListener('click', function() {
+                        const willShow = details.classList.contains('hidden');
+                        if (willShow) {
+                            details.classList.remove('hidden');
+                            toggleButton.textContent = 'Hide matching candidates';
+                            toggleButton.setAttribute('aria-expanded', 'true');
+                        } else {
+                            details.classList.add('hidden');
+                            toggleButton.textContent = `Show the ${matchCount} matching candidate${matchCount === 1 ? '' : 's'}`;
+                            toggleButton.setAttribute('aria-expanded', 'false');
+                        }
+                    });
+
+                    matchesHeader.appendChild(toggleButton);
+                    matchesDiv.appendChild(matchesHeader);
+                    matchesDiv.appendChild(details);
+                } else {
+                    const matchesSummary = document.createElement('span');
+                    matchesSummary.textContent = 'No candidates matched this word';
+                    matchesHeader.appendChild(matchesSummary);
+                    matchesDiv.appendChild(matchesHeader);
+                }
+
                 contentDiv.appendChild(wordDisplay);
                 contentDiv.appendChild(matchesDiv);
 
