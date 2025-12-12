@@ -26,7 +26,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback?: T): Promise<
         reject(new Error(`Operation timed out after ${ms}ms`));
       }
     }, ms);
-    
+
     promise.then(
       (result) => { clearTimeout(timer); resolve(result); },
       (error) => { clearTimeout(timer); reject(error); }
@@ -122,15 +122,16 @@ export class RegexAnalyzer {
     try {
       const rbA = await createRb(regexA);
       const rbB = await createRb(regexB);
-      
+
       // Compute symmetric difference
       const diffAB = rbA.without(rbB);
       const diffBA = rbB.without(rbA);
-      
+
       return diffAB.isEmpty() && diffBA.isEmpty();
     } catch (error) {
       if (isCacheOverflowError(error)) {
         logger.warn(`Regex too complex for equivalence check: '${regexA}' vs '${regexB}'`);
+        logger.warn(`Client lib cache overflow error: ${error}`);
         return false;
       }
       throw error;
@@ -160,10 +161,10 @@ export class RegexAnalyzer {
    */
   async generateWordPair(regex: string, excludedWords: string[] = []): Promise<WordPairResult> {
     const excluded = new Set(excludedWords);
-    
+
     try {
       const rb = await createRb(regex);
-      
+
       // Find a word that matches using enumerate()
       let wordIn = '';
       for (const word of rb.enumerate()) {
@@ -198,6 +199,9 @@ export class RegexAnalyzer {
     } catch (error) {
       if (isCacheOverflowError(error)) {
         logger.warn(`Regex too complex for word pair generation: '${regex}'`);
+        logger.warn(`Client lib cache overflow error: ${error}`);
+        // Can we also warn in VSCode?
+
         return { wordIn: 'test', wordNotIn: 'invalid', explanation: 'Regex too complex' };
       }
       throw new Error(`Failed to generate word pair: ${error}`);
@@ -208,8 +212,8 @@ export class RegexAnalyzer {
    * Generate multiple unique words matching a regex
    */
   async generateMultipleWords(
-    regex: string, 
-    count: number, 
+    regex: string,
+    count: number,
     excludedWords: string[] = []
   ): Promise<string[]> {
     const excluded = new Set(excludedWords);
@@ -217,7 +221,7 @@ export class RegexAnalyzer {
 
     try {
       const rb = await createRb(regex);
-      
+
       for (const word of rb.enumerate()) {
         if (!excluded.has(word)) {
           words.push(word);
@@ -226,11 +230,12 @@ export class RegexAnalyzer {
           }
         }
       }
-      
+
       return words;
     } catch (error) {
       if (isCacheOverflowError(error)) {
-        logger.warn(`Regex too complex for word generation: '${regex}'`);
+        logger.warn(`Regex too complex for word pair generation: '${regex}'`);
+        logger.warn(`Client lib cache overflow error: ${error}`);
         return words;
       }
       throw new Error(`Failed to generate words: ${error}`);
@@ -271,7 +276,7 @@ export class RegexAnalyzer {
 
     const excluded = new Set(excludedWords);
     const pool = new Set<string>();
-    
+
     // Build RBs for all candidates upfront
     const rbs: (RegexBuilder | null)[] = await Promise.all(
       candidateRegexes.map(async r => {
@@ -293,16 +298,16 @@ export class RegexAnalyzer {
       for (let i = 0; i < candidateRegexes.length && pool.size < poolSizeLimit; i++) {
         for (let j = i + 1; j < candidateRegexes.length && pool.size < poolSizeLimit; j++) {
           if (isTimedOut()) { break outerLoop; }
-          
+
           const rbA = rbs[i];
           const rbB = rbs[j];
           if (!rbA || !rbB) { continue; }
-          
+
           try {
             // Compute symmetric difference parts
             const diffAB = rbA.without(rbB); // strings in A but not B
             const diffBA = rbB.without(rbA); // strings in B but not A
-            
+
             // Sample multiple words from A \ B to increase diversity
             if (!diffAB.isEmpty()) {
               let samplesFromDiff = 0;
@@ -316,7 +321,7 @@ export class RegexAnalyzer {
                 }
               }
             }
-            
+
             // Sample multiple words from B \ A
             if (!diffBA.isEmpty()) {
               let samplesFromDiff = 0;
@@ -341,7 +346,7 @@ export class RegexAnalyzer {
         if (isTimedOut()) { break; }
         const rb = rbs[i];
         if (!rb) { continue; }
-        
+
         try {
           for (const word of rb.enumerate()) {
             if (!excluded.has(word) && !pool.has(word)) {
@@ -373,17 +378,17 @@ export class RegexAnalyzer {
       let bestScore = Infinity;
 
       // Pre-compute match vectors for all words
-      const matchVectors = poolArray.map(w => 
+      const matchVectors = poolArray.map(w =>
         candidateRegexes.map(r => this.verifyMatch(w, r))
       );
 
       for (let i = 0; i < poolArray.length; i++) {
         for (let j = i + 1; j < poolArray.length; j++) {
           if (isTimedOut() && bestPair) { break; }
-          
+
           const m1 = matchVectors[i];
           const m2 = matchVectors[j];
-          
+
           // Count survivors for each of the 4 possible classification outcomes
           const survivors = [
             m1.filter((m, idx) => m && m2[idx]).length,      // accept both
@@ -391,14 +396,14 @@ export class RegexAnalyzer {
             m1.filter((m, idx) => !m && m2[idx]).length,     // reject w1, accept w2
             m1.filter((m, idx) => !m && !m2[idx]).length     // reject both
           ];
-          
+
           // Score = worst case survivors (lower is better)
           const worstCase = Math.max(...survivors);
-          
+
           // Prefer pairs that actually distinguish (different match patterns)
           const distinguishes = m1.some((m, idx) => m !== m2[idx]);
           const score = distinguishes ? worstCase : worstCase + 1000;
-          
+
           if (score < bestScore) {
             bestScore = score;
             bestPair = [poolArray[i], poolArray[j]];
