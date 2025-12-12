@@ -5,7 +5,7 @@
   "publisher": "SiddharthaPrasad",
   "icon": "images/icon.png",
   "license": "MIT",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "repository": {
     "type": "git",
     "url": "https://github.com/sidprasad/pick-regex"
@@ -79,6 +79,18 @@
           "default": 2,
           "minimum": 1,
           "description": "Number of negative votes required to eliminate a candidate regex"
+        },
+        "pick.maxClassifications": {
+          "type": "number",
+          "default": 100,
+          "minimum": 20,
+          "description": "Maximum number of word classifications before forcing termination"
+        },
+        "pick.maxPairsWithoutProgress": {
+          "type": "number",
+          "default": 2,
+          "minimum": 2,
+          "description": "Maximum number of consecutive word pairs without eliminating a candidate before forcing termination"
         },
         "pick.surveyPromptEnabled": {
           "type": "boolean",

@@ -243,11 +243,17 @@ export class RegexAnalyzer {
    * Uses symmetric difference sampling (like @gruhn/regex-utils equiv checker):
    * - For each pair (A, B): sample from A\B and B\A
    * - This efficiently finds words that distinguish between candidates
-   * - Times out after ~1s, returning best result found so far
+   * - Times out after timeoutMs, returning best result found so far
+   * @param candidateRegexes - The candidate regex patterns
+   * @param excludedWords - Words to exclude from generation
+   * @param timeoutMs - Maximum time to spend searching (default 2000ms)
+   * @param poolSizeLimit - Maximum number of candidate words to sample (default 30)
    */
   async generateTwoDistinguishingWords(
     candidateRegexes: string[],
-    excludedWords: string[] = []
+    excludedWords: string[] = [],
+    timeoutMs: number = 2000,
+    poolSizeLimit: number = 30
   ): Promise<TwoDistinguishingWordsResult> {
     if (candidateRegexes.length === 0) {
       throw new Error('Need at least one candidate regex');
@@ -278,16 +284,14 @@ export class RegexAnalyzer {
     );
 
     const startTime = Date.now();
-    const TIMEOUT_MS = 1000; // 1 second target, hard limit 3s
-    const POOL_SIZE_LIMIT = 12; // Small pool - we only need good distinguishing words
-
-    const isTimedOut = () => Date.now() - startTime > TIMEOUT_MS;
+    const isTimedOut = () => Date.now() - startTime > timeoutMs;
 
     try {
       // Sample from pairwise symmetric differences (A\B and B\A)
+      // Take multiple samples from each difference to increase chance of finding distinguishing words
       outerLoop:
-      for (let i = 0; i < candidateRegexes.length && pool.size < POOL_SIZE_LIMIT; i++) {
-        for (let j = i + 1; j < candidateRegexes.length && pool.size < POOL_SIZE_LIMIT; j++) {
+      for (let i = 0; i < candidateRegexes.length && pool.size < poolSizeLimit; i++) {
+        for (let j = i + 1; j < candidateRegexes.length && pool.size < poolSizeLimit; j++) {
           if (isTimedOut()) { break outerLoop; }
           
           const rbA = rbs[i];
@@ -299,22 +303,30 @@ export class RegexAnalyzer {
             const diffAB = rbA.without(rbB); // strings in A but not B
             const diffBA = rbB.without(rbA); // strings in B but not A
             
-            // Sample 1 word from A \ B (just need distinguishing examples)
+            // Sample multiple words from A \ B to increase diversity
             if (!diffAB.isEmpty()) {
+              let samplesFromDiff = 0;
+              const MAX_SAMPLES_PER_DIFF = Math.max(5, Math.floor(poolSizeLimit / 4));
               for (const word of diffAB.enumerate()) {
+                if (pool.size >= poolSizeLimit || isTimedOut()) { break; }
                 if (!excluded.has(word) && !pool.has(word)) {
                   pool.add(word);
-                  break;
+                  samplesFromDiff++;
+                  if (samplesFromDiff >= MAX_SAMPLES_PER_DIFF) { break; }
                 }
               }
             }
             
-            // Sample 1 word from B \ A
+            // Sample multiple words from B \ A
             if (!diffBA.isEmpty()) {
+              let samplesFromDiff = 0;
+              const MAX_SAMPLES_PER_DIFF = Math.max(5, Math.floor(poolSizeLimit / 4));
               for (const word of diffBA.enumerate()) {
+                if (pool.size >= poolSizeLimit || isTimedOut()) { break; }
                 if (!excluded.has(word) && !pool.has(word)) {
                   pool.add(word);
-                  break;
+                  samplesFromDiff++;
+                  if (samplesFromDiff >= MAX_SAMPLES_PER_DIFF) { break; }
                 }
               }
             }
@@ -325,7 +337,7 @@ export class RegexAnalyzer {
       }
 
       // Also sample 1 word directly from each candidate (for intersection words)
-      for (let i = 0; i < candidateRegexes.length && pool.size < POOL_SIZE_LIMIT; i++) {
+      for (let i = 0; i < candidateRegexes.length && pool.size < poolSizeLimit; i++) {
         if (isTimedOut()) { break; }
         const rb = rbs[i];
         if (!rb) { continue; }
