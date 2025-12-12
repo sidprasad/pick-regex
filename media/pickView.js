@@ -1587,15 +1587,13 @@
                 const matchesHeader = document.createElement('div');
                 matchesHeader.className = 'history-matches__header';
 
-                const matchesSummary = document.createElement('span');
-                matchesSummary.textContent = item.matchingRegexes.length + ' regex(es) match this word';
-                matchesHeader.appendChild(matchesSummary);
+                const matchCount = item.matchingRegexes.length;
 
-                if (item.matchingRegexes.length > 0) {
+                if (matchCount > 0) {
                     const toggleButton = document.createElement('button');
                     toggleButton.type = 'button';
                     toggleButton.className = 'secondary match-toggle-btn';
-                    toggleButton.textContent = 'Show matches';
+                    toggleButton.textContent = `Show the ${matchCount} matching candidate${matchCount === 1 ? '' : 's'}`;
                     toggleButton.setAttribute('aria-expanded', 'false');
 
                     const details = document.createElement('div');
@@ -1618,11 +1616,11 @@
                         const willShow = details.classList.contains('hidden');
                         if (willShow) {
                             details.classList.remove('hidden');
-                            toggleButton.textContent = 'Hide matches';
+                            toggleButton.textContent = 'Hide matching candidates';
                             toggleButton.setAttribute('aria-expanded', 'true');
                         } else {
                             details.classList.add('hidden');
-                            toggleButton.textContent = 'Show matches';
+                            toggleButton.textContent = `Show the ${matchCount} matching candidate${matchCount === 1 ? '' : 's'}`;
                             toggleButton.setAttribute('aria-expanded', 'false');
                         }
                     });
@@ -1631,6 +1629,9 @@
                     matchesDiv.appendChild(matchesHeader);
                     matchesDiv.appendChild(details);
                 } else {
+                    const matchesSummary = document.createElement('span');
+                    matchesSummary.textContent = 'No candidates matched this word';
+                    matchesHeader.appendChild(matchesSummary);
                     matchesDiv.appendChild(matchesHeader);
                 }
 
