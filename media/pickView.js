@@ -54,6 +54,8 @@
         const addNegativeExampleBtn = document.getElementById('addNegativeExampleBtn');
         const positiveExamplesList = document.getElementById('positiveExamplesList');
         const negativeExamplesList = document.getElementById('negativeExamplesList');
+        const examplesCard = document.getElementById('examplesCard');
+        const examplesToggle = document.getElementById('examplesToggle');
         const generateBtn = document.getElementById('generateBtn');
         const resetBtn = document.getElementById('resetBtn');
         const startFreshBtn = document.getElementById('startFreshBtn');
@@ -128,6 +130,7 @@
         let promptHistory = Array.isArray(viewState.promptHistory)
             ? viewState.promptHistory.slice(0, 5)
             : [];
+        let examplesCollapsed = viewState.examplesCollapsed !== false;
         
         // Random placeholder rotation
         const placeholders = [
@@ -140,6 +143,18 @@
         if (promptInput) {
             const randomIndex = Math.floor(Math.random() * placeholders.length);
             promptInput.placeholder = placeholders[randomIndex];
+        }
+
+        function setExamplesCollapsed(collapsed) {
+            if (!examplesCard || !examplesToggle) {
+                return;
+            }
+
+            examplesCollapsed = collapsed;
+            examplesCard.classList.toggle('collapsed', collapsed);
+            examplesToggle.setAttribute('aria-expanded', (!collapsed).toString());
+            viewState = { ...viewState, examplesCollapsed: collapsed };
+            vscode.setState(viewState);
         }
         
         // Track available models
@@ -223,6 +238,13 @@
             });
         }
 
+        if (examplesToggle) {
+            examplesToggle.addEventListener('click', function() {
+                setExamplesCollapsed(!examplesCollapsed);
+            });
+        }
+
+        setExamplesCollapsed(examplesCollapsed);
         renderExamples();
         
         const wordPair = document.getElementById('wordPair');
@@ -251,7 +273,11 @@
         document.body.setAttribute('data-diff-mode', diffMode.toString());
 
         function persistViewState() {
-            viewState = { ...viewState, promptHistory: promptHistory.slice(0, 5) };
+            viewState = {
+                ...viewState,
+                promptHistory: promptHistory.slice(0, 5),
+                examplesCollapsed
+            };
             vscode.setState(viewState);
         }
 

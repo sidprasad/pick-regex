@@ -178,24 +178,45 @@
 
         .examples-card {
             margin-top: 14px;
-            padding: 14px;
+            padding: 0;
             background: var(--vscode-editor-background);
             border: 1px solid var(--vscode-panel-border);
             border-radius: 6px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            overflow: hidden;
+        }
+
+        .examples-card.collapsed .examples-body {
+            display: none;
         }
 
         .examples-card__header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 12px 14px;
+            gap: 8px;
+            background: color-mix(in srgb, var(--vscode-panel-border) 35%, var(--vscode-editor-background));
+            border: none;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .examples-card__header:hover {
+            background: color-mix(in srgb, var(--vscode-input-background) 70%, var(--vscode-editor-background));
         }
 
         .examples-subtitle {
             font-size: 12px;
             color: var(--vscode-descriptionForeground);
+        }
+
+        .examples-header-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .examples-header-badge {
@@ -205,6 +226,19 @@
             border-radius: 12px;
             font-size: 11px;
             font-weight: 600;
+        }
+
+        .examples-toggle-icon {
+            display: inline-block;
+            transition: transform 0.1s ease-in-out;
+        }
+
+        .examples-card:not(.collapsed) .examples-toggle-icon {
+            transform: rotate(90deg);
+        }
+
+        .examples-body {
+            padding: 0 14px 14px 14px;
         }
 
         .examples-grid {
@@ -229,6 +263,14 @@
             font-weight: 600;
             font-size: 13px;
             color: var(--vscode-foreground);
+        }
+
+        .examples-label.positive {
+            color: var(--pick-accept-color);
+        }
+
+        .examples-label.negative {
+            color: var(--pick-reject-color);
         }
 
         .examples-controls {
@@ -265,16 +307,17 @@
             align-items: center;
             gap: 6px;
             padding: 6px 10px;
-            background: var(--vscode-badge-background);
-            color: var(--vscode-badge-foreground);
+            background: color-mix(in srgb, var(--pick-accept-color) 16%, var(--vscode-badge-background));
+            color: var(--pick-accept-color);
             border-radius: 12px;
             font-size: 12px;
+            border: 1px solid color-mix(in srgb, var(--pick-accept-color) 32%, transparent);
         }
 
         .example-chip.negative {
-            background: color-mix(in srgb, var(--vscode-inputValidation-errorBackground) 80%, transparent);
-            color: var(--vscode-inputValidation-errorForeground);
-            border: 1px solid var(--vscode-inputValidation-errorBorder);
+            background: color-mix(in srgb, var(--pick-reject-color) 20%, var(--vscode-badge-background));
+            color: var(--pick-reject-color);
+            border: 1px solid color-mix(in srgb, var(--pick-reject-color) 35%, transparent);
         }
 
         .chip-remove-btn {

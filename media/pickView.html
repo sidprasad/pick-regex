@@ -99,18 +99,21 @@
     </div>
   </div>
 
-  <div class="examples-card" aria-label="Optional examples to test the regex">
-    <div class="examples-card__header">
+  <div id="examplesCard" class="examples-card collapsed" aria-label="Optional examples to test the regex">
+    <button id="examplesToggle" class="examples-card__header" type="button" aria-expanded="false">
       <div>
         <div class="examples-label">Examples</div>
-        <div class="examples-subtitle">Seed with words you know should match or not match.</div>
+        <div class="examples-subtitle">Add single words to pre-test your regex.</div>
       </div>
-      <div class="examples-header-badge" aria-hidden="true">Optional</div>
-    </div>
+      <div class="examples-header-actions">
+        <div class="examples-header-badge" aria-hidden="true">Optional</div>
+        <span class="examples-toggle-icon" aria-hidden="true">▸</span>
+      </div>
+    </button>
 
-    <div class="examples-grid" aria-label="Example entry columns">
+    <div class="examples-body" aria-label="Example entry columns">
       <div class="examples-column">
-        <div class="examples-label">Positive examples (should match)</div>
+        <div class="examples-label positive">Positive (should match)</div>
         <div class="examples-controls">
           <input
             type="text"
@@ -122,11 +125,11 @@
           <button id="addPositiveExampleBtn" class="ghost" type="button">Add +ve example</button>
         </div>
         <div class="examples-chip-row" id="positiveExamplesList" aria-live="polite"></div>
-        <div class="examples-hint">Add one word at a time to quickly test candidates.</div>
+        <div class="examples-hint">Single words only.</div>
       </div>
 
       <div class="examples-column">
-        <div class="examples-label">Negative examples (should NOT match)</div>
+        <div class="examples-label negative">Negative (should NOT match)</div>
         <div class="examples-controls">
           <input
             type="text"
@@ -138,7 +141,7 @@
           <button id="addNegativeExampleBtn" class="ghost" type="button">Add -ve example</button>
         </div>
         <div class="examples-chip-row" id="negativeExamplesList" aria-live="polite"></div>
-        <div class="examples-hint">Reject examples are used immediately to eliminate bad fits.</div>
+        <div class="examples-hint">Rejects prune bad candidates quickly.</div>
       </div>
     </div>
   </div>
