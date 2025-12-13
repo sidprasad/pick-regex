@@ -109,11 +109,6 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h4 style="margin:0;">Should the generated regex match these words?</h4>
                 <div class="display-controls" aria-hidden="false">
-                    <button id="displayOptionsBtn" class="icon-btn" title="Display options" aria-haspopup="true"
-                        aria-expanded="false" aria-controls="displayOptionsMenu">
-                        <!-- simpler gear: use emoji for consistent rendering across themes -->
-                        <span aria-hidden="true" style="font-size:16px; line-height:1;">⚙️</span>
-                    </button>
                     <span
                         id="literalIndicator"
                         class="literal-indicator hidden"
@@ -144,6 +139,11 @@
                         aria-label="Candidates list hidden">
                         Candidates hidden
                     </span>
+                    <button id="displayOptionsBtn" class="icon-btn" title="Display options" aria-haspopup="true"
+                        aria-expanded="false" aria-controls="displayOptionsMenu">
+                        <!-- simpler gear: use emoji for consistent rendering across themes -->
+                        <span aria-hidden="true" style="font-size:16px; line-height:1;">⚙️</span>
+                    </button>
                     <div id="displayOptionsMenu" class="display-menu hidden" role="menu" aria-label="Display options">
                         <label id="literalMenuRow" class="menu-row" role="menuitemcheckbox" aria-checked="false">
                             <input type="checkbox" id="literalToggle"

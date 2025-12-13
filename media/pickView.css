@@ -1234,7 +1234,7 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            margin-left: 6px;
+            margin-right: 6px;
             padding: 3px 8px;
             border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 80%, transparent);
             border-radius: 999px;
