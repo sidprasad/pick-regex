@@ -48,10 +48,92 @@
 
         // Additional UI Elements
         const promptInput = document.getElementById('promptInput');
+        const exampleInput = document.getElementById('exampleInput');
+        const upvoteExampleBtn = document.getElementById('upvoteExampleBtn');
+        const downvoteExampleBtn = document.getElementById('downvoteExampleBtn');
+        const positiveExamplesList = document.getElementById('positiveExamplesList');
+        const negativeExamplesList = document.getElementById('negativeExamplesList');
+        const examplesCard = document.getElementById('examplesCard');
+        const examplesToggle = document.getElementById('examplesToggle');
         const generateBtn = document.getElementById('generateBtn');
         const resetBtn = document.getElementById('resetBtn');
         const startFreshBtn = document.getElementById('startFreshBtn');
         const cancelBtn = inlineCancelBtn;
+
+        const positiveExamples = [];
+        const negativeExamples = [];
+
+        function renderExampleList(targetEl, examples, type) {
+            if (!targetEl) {
+                return;
+            }
+
+            targetEl.innerHTML = '';
+            targetEl.classList.toggle('empty', examples.length === 0);
+
+            examples.forEach((example, index) => {
+                const chip = document.createElement('span');
+                chip.className = `example-chip ${type === 'negative' ? 'negative' : ''}`;
+                chip.textContent = example;
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'chip-remove-btn';
+                removeBtn.title = 'Remove example';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.addEventListener('click', () => {
+                    examples.splice(index, 1);
+                    renderExamples();
+                });
+
+                chip.appendChild(removeBtn);
+                targetEl.appendChild(chip);
+            });
+        }
+
+        function renderExamples() {
+            renderExampleList(positiveExamplesList, positiveExamples, 'positive');
+            renderExampleList(negativeExamplesList, negativeExamples, 'negative');
+        }
+
+        function classifyExampleInput(isPositive) {
+            if (!exampleInput) {
+                return;
+            }
+
+            const value = (exampleInput.value || '').trim();
+            if (!value) {
+                return;
+            }
+
+            const existingPositive = positiveExamples.indexOf(value);
+            if (existingPositive !== -1) {
+                positiveExamples.splice(existingPositive, 1);
+            }
+            const existingNegative = negativeExamples.indexOf(value);
+            if (existingNegative !== -1) {
+                negativeExamples.splice(existingNegative, 1);
+            }
+
+            const destination = isPositive ? positiveExamples : negativeExamples;
+            destination.push(value);
+            exampleInput.value = '';
+            renderExamples();
+
+            vscode.postMessage({
+                type: 'classifyExample',
+                word: value,
+                classification: isPositive ? 'accept' : 'reject'
+            });
+        }
+
+        function getPositiveExamples() {
+            return positiveExamples.slice();
+        }
+
+        function getNegativeExamples() {
+            return negativeExamples.slice();
+        }
 
         // Persisted webview state (used to avoid repeatedly showing the splash)
         let viewState = vscode.getState() || {};
@@ -59,6 +141,7 @@
         let promptHistory = Array.isArray(viewState.promptHistory)
             ? viewState.promptHistory.slice(0, 5)
             : [];
+        let examplesCollapsed = viewState.examplesCollapsed !== false;
         
         // Random placeholder rotation
         const placeholders = [
@@ -71,6 +154,18 @@
         if (promptInput) {
             const randomIndex = Math.floor(Math.random() * placeholders.length);
             promptInput.placeholder = placeholders[randomIndex];
+        }
+
+        function setExamplesCollapsed(collapsed) {
+            if (!examplesCard || !examplesToggle) {
+                return;
+            }
+
+            examplesCollapsed = collapsed;
+            examplesCard.classList.toggle('collapsed', collapsed);
+            examplesToggle.setAttribute('aria-expanded', (!collapsed).toString());
+            viewState = { ...viewState, examplesCollapsed: collapsed };
+            vscode.setState(viewState);
         }
         
         // Track available models
@@ -127,6 +222,32 @@
         if (refreshModelsBtn) {
             refreshModelsBtn.addEventListener('click', refreshModels);
         }
+
+        if (upvoteExampleBtn) {
+            upvoteExampleBtn.addEventListener('click', () => classifyExampleInput(true));
+        }
+
+        if (downvoteExampleBtn) {
+            downvoteExampleBtn.addEventListener('click', () => classifyExampleInput(false));
+        }
+
+        if (exampleInput) {
+            exampleInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    classifyExampleInput(true);
+                }
+            });
+        }
+
+        if (examplesToggle) {
+            examplesToggle.addEventListener('click', function() {
+                setExamplesCollapsed(!examplesCollapsed);
+            });
+        }
+
+        setExamplesCollapsed(examplesCollapsed);
+        renderExamples();
         
         const wordPair = document.getElementById('wordPair');
         const candidatesList = document.getElementById('candidatesList');
@@ -154,7 +275,11 @@
         document.body.setAttribute('data-diff-mode', diffMode.toString());
 
         function persistViewState() {
-            viewState = { ...viewState, promptHistory: promptHistory.slice(0, 5) };
+            viewState = {
+                ...viewState,
+                promptHistory: promptHistory.slice(0, 5),
+                examplesCollapsed
+            };
             vscode.setState(viewState);
         }
 
@@ -398,7 +523,9 @@
                         prompt: newPrompt,
                         modelId: newModelId,
                         modelChanged: modelChanged,
-                        previousModelId: previousModelId
+                        previousModelId: previousModelId,
+                        positiveExamples: getPositiveExamples(),
+                        negativeExamples: getNegativeExamples()
                     });
                     selectedModelId = newModelId;
                     previousModelId = newModelId;
@@ -470,7 +597,9 @@
                             prompt: newPrompt,
                             modelId: newModelId,
                             modelChanged: modelChanged,
-                            previousModelId: previousModelId
+                            previousModelId: previousModelId,
+                            positiveExamples: getPositiveExamples(),
+                            negativeExamples: getNegativeExamples()
                         });
                         selectedModelId = newModelId;
                         previousModelId = newModelId;
@@ -513,7 +642,9 @@
                             prompt: newPrompt,
                             modelId: newModelId,
                             modelChanged: modelChanged,
-                            previousModelId: previousModelId
+                            previousModelId: previousModelId,
+                            positiveExamples: getPositiveExamples(),
+                            negativeExamples: getNegativeExamples()
                         });
                         selectedModelId = newModelId;
                         previousModelId = newModelId;
@@ -558,7 +689,9 @@
                     prompt: newPrompt,
                     modelId: newModelId,
                     modelChanged: modelChanged,
-                    previousModelId: previousModelId
+                    previousModelId: previousModelId,
+                    positiveExamples: getPositiveExamples(),
+                    negativeExamples: getNegativeExamples()
                 });
                 selectedModelId = newModelId;
                 previousModelId = newModelId;
@@ -872,7 +1005,13 @@
             if (prompt) {
                 addPromptToHistory(prompt);
                 updatePromptDisplay(prompt);
-                vscode.postMessage({ type: 'generateCandidates', prompt: prompt, modelId: selectedModelId });
+                vscode.postMessage({
+                    type: 'generateCandidates',
+                    prompt: prompt,
+                    modelId: selectedModelId,
+                    positiveExamples: getPositiveExamples(),
+                    negativeExamples: getNegativeExamples()
+                });
                 previousModelId = selectedModelId;
                 showSection('loading');
             }
@@ -1261,10 +1400,10 @@
             // Clear any existing error messages first
             errorSection.classList.add('hidden');
             statusBar.classList.add('hidden');
-            
+
             showSection('voting');
             updateCandidates(candidates, status.threshold);
-            updateWordHistory(status.wordHistory);
+            updateWordHistory(status.wordHistory, status.totalCandidates);
 
             wordPair.innerHTML = '<div style="text-align: center; padding: 20px; background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); border-radius: 4px;">' +
                 '<h3>Unable to generate more words</h3>' +
@@ -1531,8 +1670,9 @@
         }
 
         function updateStatus(status) {
+            lastStatus = status;
             updateCandidates(status.candidateDetails, status.threshold);
-            updateWordHistory(status.wordHistory);
+            updateWordHistory(status.wordHistory, status.totalCandidates);
             const fallbackMatches = lastPairMatches && lastPair
                 ? new Map([
                     [lastPair.word1, Array.isArray(lastPairMatches.word1) ? lastPairMatches.word1 : []],
@@ -1574,7 +1714,7 @@
 
             showSection('voting');
             updateCandidates(status.candidateDetails, status.threshold);
-            updateWordHistory(status.wordHistory);
+            updateWordHistory(status.wordHistory, status.totalCandidates);
             showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
 
             const diffOps = diffMode ? diffWords(pair.word1, pair.word2) : null;
@@ -1669,7 +1809,7 @@
             decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
         }
 
-        function updateWordHistory(history) {
+        function updateWordHistory(history, totalCandidates) {
             closeMatchPopovers();
 
             if (!history || history.length === 0) {
@@ -1728,6 +1868,7 @@
                 matchesHeader.className = 'history-matches__header';
 
                 const matchCount = item.matchingRegexes.length;
+                const showSeed = typeof totalCandidates === 'number' && totalCandidates === 0;
 
                 if (matchCount > 0) {
                     const toggleButton = document.createElement('button');
@@ -1770,7 +1911,7 @@
                     matchesDiv.appendChild(details);
                 } else {
                     const matchesSummary = document.createElement('span');
-                    matchesSummary.textContent = 'No candidates matched this word';
+                    matchesSummary.textContent = showSeed ? 'Seed' : 'No candidates matched this word';
                     matchesHeader.appendChild(matchesSummary);
                     matchesDiv.appendChild(matchesHeader);
                 }
@@ -1896,7 +2037,7 @@
 
             if (status) {
                 updateCandidatesWithWinner(status.candidateDetails, status.threshold, regex);
-                updateWordHistory(status.wordHistory);
+                updateWordHistory(status.wordHistory, status.totalCandidates);
             }
 
             showStatusWithoutCancel('Classification complete! Selected regex highlighted below.');

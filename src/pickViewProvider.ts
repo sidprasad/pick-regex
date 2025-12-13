@@ -57,13 +57,25 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'generateCandidates':
           // Don't await - run asynchronously so other messages can be processed
-          this.handleGenerateCandidates(data.prompt, data.modelId).catch(error => {
+          this.handleGenerateCandidates(
+            data.prompt,
+            data.modelId,
+            data.positiveExamples ?? [],
+            data.negativeExamples ?? []
+          ).catch(error => {
             logger.error(error, 'Error in handleGenerateCandidates');
           });
           break;
         case 'refineCandidates':
           // Don't await - run asynchronously so other messages can be processed
-          this.handleRefineCandidates(data.prompt, data.modelId, data.modelChanged, data.previousModelId).catch(error => {
+          this.handleRefineCandidates(
+            data.prompt,
+            data.modelId,
+            data.modelChanged,
+            data.previousModelId,
+            data.positiveExamples ?? [],
+            data.negativeExamples ?? []
+          ).catch(error => {
             logger.error(error, 'Error in handleRefineCandidates');
           });
           break;
@@ -75,6 +87,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'vote':
           this.handleVote(data.acceptedWord);
+          break;
+        case 'classifyExample':
+          await this.handleClassifyExample(data.word, data.classification);
           break;
         case 'reset':
           this.handleReset(data.preserveClassifications);
@@ -156,7 +171,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleGenerateCandidates(prompt: string, modelId?: string) {
+  private async handleGenerateCandidates(
+    prompt: string,
+    modelId?: string,
+    positiveExamples: string[] = [],
+    negativeExamples: string[] = []
+  ) {
     try {
       const modelDescription = await this.getModelDescription(modelId);
       const statusMessage = modelDescription
@@ -406,7 +426,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       await this.controller.generateCandidates(prompt, seeds, equivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
         this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
-      });
+      }, positiveExamples, negativeExamples);
       
       // Check cancellation before sending results
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -562,7 +582,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private async handleClassifyWord(word: string, classification: string) {
     try {
       logger.info(`handleClassifyWord called: word="${word}" (length: ${word.length}), classification="${classification}"`);
-      
+
       const classificationEnum = classification as WordClassification;
       this.controller.classifyWord(word, classificationEnum);
       
@@ -607,6 +627,32 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.sendMessage({
         type: 'error',
         message: `Error classifying word: ${error}`
+      });
+    }
+  }
+
+  private async handleClassifyExample(word: string, classification: string) {
+    try {
+      const classificationEnum = classification as WordClassification;
+      this.controller.classifyExampleWord(word, classificationEnum);
+
+      const status = this.controller.getStatus();
+      const state = this.controller.getState();
+
+      if (state === PickState.FINAL_RESULT) {
+        await this.handleFinalResult();
+        return;
+      }
+
+      this.sendMessage({
+        type: 'classificationUpdated',
+        status
+      });
+    } catch (error) {
+      logger.error(error, 'Error classifying example word');
+      this.sendMessage({
+        type: 'error',
+        message: `Error classifying example word: ${error}`
       });
     }
   }
@@ -710,7 +756,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleRefineCandidates(prompt: string, modelId?: string, modelChanged?: boolean, previousModelId?: string) {
+  private async handleRefineCandidates(
+    prompt: string,
+    modelId?: string,
+    modelChanged?: boolean,
+    previousModelId?: string,
+    positiveExamples: string[] = [],
+    negativeExamples: string[] = []
+  ) {
     try {
       // Log revision type
       if (modelChanged && previousModelId) {
@@ -973,7 +1026,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       await this.controller.refineCandidates(prompt, seeds, equivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
         this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
-      });
+      }, positiveExamples, negativeExamples);
       
       // Check cancellation before sending results
       if (this.cancellationTokenSource?.token.isCancellationRequested) {

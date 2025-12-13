@@ -99,6 +99,51 @@
     </div>
   </div>
 
+  <div id="examplesCard" class="examples-card collapsed" aria-label="Optional examples to test the regex">
+    <button id="examplesToggle" class="examples-card__header" type="button" aria-expanded="false">
+      <div>
+        <div class="examples-label">Examples</div>
+        <div class="examples-subtitle">Vote on a word to pre-test your regex.</div>
+      </div>
+      <div class="examples-header-actions">
+        <div class="examples-header-badge" aria-hidden="true">Optional</div>
+        <span class="examples-toggle-icon" aria-hidden="true">▸</span>
+      </div>
+    </button>
+
+      <div class="examples-body" aria-label="Example entry and votes">
+      <div class="example-entry-row">
+        <input
+          type="text"
+          id="exampleInput"
+          class="example-text-input"
+          placeholder="Type a word"
+          aria-label="Type a word to upvote or downvote"
+        />
+        <div class="examples-vote-buttons word-actions">
+          <button id="upvoteExampleBtn" class="btn accept example-vote-btn" type="button" title="Should match" aria-label="Mark example as should match">
+            <span aria-hidden="true" class="vote-chevron">▲</span>
+          </button>
+          <button id="downvoteExampleBtn" class="btn reject example-vote-btn" type="button" title="Should not match" aria-label="Mark example as should not match">
+            <span aria-hidden="true" class="vote-chevron">▼</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="examples-grid">
+        <div class="examples-column">
+          <div class="examples-label positive">Upvoted</div>
+          <div class="examples-chip-row" id="positiveExamplesList" aria-live="polite"></div>
+        </div>
+
+        <div class="examples-column">
+          <div class="examples-label negative">Downvoted</div>
+          <div class="examples-chip-row" id="negativeExamplesList" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
         <!-- Voting Section -->
         <div id="votingSection" class="section hidden">

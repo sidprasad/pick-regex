@@ -217,6 +217,222 @@
             position: relative;
         }
 
+        .examples-card {
+            margin-top: 14px;
+            padding: 0;
+            background: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .examples-card.collapsed .examples-body {
+            display: none;
+        }
+
+        .examples-card__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 14px;
+            gap: 8px;
+            background: color-mix(in srgb, var(--vscode-panel-border) 35%, var(--vscode-editor-background));
+            border: none;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .examples-card__header:hover {
+            background: color-mix(in srgb, var(--vscode-input-background) 70%, var(--vscode-editor-background));
+        }
+
+        .examples-subtitle {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .examples-header-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .examples-header-badge {
+            background: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .examples-toggle-icon {
+            display: inline-block;
+            transition: transform 0.1s ease-in-out;
+        }
+
+        .examples-card:not(.collapsed) .examples-toggle-icon {
+            transform: rotate(90deg);
+        }
+
+        .examples-body {
+            padding: 0 14px 14px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .examples-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .examples-column {
+            flex: 1;
+            min-width: 260px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            background: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
+            padding: 10px;
+        }
+
+        .examples-label {
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--vscode-foreground);
+        }
+
+        .examples-label.positive {
+            color: var(--pick-accept-color);
+        }
+
+        .examples-label.negative {
+            color: var(--pick-reject-color);
+        }
+
+        .example-text-input {
+            flex: 1;
+            padding: 8px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            height: 34px;
+        }
+
+        .examples-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-height: 28px;
+        }
+
+        .examples-chip-row.empty::before {
+            content: 'No examples yet';
+            color: var(--vscode-descriptionForeground);
+            font-size: 12px;
+        }
+
+        .example-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            background: color-mix(in srgb, var(--pick-accept-color) 16%, var(--vscode-badge-background));
+            color: var(--pick-accept-color);
+            border-radius: 12px;
+            font-size: 12px;
+            border: 1px solid color-mix(in srgb, var(--pick-accept-color) 32%, transparent);
+        }
+
+        .example-chip.negative {
+            background: color-mix(in srgb, var(--pick-reject-color) 20%, var(--vscode-badge-background));
+            color: var(--pick-reject-color);
+            border: 1px solid color-mix(in srgb, var(--pick-reject-color) 35%, transparent);
+        }
+
+        .chip-remove-btn {
+            border: none;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            padding: 0 2px;
+            height: auto;
+        }
+
+        .examples-hint {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .example-entry-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            background: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
+        }
+
+        .examples-vote-buttons {
+            display: inline-flex;
+            gap: 8px;
+        }
+
+        .example-vote-btn {
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--vscode-input-border);
+            background: var(--vscode-editor-background);
+        }
+
+        .example-vote-btn:hover,
+        .example-vote-btn:focus-visible {
+            background: var(--vscode-list-hoverBackground);
+            outline: none;
+        }
+
+        .example-vote-btn .vote-chevron {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .vote-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--vscode-button-border, transparent);
+            background: color-mix(in srgb, var(--vscode-button-secondaryBackground) 75%, transparent);
+            color: var(--vscode-button-secondaryForeground);
+            cursor: pointer;
+        }
+
+        .vote-btn .codicon {
+            font-size: 14px;
+        }
+
+        .vote-btn.positive {
+            background: color-mix(in srgb, var(--pick-accept-color) 18%, var(--vscode-button-secondaryBackground));
+            color: var(--pick-accept-color);
+        }
+
+        .vote-btn.negative {
+            background: color-mix(in srgb, var(--pick-reject-color) 18%, var(--vscode-button-secondaryBackground));
+            color: var(--pick-reject-color);
+        }
+
         .prompt-actions {
             display: inline-flex;
             align-items: center;
