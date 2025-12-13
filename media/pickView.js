@@ -25,6 +25,7 @@
         const inlineCancelBtn = document.getElementById('inlineCancelBtn');
         const errorSection = document.getElementById('errorSection');
         const literalToggle = document.getElementById('literalToggle');
+        const literalIndicator = document.getElementById('literalIndicator');
         const showCandidatesToggle = document.getElementById('showCandidatesToggle');
         const displayOptionsBtn = document.getElementById('displayOptionsBtn');
         const displayOptionsMenu = document.getElementById('displayOptionsMenu');
@@ -136,8 +137,11 @@
         const wordsIn = document.getElementById('wordsIn');
         const wordsOut = document.getElementById('wordsOut');
 
-        // Track literal mode state (off by default)
-        let literalMode = false;
+        // Track literal mode state (persisted; default off)
+        const savedLiteralMode = typeof viewState.literalMode === 'boolean'
+            ? viewState.literalMode
+            : (literalToggle ? literalToggle.checked : false);
+        let literalMode = savedLiteralMode;
         // Track diff view state (off by default)
         let diffMode = false;
 
@@ -152,6 +156,30 @@
         // Initialize body data attributes
         document.body.setAttribute('data-literal-mode', literalMode.toString());
         document.body.setAttribute('data-diff-mode', diffMode.toString());
+
+        function updateLiteralModeUI() {
+            document.body.setAttribute('data-literal-mode', literalMode.toString());
+            if (literalToggle) {
+                literalToggle.checked = literalMode;
+            }
+            const menuRow = document.getElementById('literalMenuRow');
+            if (menuRow) {
+                menuRow.setAttribute('aria-checked', literalMode ? 'true' : 'false');
+            }
+            if (literalIndicator) {
+                if (literalMode) {
+                    literalIndicator.classList.remove('hidden');
+                    literalIndicator.setAttribute('aria-hidden', 'false');
+                } else {
+                    literalIndicator.classList.add('hidden');
+                    literalIndicator.setAttribute('aria-hidden', 'true');
+                }
+            }
+            viewState = { ...viewState, literalMode };
+            vscode.setState(viewState);
+        }
+
+        updateLiteralModeUI();
 
         function persistViewState() {
             viewState = { ...viewState, promptHistory: promptHistory.slice(0, 5) };
@@ -580,14 +608,15 @@
         }
 
         function toLiteralString(str) {
-            return str
-                .replace(/\n/g, '¶')
-                .replace(/\r/g, '¶')
+            const normalized = String(str ?? '').replace(/\r\n/g, '\n');
+            return normalized
+                .replace(/\r/g, '↵')
+                .replace(/\n/g, '↵')
                 .replace(/\t/g, '→')
-                .replace(/ /g, '␣')
+                .replace(/ /g, '·')
                 .replace(/\u00A0/g, '⍽')
-                .replace(/\f/g, '↡')
-                .replace(/\v/g, '↓')
+                .replace(/\f/g, '␌')
+                .replace(/\v/g, '␋')
                 .replace(/\0/g, '␀')
                 .replace(/\\/g, '⧹')
                 .replace(/"/g, '"')
@@ -900,11 +929,7 @@
         if (literalToggle) {
             literalToggle.addEventListener('change', function() {
                 literalMode = literalToggle.checked;
-                document.body.setAttribute('data-literal-mode', literalMode.toString());
-                const menuRow = document.getElementById('literalMenuRow');
-                if (menuRow) {
-                    menuRow.setAttribute('aria-checked', literalMode ? 'true' : 'false');
-                }
+                updateLiteralModeUI();
                 // Re-render current pair if one exists
                 if (lastPair && lastStatus) {
                     showWordPair(lastPair, lastStatus);

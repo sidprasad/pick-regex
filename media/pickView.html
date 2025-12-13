@@ -114,11 +114,14 @@
                         <!-- simpler gear: use emoji for consistent rendering across themes -->
                         <span aria-hidden="true" style="font-size:16px; line-height:1;">⚙️</span>
                     </button>
+                    <span id="literalIndicator" class="literal-indicator hidden" role="status" aria-live="polite" aria-hidden="true">
+                        Whitespace disambiguation on (· → ↵ ⍽)
+                    </span>
                     <div id="displayOptionsMenu" class="display-menu hidden" role="menu" aria-label="Display options">
-                        <label id="literalMenuRow" class="menu-row" role="menuitemcheckbox" aria-checked="true">
-                            <input type="checkbox" id="literalToggle" checked
+                        <label id="literalMenuRow" class="menu-row" role="menuitemcheckbox" aria-checked="false">
+                            <input type="checkbox" id="literalToggle"
                                 aria-label="Literal mode — visualize whitespace and control characters">
-                            <span>Literal mode — visualize whitespace &amp; control characters</span>
+                            <span>Whitespace disambiguation (literal mode) — show whitespace &amp; control characters</span>
                         </label>
                         <label id="diffMenuRow" class="menu-row" role="menuitemcheckbox" aria-checked="false">
                             <input type="checkbox" id="diffToggle" aria-label="Show diff between words (off by default)">

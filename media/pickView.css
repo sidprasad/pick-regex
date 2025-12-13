@@ -1230,6 +1230,38 @@
             display: none;
         }
 
+        .literal-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 6px;
+            padding: 3px 8px;
+            border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 80%, transparent);
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--vscode-editorWidget-background, var(--vscode-input-background)) 65%, transparent);
+            color: var(--vscode-descriptionForeground);
+            font-size: 11px;
+            line-height: 1.2;
+        }
+
+        .literal-indicator.hidden {
+            display: none !important;
+        }
+
+        .literal-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 16px;
+            padding: 0 5px;
+            border-radius: 999px;
+            background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+            color: var(--vscode-editor-foreground);
+            font-family: monospace;
+            font-weight: 600;
+            line-height: 1.1;
+        }
+
         .history-menu {
             position: absolute;
             right: 0;
