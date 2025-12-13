@@ -306,9 +306,9 @@ suite('PickController Test Suite', () => {
     assert.ok(numberCandidate);
 
     assert.strictEqual(letterCandidate?.positiveVotes, 1, 'Positive refinement example should reward matching candidates');
-    assert.ok((numberCandidate?.negativeVotes ?? 0) >= 1, 'Negative and missed positive examples should penalize the number pattern');
+    assert.strictEqual(numberCandidate?.negativeVotes, 1, 'Negative refinement example should penalize matching candidates');
     assert.strictEqual(status.wordHistory.length, 2, 'Refinement examples should be added to history');
-    assert.strictEqual(numberCandidate?.eliminated, true, 'Penalized candidate should be eliminated when reaching threshold');
+    assert.strictEqual(numberCandidate?.eliminated, false, 'Refinement examples should not eliminate candidates on a single vote');
   });
 
   test('Should apply preserved classifications to new candidates during refinement', async () => {

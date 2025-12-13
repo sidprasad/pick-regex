@@ -175,7 +175,11 @@ export class PickController {
     logger.info(`Applying ${accepted.length} positive and ${rejected.length} negative user-provided example(s).`);
 
     for (const word of accepted) {
-      const matchingRegexes = this.applyClassification(word, WordClassification.ACCEPT);
+      const matchingRegexes = this.applyClassification(
+        word,
+        WordClassification.ACCEPT,
+        /* penalizeAcceptMisses */ false
+      );
       this.usedWords.add(word);
       this.wordHistory.push({
         word,
@@ -445,10 +449,11 @@ export class PickController {
 
     // Replay all classifications
     for (const record of this.wordHistory) {
+      const penalizeAcceptMisses = !(record.fromExample && record.classification === WordClassification.ACCEPT);
       record.matchingRegexes = this.applyClassification(
         record.word,
         record.classification,
-        true
+        penalizeAcceptMisses
       );
     }
 
