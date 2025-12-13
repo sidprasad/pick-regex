@@ -120,14 +120,11 @@
             exampleInput.value = '';
             renderExamples();
 
-            const shouldClassifyImmediately = lastStatus && lastStatus.totalCandidates > 0;
-            if (shouldClassifyImmediately) {
-                vscode.postMessage({
-                    type: 'classifyExample',
-                    word: value,
-                    classification: isPositive ? 'accept' : 'reject'
-                });
-            }
+            vscode.postMessage({
+                type: 'classifyExample',
+                word: value,
+                classification: isPositive ? 'accept' : 'reject'
+            });
         }
 
         function getPositiveExamples() {
