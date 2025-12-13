@@ -12,12 +12,31 @@
             /* make classification icons larger by default so Up/Down are prominent */
             --pick-icon-size: 18px;
             --pick-icon-stroke: 2.4;
+            /* regex highlighting surfaces */
+            --pick-regex-surface: var(--vscode-textCodeBlock-background,
+                    color-mix(in srgb, var(--vscode-editor-background, #0f0f0f) 88%, var(--vscode-editor-foreground, #d4d4d4) 12%));
+            --pick-regex-border: color-mix(in srgb, var(--vscode-editor-foreground, #d4d4d4) 16%, transparent);
+            --pick-regex-foreground: var(--vscode-editor-foreground);
+            --pick-regex-muted: var(--vscode-descriptionForeground);
+            --pick-regex-char: var(--vscode-charts-purple,
+                    color-mix(in srgb, var(--pick-regex-foreground) 45%, #bb80b3 55%));
+            --pick-regex-keyword: var(--vscode-symbolIcon-keywordForeground,
+                    color-mix(in srgb, var(--pick-regex-foreground) 52%, #c586c0 48%));
+            --pick-regex-number: var(--vscode-symbolIcon-numberForeground,
+                    color-mix(in srgb, var(--pick-regex-foreground) 58%, #0e639c 42%));
+            --pick-regex-escape: var(--vscode-charts-yellow,
+                    color-mix(in srgb, var(--pick-regex-foreground) 58%, #cca700 42%));
+            --pick-regex-variable: var(--vscode-charts-blue,
+                    color-mix(in srgb, var(--pick-regex-foreground) 55%, #0078d4 45%));
         }
 
         body.vscode-light {
             /* Light themes need more body to the highlight and a subtle outline */
             --pick-diff-bg: color-mix(in srgb, var(--vscode-editor-selectionBackground, #cfe8ff) 90%, white);
             --pick-diff-border: color-mix(in srgb, var(--vscode-editor-foreground, #1a1a1a) 20%, transparent);
+            --pick-regex-surface: color-mix(in srgb, var(--vscode-textCodeBlock-background, #ffffff) 82%, white 18%);
+            --pick-regex-border: color-mix(in srgb, var(--vscode-editor-foreground, #1a1a1a) 12%, transparent);
+            --pick-regex-muted: color-mix(in srgb, var(--vscode-descriptionForeground, #616161) 86%, var(--vscode-editor-foreground, #1a1a1a) 14%);
         }
 
         body.vscode-high-contrast,
@@ -26,6 +45,8 @@
             --pick-diff-bg: color-mix(in srgb, var(--vscode-editor-background, transparent) 36%, transparent);
             --pick-diff-border: var(--vscode-contrastActiveBorder, var(--vscode-foreground));
             --pick-diff-text: var(--vscode-editor-foreground);
+            --pick-regex-surface: color-mix(in srgb, var(--vscode-editor-background, transparent) 40%, transparent);
+            --pick-regex-border: var(--vscode-contrastActiveBorder, var(--vscode-foreground));
         }
 
         body {
@@ -582,6 +603,16 @@
             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
         }
 
+        .candidate-pattern code.regex-syntax {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 5px;
+            background: var(--pick-regex-surface);
+            border: 1px solid var(--pick-regex-border);
+            color: var(--pick-regex-foreground);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pick-regex-foreground) 4%, transparent);
+        }
+
         .candidate-info {
             margin-top: 4px;
             padding: 8px;
@@ -711,11 +742,13 @@
             font-size: 1.5em;
             font-family: monospace;
             padding: 15px;
-            background: var(--vscode-textCodeBlock-background);
-            border-radius: 4px;
+            background: var(--pick-regex-surface);
+            border: 1px solid var(--pick-regex-border);
+            border-radius: 6px;
             margin: 15px 0;
             overflow-x: auto;
             white-space: nowrap;
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pick-regex-foreground) 4%, transparent);
         }
 
         .examples {
@@ -1316,13 +1349,13 @@
             line-height: 1.35;
             white-space: pre;
             background: transparent;
-            color: var(--vscode-editor-foreground);
+            color: var(--pick-regex-foreground);
         }
 
         /* Prism token theming for regex */
         .regex-syntax .token.char-class,
         .regex-syntax .token.char-set {
-            color: var(--vscode-charts-purple, #bb80b3);
+            color: var(--pick-regex-char);
         }
 
         .regex-syntax .token.char-class-negation,
@@ -1332,30 +1365,30 @@
         .regex-syntax .token.keyword,
         .regex-syntax .token.anchor,
         .regex-syntax .token.alternation {
-            color: var(--vscode-symbolIcon-keywordForeground, #c586c0);
+            color: var(--pick-regex-keyword);
             font-weight: 600;
         }
 
         .regex-syntax .token.quantifier,
         .regex-syntax .token.number {
-            color: var(--vscode-symbolIcon-numberForeground, #0e639c);
+            color: var(--pick-regex-number);
             font-weight: 600;
         }
 
         .regex-syntax .token.escape,
         .regex-syntax .token.special-escape {
-            color: var(--vscode-charts-yellow, #cca700);
+            color: var(--pick-regex-escape);
         }
 
         .regex-syntax .token.variable,
         .regex-syntax .token.group-name,
         .regex-syntax .token.backreference {
-            color: var(--vscode-charts-blue, #0078d4);
+            color: var(--pick-regex-variable);
             font-weight: 600;
         }
 
         .regex-syntax .token.punctuation {
-            color: var(--vscode-descriptionForeground);
+            color: var(--pick-regex-muted);
         }
 
         /* Ensure copy buttons and icons are visible in light themes */
