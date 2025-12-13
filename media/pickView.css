@@ -659,6 +659,116 @@
             line-height: 1;
         }
 
+        .candidate-tablist {
+            display: flex;
+            gap: 6px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+        }
+
+        .candidate-tab {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--vscode-foreground);
+            padding: 6px 10px;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .candidate-tab.active {
+            border-color: var(--vscode-panel-border);
+            border-bottom-color: transparent;
+            background: var(--vscode-editor-background);
+        }
+
+        .candidate-panels {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .candidate-tabpanel {
+            display: none;
+        }
+
+        .candidate-tabpanel.active {
+            display: block;
+        }
+
+        .candidate-item--winner {
+            border: 2px solid var(--pick-accept-color);
+            background: color-mix(in srgb, var(--pick-accept-color) 10%, var(--pick-regex-surface));
+        }
+
+        .btn--winner {
+            border: 1px solid var(--pick-accept-color);
+        }
+
+        .candidate-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .relationship-legend {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 6px;
+        }
+
+        .relationship-card {
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+            background: var(--pick-regex-surface);
+        }
+
+        .relationship-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .relationship-label {
+            font-weight: 600;
+            color: var(--vscode-foreground);
+        }
+
+        .relationship-patterns {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            font-family: monospace;
+        }
+
+        .relationship-arrow {
+            opacity: 0.7;
+        }
+
+        .relationship-detail {
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 6px;
+        }
+
+        .relationship-counts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 6px;
+            font-size: 12px;
+        }
+
+        .relationship-empty {
+            color: var(--vscode-descriptionForeground);
+            font-style: italic;
+        }
+
 
         .equivalent-toggle {
             padding: 6px 8px;

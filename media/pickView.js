@@ -1158,14 +1158,14 @@
                     statusCancelBtn.classList.add('hidden');
                     generateBtn.classList.remove('hidden');
                     statusBar.classList.add('hidden');
-                    updateCandidates(message.candidates, 2);
+                    updateCandidates(message.candidates, message.threshold, message.candidateRelationships);
                     break;
                 case 'candidatesRefined':
                     inlineCancelBtn.classList.add('hidden');
                     statusCancelBtn.classList.add('hidden');
                     generateBtn.classList.remove('hidden');
                     statusBar.classList.add('hidden');
-                    updateCandidates(message.candidates, 2);
+                    updateCandidates(message.candidates, message.threshold, message.candidateRelationships);
                     break;
                 case 'newPair':
                     classifiedWords.clear();
@@ -1356,7 +1356,7 @@
             statusBar.classList.add('hidden');
             
             showSection('voting');
-            updateCandidates(candidates, status.threshold);
+            updateCandidates(candidates, status.threshold, status.candidateRelationships);
             updateWordHistory(status.wordHistory);
 
             wordPair.innerHTML = '<div style="text-align: center; padding: 20px; background: var(--vscode-inputValidation-warningBackground); border: 1px solid var(--vscode-inputValidation-warningBorder); border-radius: 4px;">' +
@@ -1434,139 +1434,71 @@
             return { button: infoBtn, panel: infoPanel };
         }
 
-        function updateCandidates(candidates, threshold) {
-            candidatesList.innerHTML = '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">' +
-                '<h4 style="margin:0">Regex Candidates</h4>' +
-                '<button id="candidatesHelpBtn" class="icon-btn" title="Where do these candidates come from?" aria-haspopup="dialog" aria-controls="candidatesHelpModal">?</button>' +
-                '</div>';
-            
-            const helpBtn = document.getElementById('candidatesHelpBtn');
-            if (helpBtn) {
-                helpBtn.onclick = function() {
-                    const modal = document.getElementById('candidatesHelpModal');
-                    const overlay = document.getElementById('candidatesHelpOverlay');
-                    const closeBtn = document.getElementById('candidatesHelpClose');
-                    if (modal) {
-                        modal.classList.remove('hidden');
-                    }
-                    if (closeBtn) {
-                        closeBtn.focus();
-                    }
-                    if (overlay) {
-                        overlay.onclick = function() { modal.classList.add('hidden'); };
-                    }
-                    if (closeBtn) {
-                        closeBtn.onclick = function() { modal.classList.add('hidden'); };
-                    }
-                };
-            }
 
-            if (threshold !== undefined) {
-                const thresholdDiv = document.createElement('div');
-                thresholdDiv.className = 'threshold-info';
-                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative votes';
-                candidatesList.appendChild(thresholdDiv);
-            }
+        function buildCandidatesHelpButton() {
+            const helpBtn = document.createElement('button');
+            helpBtn.className = 'icon-btn';
+            helpBtn.title = 'Where do these candidates come from?';
+            helpBtn.setAttribute('aria-haspopup', 'dialog');
+            helpBtn.setAttribute('aria-controls', 'candidatesHelpModal');
+            helpBtn.textContent = '?';
 
-            candidates.forEach(function(c) {
-                const div = document.createElement('div');
-                div.className = 'candidate-item ' + (c.eliminated ? 'eliminated' : 'active');
-
-                const header = document.createElement('div');
-                header.className = 'candidate-header';
-
-                const patternSpan = document.createElement('span');
-                patternSpan.className = 'candidate-pattern';
-                patternSpan.innerHTML = highlightRegex(c.pattern);
-
-                const votesContainer = document.createElement('div');
-                votesContainer.className = 'candidate-votes';
-                votesContainer.style.cssText = 'display:flex; gap:8px; align-items:center;';
-
-                const copyBtn = document.createElement('button');
-                copyBtn.className = 'btn copy';
-                copyBtn.setAttribute('data-pattern', encodeURIComponent(c.pattern));
-                copyBtn.setAttribute('title', 'Copy regex');
-                copyBtn.onclick = function() { copyRegex(decodeURIComponent(this.getAttribute('data-pattern'))); };
-                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                    '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
-                    '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
-                    '</svg>';
-
-                const info = createCandidateInfo(c);
-
-                const posBadge = document.createElement('span');
-                posBadge.className = 'badge positive';
-                posBadge.textContent = '✓ ' + c.positiveVotes;
-
-                const negBadge = document.createElement('span');
-                negBadge.className = 'badge negative';
-                negBadge.textContent = '✗ ' + c.negativeVotes;
-
-                votesContainer.appendChild(copyBtn);
-                votesContainer.appendChild(posBadge);
-                votesContainer.appendChild(negBadge);
-
-                header.appendChild(patternSpan);
-                header.appendChild(votesContainer);
-                div.appendChild(header);
-
-                const equivalents = createEquivalentSection(c.equivalents);
-                if (equivalents) {
-                    votesContainer.appendChild(equivalents.toggle);
-                    div.appendChild(equivalents.list);
+            helpBtn.onclick = function() {
+                const modal = document.getElementById('candidatesHelpModal');
+                const overlay = document.getElementById('candidatesHelpOverlay');
+                const closeBtn = document.getElementById('candidatesHelpClose');
+                if (modal) {
+                    modal.classList.remove('hidden');
                 }
-
-                if (info) {
-                    votesContainer.appendChild(info.button);
-                    div.appendChild(info.panel);
+                if (closeBtn) {
+                    closeBtn.focus();
                 }
+                if (overlay) {
+                    overlay.onclick = function() { modal.classList.add('hidden'); };
+                }
+                if (closeBtn) {
+                    closeBtn.onclick = function() { modal.classList.add('hidden'); };
+                }
+            };
 
-                candidatesList.appendChild(div);
-            });
+            return helpBtn;
         }
 
-        function updateCandidatesWithWinner(candidates, threshold, winnerRegex) {
-            candidatesList.innerHTML = '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">' +
-                '<h4 style="margin:0">Regex Candidates</h4>' +
-                '<button id="candidatesHelpBtn" class="icon-btn" title="Where do these candidates come from?" aria-haspopup="dialog" aria-controls="candidatesHelpModal">?</button>' +
-                '</div>';
-            
-            const helpBtn = document.getElementById('candidatesHelpBtn');
+        function buildCandidateSectionHeader(titleText) {
+            const header = document.createElement('div');
+            header.className = 'candidate-section-header';
+
+            const title = document.createElement('h4');
+            title.style.margin = '0';
+            title.textContent = titleText;
+            header.appendChild(title);
+
+            const helpBtn = buildCandidatesHelpButton();
             if (helpBtn) {
-                helpBtn.onclick = function() {
-                    const modal = document.getElementById('candidatesHelpModal');
-                    const overlay = document.getElementById('candidatesHelpOverlay');
-                    const closeBtn = document.getElementById('candidatesHelpClose');
-                    if (modal) {
-                        modal.classList.remove('hidden');
-                    }
-                    if (closeBtn) {
-                        closeBtn.focus();
-                    }
-                    if (overlay) {
-                        overlay.onclick = function() { modal.classList.add('hidden'); };
-                    }
-                    if (closeBtn) {
-                        closeBtn.onclick = function() { modal.classList.add('hidden'); };
-                    }
-                };
+                header.appendChild(helpBtn);
             }
+
+            return header;
+        }
+
+        function renderCandidateList(panel, candidates, threshold, winnerRegex) {
+            panel.innerHTML = '';
+            panel.appendChild(buildCandidateSectionHeader('Regex Candidates'));
 
             if (threshold !== undefined) {
                 const thresholdDiv = document.createElement('div');
                 thresholdDiv.className = 'threshold-info';
                 thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative votes';
-                candidatesList.appendChild(thresholdDiv);
+                panel.appendChild(thresholdDiv);
             }
 
             candidates.forEach(function(c) {
-                const isWinner = c.pattern === winnerRegex;
+                const isWinner = winnerRegex && c.pattern === winnerRegex;
                 const div = document.createElement('div');
                 div.className = 'candidate-item ' + (c.eliminated ? 'eliminated' : 'active');
 
                 if (isWinner) {
-                    div.style.cssText = 'border: 2px solid var(--pick-accept-color); background: var(--vscode-list-activeSelectionBackground);';
+                    div.classList.add('candidate-item--winner');
                 }
 
                 const header = document.createElement('div');
@@ -1588,7 +1520,7 @@
                 copyBtn.setAttribute('title', 'Copy regex');
                 copyBtn.onclick = function() { copyRegex(decodeURIComponent(this.getAttribute('data-pattern'))); };
                 if (isWinner) {
-                    copyBtn.style.border = '1px solid var(--pick-accept-color)';
+                    copyBtn.classList.add('btn--winner');
                 }
                 copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
                     '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
@@ -1598,7 +1530,7 @@
                 const posVoteBadge = document.createElement('span');
                 posVoteBadge.className = 'badge positive';
                 posVoteBadge.textContent = '✓ ' + c.positiveVotes;
-                
+
                 const negVoteBadge = document.createElement('span');
                 negVoteBadge.className = 'badge negative';
                 negVoteBadge.textContent = '✗ ' + c.negativeVotes;
@@ -1619,12 +1551,175 @@
                     votesDiv.appendChild(info.button);
                     div.appendChild(info.panel);
                 }
-                candidatesList.appendChild(div);
+                panel.appendChild(div);
             });
         }
 
+        function describeRelationship(relation) {
+            switch (relation) {
+                case 'equivalent':
+                    return { label: '≡ Equivalent', description: 'Both regexes appear to match the same language.' };
+                case 'subset':
+                    return { label: '⊂ Subset', description: 'Everything matched by the first regex is also matched by the second.' };
+                case 'superset':
+                    return { label: '⊃ Superset', description: 'The first regex accepts everything the second does, and more.' };
+                case 'overlap':
+                    return { label: '⋂ Overlap', description: 'Both regexes have their own matches but also share some.' };
+                default:
+                    return { label: 'Unknown', description: 'The relationship could not be determined (too complex or timed out).' };
+            }
+        }
+
+        function formatRelationshipCount(count) {
+            if (typeof count !== 'string' || count.length === 0) {
+                return 'Unknown';
+            }
+
+            if (count === '0') {
+                return '0';
+            }
+
+            if (count.length > 6) {
+                return `≥ ${count}`;
+            }
+
+            return count;
+        }
+
+        function renderRelationshipsPanel(panel, relationships) {
+            panel.innerHTML = '';
+            panel.appendChild(buildCandidateSectionHeader('Set Relationships'));
+
+            if (!Array.isArray(relationships) || relationships.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'relationship-empty';
+                empty.textContent = 'Relationships will appear once we compare the candidates.';
+                panel.appendChild(empty);
+                return;
+            }
+
+            const legend = document.createElement('div');
+            legend.className = 'relationship-legend';
+            legend.textContent = 'Set relationships are estimated from pairwise comparisons between candidates.';
+            panel.appendChild(legend);
+
+            relationships.forEach(function(rel) {
+                const card = document.createElement('div');
+                card.className = 'relationship-card';
+
+                const summary = document.createElement('div');
+                summary.className = 'relationship-summary';
+                const description = describeRelationship(rel.relation);
+                const label = document.createElement('span');
+                label.className = 'relationship-label';
+                label.textContent = description.label;
+
+                const patterns = document.createElement('div');
+                patterns.className = 'relationship-patterns';
+                patterns.innerHTML = `${highlightRegex(rel.a)} <span class="relationship-arrow">↔</span> ${highlightRegex(rel.b)}`;
+
+                summary.appendChild(label);
+                summary.appendChild(patterns);
+                card.appendChild(summary);
+
+                const detail = document.createElement('div');
+                detail.className = 'relationship-detail';
+                detail.textContent = description.description;
+                card.appendChild(detail);
+
+                if (rel.countANotB || rel.countBNotA) {
+                    const counts = document.createElement('div');
+                    counts.className = 'relationship-counts';
+                    counts.innerHTML =
+                        `<div><strong>A \ B:</strong> ${formatRelationshipCount(rel.countANotB)}</div>` +
+                        `<div><strong>B \ A:</strong> ${formatRelationshipCount(rel.countBNotA)}</div>`;
+                    card.appendChild(counts);
+                }
+
+                panel.appendChild(card);
+            });
+        }
+
+        function updateCandidates(candidates, threshold, relationships, winnerRegex) {
+            if (!candidatesList) {
+                return;
+            }
+
+            const rels = Array.isArray(relationships) ? relationships : [];
+
+            candidatesList.innerHTML = '';
+
+            const tablist = document.createElement('div');
+            tablist.className = 'candidate-tablist';
+            tablist.setAttribute('role', 'tablist');
+
+            const listTab = document.createElement('button');
+            listTab.className = 'candidate-tab active';
+            listTab.type = 'button';
+            listTab.setAttribute('role', 'tab');
+            listTab.setAttribute('aria-selected', 'true');
+            listTab.textContent = 'Candidates';
+
+            const relationshipsTab = document.createElement('button');
+            relationshipsTab.className = 'candidate-tab';
+            relationshipsTab.type = 'button';
+            relationshipsTab.setAttribute('role', 'tab');
+            relationshipsTab.setAttribute('aria-selected', 'false');
+            relationshipsTab.textContent = 'Set relationships';
+
+            tablist.appendChild(listTab);
+            tablist.appendChild(relationshipsTab);
+
+            const panels = document.createElement('div');
+            panels.className = 'candidate-panels';
+
+            const listPanel = document.createElement('div');
+            listPanel.id = 'candidateListPanel';
+            listPanel.className = 'candidate-tabpanel active';
+            listPanel.setAttribute('role', 'tabpanel');
+            listPanel.setAttribute('aria-hidden', 'false');
+
+            const relationshipsPanel = document.createElement('div');
+            relationshipsPanel.id = 'candidateRelationshipsPanel';
+            relationshipsPanel.className = 'candidate-tabpanel';
+            relationshipsPanel.setAttribute('role', 'tabpanel');
+            relationshipsPanel.setAttribute('aria-hidden', 'true');
+
+            renderCandidateList(listPanel, candidates, threshold, winnerRegex);
+            renderRelationshipsPanel(relationshipsPanel, rels);
+
+            panels.appendChild(listPanel);
+            panels.appendChild(relationshipsPanel);
+
+            const tabs = [
+                { button: listTab, panel: listPanel },
+                { button: relationshipsTab, panel: relationshipsPanel }
+            ];
+
+            function activateTab(targetPanel) {
+                tabs.forEach(({ button, panel }) => {
+                    const isActive = panel === targetPanel;
+                    panel.classList.toggle('active', isActive);
+                    panel.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+                    button.classList.toggle('active', isActive);
+                    button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                });
+            }
+
+            listTab.addEventListener('click', () => activateTab(listPanel));
+            relationshipsTab.addEventListener('click', () => activateTab(relationshipsPanel));
+
+            candidatesList.appendChild(tablist);
+            candidatesList.appendChild(panels);
+        }
+
+        function updateCandidatesWithWinner(candidates, threshold, winnerRegex, relationships) {
+            updateCandidates(candidates, threshold, relationships, winnerRegex);
+        }
+
+
         function updateStatus(status) {
-            updateCandidates(status.candidateDetails, status.threshold);
+            updateCandidates(status.candidateDetails, status.threshold, status.candidateRelationships);
             updateWordHistory(status.wordHistory);
             const fallbackMatches = lastPairMatches && lastPair
                 ? new Map([
@@ -1666,7 +1761,7 @@
             closeMatchPopovers();
 
             showSection('voting');
-            updateCandidates(status.candidateDetails, status.threshold);
+            updateCandidates(status.candidateDetails, status.threshold, status.candidateRelationships);
             updateWordHistory(status.wordHistory);
             showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
 
@@ -1988,7 +2083,7 @@
                 '</div>';
 
             if (status) {
-                updateCandidatesWithWinner(status.candidateDetails, status.threshold, regex);
+                updateCandidatesWithWinner(status.candidateDetails, status.threshold, regex, status.candidateRelationships);
                 updateWordHistory(status.wordHistory);
             }
 

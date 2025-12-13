@@ -785,20 +785,55 @@ suite('PickController Test Suite', () => {
     test('Should report used words count correctly', async () => {
       const patterns = ['[a-z]+', '[0-9]+'];
       await controller.generateCandidates('test', patterns);
-      
+
       const pair1 = await controller.generateNextPair();
       controller.classifyWord(pair1.word1, WordClassification.ACCEPT);
       controller.classifyWord(pair1.word2, WordClassification.REJECT);
       controller.clearCurrentPair();
-      
+
       const statusAfter1 = controller.getStatus();
       assert.strictEqual(statusAfter1.usedWords, 2);
-      
+
       const pair2 = await controller.generateNextPair();
       controller.classifyWord(pair2.word1, WordClassification.ACCEPT);
-      
+
       const statusAfter2 = controller.getStatus();
       assert.ok(statusAfter2.usedWords >= 3);
+    });
+  });
+
+  suite('Candidate relationships', () => {
+    test('captures subset and superset relationships between candidates', async () => {
+      const patterns = ['[a-z]+', '[a-z0-9]+', '[0-9]+'];
+      await controller.generateCandidates('relationships test', patterns);
+
+      const relationships = controller.getStatus().candidateRelationships;
+      assert.ok(Array.isArray(relationships), 'candidateRelationships should be an array');
+      assert.ok(relationships.length > 0, 'candidateRelationships should contain pairwise results');
+
+      const letterVsAlnum = relationships.find(rel =>
+        (rel.a === '[a-z]+' && rel.b === '[a-z0-9]+') ||
+        (rel.a === '[a-z0-9]+' && rel.b === '[a-z]+')
+      );
+
+      assert.ok(letterVsAlnum, 'Should include comparison between letter and alphanumeric regexes');
+      if (letterVsAlnum?.a === '[a-z]+') {
+        assert.strictEqual(letterVsAlnum.relation, 'subset');
+      } else if (letterVsAlnum) {
+        assert.strictEqual(letterVsAlnum.relation, 'superset');
+      }
+
+      const alnumVsDigits = relationships.find(rel =>
+        (rel.a === '[a-z0-9]+' && rel.b === '[0-9]+') ||
+        (rel.a === '[0-9]+' && rel.b === '[a-z0-9]+')
+      );
+
+      assert.ok(alnumVsDigits, 'Should include comparison between alphanumeric and digit regexes');
+      if (alnumVsDigits?.a === '[a-z0-9]+') {
+        assert.strictEqual(alnumVsDigits.relation, 'superset');
+      } else if (alnumVsDigits) {
+        assert.strictEqual(alnumVsDigits.relation, 'subset');
+      }
     });
   });
 
