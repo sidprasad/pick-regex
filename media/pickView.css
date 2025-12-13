@@ -592,7 +592,7 @@
             opacity: 0.82;
             border-style: dashed;
             border-color: color-mix(in srgb, var(--pick-reject-color) 40%, var(--pick-regex-border));
-            background: color-mix(in srgb, var(--pick-reject-color) 12%, var(--pick-regex-surface));
+            background: color-mix(in srgb, var(--pick-regex-surface) 94%, var(--pick-reject-color) 6%);
         }
 
         .candidate-item.eliminated .candidate-pattern {
@@ -601,9 +601,7 @@
         }
 
         .candidate-item.active {
-            background: color-mix(in srgb,
-                    var(--vscode-list-activeSelectionBackground, var(--pick-regex-surface)) 45%,
-                    var(--pick-regex-surface));
+            background: var(--pick-regex-surface);
             border-color: var(--vscode-focusBorder, var(--pick-regex-border));
             /* remove heavy left accent to avoid a sidebar effect */
             border-left: none;
@@ -625,7 +623,7 @@
             padding: 8px;
             border-radius: 6px;
             border: 1px solid var(--pick-regex-border);
-            background: color-mix(in srgb, var(--pick-regex-surface) 88%, var(--vscode-editor-background, transparent));
+            background: var(--pick-regex-surface);
             color: var(--pick-regex-muted);
             font-family: var(--vscode-font-family);
             line-height: 1.4;
