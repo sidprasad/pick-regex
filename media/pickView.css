@@ -348,6 +348,24 @@
             gap: 8px;
         }
 
+        .example-vote-btn {
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--vscode-input-border);
+            background: var(--vscode-editor-background);
+        }
+
+        .example-vote-btn:hover,
+        .example-vote-btn:focus-visible {
+            background: var(--vscode-list-hoverBackground);
+            outline: none;
+        }
+
+        .example-vote-btn .vote-chevron {
+            font-size: 18px;
+            line-height: 1;
+        }
+
         .vote-btn {
             display: inline-flex;
             align-items: center;

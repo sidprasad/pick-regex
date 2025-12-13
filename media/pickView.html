@@ -111,7 +111,7 @@
       </div>
     </button>
 
-    <div class="examples-body" aria-label="Example entry and votes">
+      <div class="examples-body" aria-label="Example entry and votes">
       <div class="example-entry-row">
         <input
           type="text"
@@ -120,14 +120,12 @@
           placeholder="Type a word"
           aria-label="Type a word to upvote or downvote"
         />
-        <div class="examples-vote-buttons">
-          <button id="upvoteExampleBtn" class="vote-btn positive" type="button" title="Upvote: should match">
-            <span class="codicon codicon-thumbsup" aria-hidden="true"></span>
-            <span class="btn-label">Upvote</span>
+        <div class="examples-vote-buttons word-actions">
+          <button id="upvoteExampleBtn" class="btn accept example-vote-btn" type="button" title="Should match" aria-label="Mark example as should match">
+            <span aria-hidden="true" class="vote-chevron">▲</span>
           </button>
-          <button id="downvoteExampleBtn" class="vote-btn negative" type="button" title="Downvote: should not match">
-            <span class="codicon codicon-thumbsdown" aria-hidden="true"></span>
-            <span class="btn-label">Downvote</span>
+          <button id="downvoteExampleBtn" class="btn reject example-vote-btn" type="button" title="Should not match" aria-label="Mark example as should not match">
+            <span aria-hidden="true" class="vote-chevron">▼</span>
           </button>
         </div>
       </div>
