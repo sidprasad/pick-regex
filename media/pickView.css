@@ -3,12 +3,29 @@
             --pick-accept-color: var(--vscode-charts-blue, #0078d4);
             --pick-reject-color: var(--vscode-charts-orange, #f59e0b);
             --pick-muted-color: var(--vscode-descriptionForeground);
-            --pick-diff-bg: var(--vscode-diffEditor-insertedTextBackground, var(--vscode-editor-selectionBackground, rgba(0, 120, 212, 0.28)));
-            --pick-diff-border: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder, color-mix(in srgb, var(--pick-diff-bg) 70%, transparent)));
+            --pick-diff-bg: var(--vscode-diffEditor-insertedTextBackground,
+                    color-mix(in srgb, var(--vscode-editor-selectionBackground, #cfe8ff) 82%, transparent));
+            --pick-diff-border: var(--vscode-contrastActiveBorder,
+                    var(--vscode-focusBorder,
+                        color-mix(in srgb, var(--vscode-editor-foreground, #1a1a1a) 18%, var(--pick-diff-bg) 65%)));
             --pick-diff-text: var(--vscode-editor-foreground);
             /* make classification icons larger by default so Up/Down are prominent */
             --pick-icon-size: 18px;
             --pick-icon-stroke: 2.4;
+        }
+
+        body.vscode-light {
+            /* Light themes need more body to the highlight and a subtle outline */
+            --pick-diff-bg: color-mix(in srgb, var(--vscode-editor-selectionBackground, #cfe8ff) 90%, white);
+            --pick-diff-border: color-mix(in srgb, var(--vscode-editor-foreground, #1a1a1a) 20%, transparent);
+        }
+
+        body.vscode-high-contrast,
+        body.vscode-high-contrast-light {
+            /* Avoid washed-out fills and lean on contrast borders for HC themes */
+            --pick-diff-bg: color-mix(in srgb, var(--vscode-editor-background, transparent) 36%, transparent);
+            --pick-diff-border: var(--vscode-contrastActiveBorder, var(--vscode-foreground));
+            --pick-diff-text: var(--vscode-editor-foreground);
         }
 
         body {
