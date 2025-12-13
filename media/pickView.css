@@ -3,6 +3,9 @@
             --pick-accept-color: var(--vscode-charts-blue, #0078d4);
             --pick-reject-color: var(--vscode-charts-orange, #f59e0b);
             --pick-muted-color: var(--vscode-descriptionForeground);
+            --pick-diff-bg: var(--vscode-diffEditor-insertedTextBackground, var(--vscode-editor-selectionBackground, rgba(0, 120, 212, 0.28)));
+            --pick-diff-border: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder, color-mix(in srgb, var(--pick-diff-bg) 70%, transparent)));
+            --pick-diff-text: var(--vscode-editor-foreground);
             /* make classification icons larger by default so Up/Down are prominent */
             --pick-icon-size: 18px;
             --pick-icon-stroke: 2.4;
@@ -1119,14 +1122,24 @@
 
         /* Highlight differences between the two presented words */
         .diff-chunk {
-            background: var(--vscode-editor-selectionBackground, rgba(255, 200, 0, 0.22));
-            color: inherit;
-            border-radius: 3px;
-            padding: 0 1px;
+            background: var(--pick-diff-bg);
+            color: var(--pick-diff-text);
+            border-radius: 4px;
+            padding: 0 2px;
+            outline: 1px solid var(--pick-diff-border);
+            outline-offset: 1px;
         }
 
         .same-chunk {
-            color: inherit;
+            color: var(--pick-diff-text);
+        }
+
+        @media (forced-colors: active) {
+            .diff-chunk {
+                background: Highlight;
+                color: HighlightText;
+                outline: 1px solid Highlight;
+            }
         }
 
         .toggle-switch {
