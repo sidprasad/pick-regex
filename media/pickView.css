@@ -508,7 +508,9 @@
         }
 
         .btn.copy {
-            color: var(--vscode-foreground);
+            color: var(--pick-regex-foreground);
+            background: color-mix(in srgb, var(--pick-regex-surface) 86%, transparent);
+            border-color: var(--pick-regex-border);
         }
 
         .status-bar {
@@ -559,14 +561,16 @@
         .candidate-item {
             padding: 8px;
             margin: 6px 0;
-            background: var(--vscode-editor-background);
-            border: 1px solid var(--vscode-panel-border);
+            background: var(--pick-regex-surface);
+            border: 1px solid var(--pick-regex-border);
             border-radius: 6px;
             font-family: monospace;
             display: flex;
             flex-direction: column;
             align-items: stretch;
             gap: 6px;
+            color: var(--pick-regex-foreground);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pick-regex-foreground) 3%, transparent);
         }
 
         .candidate-header {
@@ -587,8 +591,8 @@
         .candidate-item.eliminated {
             opacity: 0.82;
             border-style: dashed;
-            border-color: color-mix(in srgb, var(--pick-reject-color) 45%, var(--vscode-panel-border));
-            background: color-mix(in srgb, var(--pick-reject-color) 12%, var(--vscode-editor-background));
+            border-color: color-mix(in srgb, var(--pick-reject-color) 40%, var(--pick-regex-border));
+            background: color-mix(in srgb, var(--pick-reject-color) 12%, var(--pick-regex-surface));
         }
 
         .candidate-item.eliminated .candidate-pattern {
@@ -597,10 +601,13 @@
         }
 
         .candidate-item.active {
-            background: var(--vscode-list-activeSelectionBackground);
+            background: color-mix(in srgb,
+                    var(--vscode-list-activeSelectionBackground, var(--pick-regex-surface)) 45%,
+                    var(--pick-regex-surface));
+            border-color: var(--vscode-focusBorder, var(--pick-regex-border));
             /* remove heavy left accent to avoid a sidebar effect */
             border-left: none;
-            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pick-regex-foreground) 6%, transparent);
         }
 
         .candidate-pattern code.regex-syntax {
@@ -617,9 +624,9 @@
             margin-top: 4px;
             padding: 8px;
             border-radius: 6px;
-            border: 1px solid var(--vscode-panel-border);
-            background: var(--vscode-input-background);
-            color: var(--vscode-descriptionForeground);
+            border: 1px solid var(--pick-regex-border);
+            background: color-mix(in srgb, var(--pick-regex-surface) 88%, var(--vscode-editor-background, transparent));
+            color: var(--pick-regex-muted);
             font-family: var(--vscode-font-family);
             line-height: 1.4;
         }
@@ -639,7 +646,7 @@
         }
 
         .candidate-info strong {
-            color: var(--vscode-foreground);
+            color: var(--pick-regex-foreground);
         }
 
         .candidate-info-btn {
@@ -1391,22 +1398,24 @@
             color: var(--pick-regex-muted);
         }
 
-        /* Ensure copy buttons and icons are visible in light themes */
+        /* Ensure copy buttons and icons stay visible against the code surface */
         .candidate-header .icon-btn,
         .regex-display .icon-btn {
-            color: var(--vscode-icon-foreground, var(--vscode-foreground));
-            opacity: 0.8;
+            color: var(--pick-regex-foreground);
+            background: color-mix(in srgb, var(--pick-regex-foreground) 6%, transparent);
+            border-color: var(--pick-regex-border);
+            opacity: 0.9;
         }
 
         .candidate-header .icon-btn:hover,
         .regex-display .icon-btn:hover {
             opacity: 1;
-            background: var(--vscode-toolbar-hoverBackground);
+            background: color-mix(in srgb, var(--pick-regex-foreground) 12%, transparent);
         }
 
         .candidate-header .codicon,
         .regex-display .codicon {
-            color: var(--vscode-icon-foreground, var(--vscode-foreground));
+            color: var(--pick-regex-foreground);
         }
 
         /* Modal styles */
