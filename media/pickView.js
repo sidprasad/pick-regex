@@ -36,6 +36,8 @@
         const recentPromptsBtn = document.getElementById('recentPromptsBtn');
         const recentPromptsMenu = document.getElementById('recentPromptsMenu');
         const recentPromptList = document.getElementById('recentPromptList');
+        const diffIndicator = document.getElementById('diffIndicator');
+        const candidatesIndicator = document.getElementById('candidatesIndicator');
 
         // Model selector elements
         const modelSelect = document.getElementById('modelSelect');
@@ -143,7 +145,7 @@
             : (literalToggle ? literalToggle.checked : false);
         let literalMode = savedLiteralMode;
         // Track diff view state (off by default)
-        let diffMode = false;
+        let diffMode = diffToggle ? diffToggle.checked : false;
 
         // Keep last shown pair/status for re-rendering when toggles change
         let lastPair = null;
@@ -179,7 +181,53 @@
             vscode.setState(viewState);
         }
 
+        function updateDiffModeUI() {
+            document.body.setAttribute('data-diff-mode', diffMode.toString());
+            const menuRow = document.getElementById('diffMenuRow');
+            if (menuRow) {
+                menuRow.setAttribute('aria-checked', diffMode ? 'true' : 'false');
+            }
+            if (diffIndicator) {
+                if (diffMode) {
+                    diffIndicator.classList.remove('hidden');
+                    diffIndicator.setAttribute('aria-hidden', 'false');
+                } else {
+                    diffIndicator.classList.add('hidden');
+                    diffIndicator.setAttribute('aria-hidden', 'true');
+                }
+            }
+        }
+
+        function updateCandidatesUI(showCandidates) {
+            const show = typeof showCandidates === 'boolean' ? showCandidates : (showCandidatesToggle ? showCandidatesToggle.checked : true);
+            if (showCandidatesToggle) {
+                showCandidatesToggle.checked = show;
+            }
+            if (candidatesList) {
+                if (show) {
+                    candidatesList.classList.remove('hidden');
+                } else {
+                    candidatesList.classList.add('hidden');
+                }
+            }
+            const menuRow = document.getElementById('showCandidatesMenuRow');
+            if (menuRow) {
+                menuRow.setAttribute('aria-checked', show ? 'true' : 'false');
+            }
+            if (candidatesIndicator) {
+                if (show) {
+                    candidatesIndicator.classList.add('hidden');
+                    candidatesIndicator.setAttribute('aria-hidden', 'true');
+                } else {
+                    candidatesIndicator.classList.remove('hidden');
+                    candidatesIndicator.setAttribute('aria-hidden', 'false');
+                }
+            }
+        }
+
         updateLiteralModeUI();
+        updateDiffModeUI();
+        updateCandidatesUI();
 
         function persistViewState() {
             viewState = { ...viewState, promptHistory: promptHistory.slice(0, 5) };
@@ -938,20 +986,9 @@
         }
 
         if (showCandidatesToggle) {
-            if (!showCandidatesToggle.checked) {
-                candidatesList.classList.add('hidden');
-            }
             showCandidatesToggle.addEventListener('change', function() {
                 const show = showCandidatesToggle.checked;
-                if (show) {
-                    candidatesList.classList.remove('hidden');
-                } else {
-                    candidatesList.classList.add('hidden');
-                }
-                const menuRow = document.getElementById('showCandidatesMenuRow');
-                if (menuRow) {
-                    menuRow.setAttribute('aria-checked', show ? 'true' : 'false');
-                }
+                updateCandidatesUI(show);
                 // Re-render current pair if one exists
                 if (lastPair && lastStatus) {
                     showWordPair(lastPair, lastStatus);
@@ -966,11 +1003,7 @@
             }
             diffToggle.addEventListener('change', function() {
                 diffMode = diffToggle.checked;
-                document.body.setAttribute('data-diff-mode', diffMode.toString());
-                const menuRow = document.getElementById('diffMenuRow');
-                if (menuRow) {
-                    menuRow.setAttribute('aria-checked', diffMode ? 'true' : 'false');
-                }
+                updateDiffModeUI();
                 // Re-render current pair if one exists
                 if (lastPair && lastStatus) {
                     showWordPair(lastPair, lastStatus);
@@ -985,21 +1018,33 @@
             });
         }
 
-        if (displayOptionsBtn && displayOptionsMenu) {
-            displayOptionsBtn.addEventListener('click', function(e) {
-                const isOpen = !displayOptionsMenu.classList.contains('hidden');
-                if (isOpen) {
-                    displayOptionsMenu.classList.add('hidden');
-                    displayOptionsBtn.setAttribute('aria-expanded', 'false');
-                } else {
-                    displayOptionsMenu.classList.remove('hidden');
-                    displayOptionsBtn.setAttribute('aria-expanded', 'true');
-                    const cb = displayOptionsMenu.querySelector('input[type="checkbox"]');
-                    if (cb) {
-                        cb.focus();
-                    }
+        const displayButtons = displayOptionsBtn ? [displayOptionsBtn] : [];
+
+        function setDisplayMenuState(open) {
+            if (!displayOptionsMenu) {
+                return;
+            }
+            if (open) {
+                displayOptionsMenu.classList.remove('hidden');
+            } else {
+                displayOptionsMenu.classList.add('hidden');
+            }
+            displayButtons.forEach(btn => btn.setAttribute('aria-expanded', open ? 'true' : 'false'));
+            if (open) {
+                const cb = displayOptionsMenu.querySelector('input[type="checkbox"]');
+                if (cb) {
+                    cb.focus();
                 }
-                e.stopPropagation();
+            }
+        }
+
+        if (displayButtons.length && displayOptionsMenu) {
+            displayButtons.forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    const isOpen = !displayOptionsMenu.classList.contains('hidden');
+                    setDisplayMenuState(!isOpen);
+                    e.stopPropagation();
+                });
             });
 
             window.addEventListener('click', function(ev) {
@@ -1007,9 +1052,8 @@
 
                 if (!displayOptionsMenu.classList.contains('hidden') &&
                     !displayOptionsMenu.contains(target) &&
-                    target !== displayOptionsBtn) {
-                    displayOptionsMenu.classList.add('hidden');
-                    displayOptionsBtn.setAttribute('aria-expanded', 'false');
+                    !displayButtons.some(btn => btn.contains(target))) {
+                    setDisplayMenuState(false);
                 }
 
                 if (recentPromptsMenu && !recentPromptsMenu.classList.contains('hidden') &&
@@ -1037,9 +1081,11 @@
                         return;
                     }
                     if (!displayOptionsMenu.classList.contains('hidden')) {
-                        displayOptionsMenu.classList.add('hidden');
-                        displayOptionsBtn.setAttribute('aria-expanded', 'false');
-                        displayOptionsBtn.focus();
+                        setDisplayMenuState(false);
+                        const focusTarget = displayButtons[0];
+                        if (focusTarget) {
+                            focusTarget.focus();
+                        }
                         return;
                     }
                     if (recentPromptsMenu && !recentPromptsMenu.classList.contains('hidden')) {

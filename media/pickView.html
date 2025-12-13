@@ -14,14 +14,14 @@
     <!--SPLASH_HTML_PLACEHOLDER-->
     <div class="container">
         <!-- Status Bar (global - shown during LLM operations) -->
-        <div id="statusBar" class="status-bar hidden">
-            <div id="statusMessage" class="status-message"></div>
-            <div class="status-actions">
-                <button id="reportIssueBtn" class="icon-btn small" title="Report an issue" aria-label="Report an issue">
-                    <span class="codicon codicon-bug" aria-hidden="true"></span>
-                    <span class="btn-label">Report Issue</span>
-                </button>
-                <button id="statusCancelBtn" class="icon-btn small stop-btn hidden" title="Cancel generation" aria-label="Cancel generation">
+            <div id="statusBar" class="status-bar hidden">
+                <div id="statusMessage" class="status-message"></div>
+                <div class="status-actions">
+                    <button id="reportIssueBtn" class="icon-btn small" title="Report an issue" aria-label="Report an issue">
+                        <span class="codicon codicon-bug" aria-hidden="true"></span>
+                        <span class="btn-label">Report Issue</span>
+                    </button>
+                    <button id="statusCancelBtn" class="icon-btn small stop-btn hidden" title="Cancel generation" aria-label="Cancel generation">
                     <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M7 7 L17 17 M17 7 L7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
                     </svg>
@@ -114,8 +114,35 @@
                         <!-- simpler gear: use emoji for consistent rendering across themes -->
                         <span aria-hidden="true" style="font-size:16px; line-height:1;">⚙️</span>
                     </button>
-                    <span id="literalIndicator" class="literal-indicator hidden" role="status" aria-live="polite" aria-hidden="true">
-                        Whitespace disambiguation on (· → ↵ ⍽)
+                    <span
+                        id="literalIndicator"
+                        class="literal-indicator hidden"
+                        role="status"
+                        aria-live="polite"
+                        aria-hidden="true"
+                        title="Whitespace disambiguation on (shows whitespace/control symbols)"
+                        aria-label="Whitespace disambiguation on">
+                        → ↵
+                    </span>
+                    <span
+                        id="diffIndicator"
+                        class="literal-indicator hidden"
+                        role="status"
+                        aria-live="polite"
+                        aria-hidden="true"
+                        title="Diff view on"
+                        aria-label="Diff view on">
+                        Diff
+                    </span>
+                    <span
+                        id="candidatesIndicator"
+                        class="literal-indicator hidden"
+                        role="status"
+                        aria-live="polite"
+                        aria-hidden="true"
+                        title="Candidates list hidden"
+                        aria-label="Candidates list hidden">
+                        Candidates hidden
                     </span>
                     <div id="displayOptionsMenu" class="display-menu hidden" role="menu" aria-label="Display options">
                         <label id="literalMenuRow" class="menu-row" role="menuitemcheckbox" aria-checked="false">
