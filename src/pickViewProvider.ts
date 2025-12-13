@@ -18,9 +18,20 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly extensionUri: vscode.Uri,
-    private readonly surveyPrompt: SurveyPrompt
+    private readonly surveyPrompt: SurveyPrompt,
+    private readonly globalState: vscode.Memento
   ) {
     this.controller = new PickController();
+  }
+
+  private readonly preferredModelKey = 'pick.preferredModelId';
+
+  private getPreferredModelId(): string | undefined {
+    return this.globalState.get<string>(this.preferredModelKey);
+  }
+
+  private async setPreferredModelId(modelId?: string) {
+    await this.globalState.update(this.preferredModelKey, modelId);
   }
 
   public resolveWebviewView(
@@ -97,6 +108,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'checkModels':
           await this.checkAvailableModels();
           break;
+        case 'modelSelected':
+          await this.setPreferredModelId(data.modelId);
+          break;
         case 'reportIssue':
           try {
             await openIssueReport();
@@ -115,7 +129,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private async checkAvailableModels() {
     try {
       const models = await getAvailableChatModels();
-      
+      const preferredModelId = this.getPreferredModelId();
+
       if (models.length === 0) {
         logger.warn('No language models available on startup');
         this.sendMessage({
@@ -124,9 +139,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         });
       } else {
         logger.info(`Found ${models.length} available language model(s): ${models.map(m => m.name).join(', ')}`);
+        const availableIds = models.map(m => m.id);
+        const selectedModelId = (preferredModelId && availableIds.includes(preferredModelId))
+          ? preferredModelId
+          : models[0].id;
+        await this.setPreferredModelId(selectedModelId);
+
         this.sendMessage({
           type: 'modelsAvailable',
-          models: models
+          models: models,
+          preferredModelId: selectedModelId
         });
       }
     } catch (error) {
@@ -1251,7 +1273,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
    * Clear any persisted webview state (prompt history, splash acknowledgement).
    * Invoked by the reset command so the splash and history reset alongside global storage.
    */
-  public resetLocalWebviewState() {
+  public async resetLocalWebviewState() {
+    await this.setPreferredModelId(undefined);
     this.sendMessage({ type: 'resetLocalState' });
   }
 

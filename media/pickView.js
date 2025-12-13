@@ -78,6 +78,13 @@
         let selectedModelId = '';
         let previousModelId = '';
 
+        function updateSelectedModel(modelId) {
+            selectedModelId = modelId || '';
+            if (selectedModelId) {
+                vscode.postMessage({ type: 'modelSelected', modelId: selectedModelId });
+            }
+        }
+
         function hideSplash() {
             if (splashScreen) {
                 splashScreen.classList.add('hidden');
@@ -119,7 +126,7 @@
         // Handle model selection change
         if (modelSelect) {
             modelSelect.addEventListener('change', function() {
-                selectedModelId = modelSelect.value;
+                updateSelectedModel(modelSelect.value);
             });
         }
         
@@ -229,34 +236,49 @@
         /**
          * Update the model selector dropdown with available models
          */
-        function updateModelSelector(models) {
+        function updateModelSelector(models, preferredModelId) {
             availableModels = models;
             if (!modelSelect) {
                 return;
             }
-            
+
+            const previousSelection = selectedModelId;
             modelSelect.innerHTML = '';
-            
+
             if (models.length === 0) {
                 const option = document.createElement('option');
                 option.value = '';
                 option.textContent = 'No models available';
                 modelSelect.appendChild(option);
                 modelSelect.disabled = true;
+                selectedModelId = '';
                 return;
             }
-            
+
             modelSelect.disabled = false;
-            models.forEach(function(model, index) {
+            const preferredAvailable = preferredModelId && models.some(model => model.id === preferredModelId);
+            const currentAvailable = selectedModelId && models.some(model => model.id === selectedModelId);
+            const modelToSelect = preferredAvailable
+                ? preferredModelId
+                : (currentAvailable ? selectedModelId : models[0].id);
+
+            models.forEach(function(model) {
                 const option = document.createElement('option');
                 option.value = model.id;
                 option.textContent = model.name;
-                if (index === 0) {
+                if (model.id === modelToSelect) {
                     option.selected = true;
-                    selectedModelId = model.id;
                 }
                 modelSelect.appendChild(option);
             });
+
+            if (modelToSelect) {
+                if (modelToSelect !== previousSelection) {
+                    updateSelectedModel(modelToSelect);
+                } else {
+                    selectedModelId = modelToSelect;
+                }
+            }
         }
 
         /**
@@ -400,7 +422,7 @@
                         modelChanged: modelChanged,
                         previousModelId: previousModelId
                     });
-                    selectedModelId = newModelId;
+                    updateSelectedModel(newModelId);
                     previousModelId = newModelId;
                     showSection('loading');
                 }
@@ -472,7 +494,7 @@
                             modelChanged: modelChanged,
                             previousModelId: previousModelId
                         });
-                        selectedModelId = newModelId;
+                        updateSelectedModel(newModelId);
                         previousModelId = newModelId;
                         showSection('loading');
                     }
@@ -515,7 +537,7 @@
                             modelChanged: modelChanged,
                             previousModelId: previousModelId
                         });
-                        selectedModelId = newModelId;
+                        updateSelectedModel(newModelId);
                         previousModelId = newModelId;
                         showSection('loading');
                     }
@@ -560,7 +582,7 @@
                     modelChanged: modelChanged,
                     previousModelId: previousModelId
                 });
-                selectedModelId = newModelId;
+                updateSelectedModel(newModelId);
                 previousModelId = newModelId;
                 showSection('loading');
             }
@@ -1058,7 +1080,7 @@
                 case 'modelsAvailable':
                     // Clear any previous model availability errors and populate selector
                     errorSection.classList.add('hidden');
-                    updateModelSelector(message.models);
+                    updateModelSelector(message.models, message.preferredModelId);
                     break;
                 case 'candidatesGenerated':
                     inlineCancelBtn.classList.add('hidden');

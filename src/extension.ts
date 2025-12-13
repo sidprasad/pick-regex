@@ -14,7 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const surveyPrompt = new SurveyPrompt(context);
 
 	// Register the PICK webview provider
-	const provider = new PickViewProvider(context.extensionUri, surveyPrompt);
+        const provider = new PickViewProvider(context.extensionUri, surveyPrompt, context.globalState);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(PickViewProvider.viewType, provider)
 	);
@@ -23,11 +23,11 @@ export function activate(context: vscode.ExtensionContext) {
 		await openIssueReport();
 	});
 
-	const resetSurveyCommand = vscode.commands.registerCommand('pick.resetSurveyState', async () => {
-		await surveyPrompt.resetUsageTracking();
-		provider.resetLocalWebviewState();
-		vscode.window.showInformationMessage('PICK local storage, history, and splash preference have been cleared.');
-	});
+        const resetSurveyCommand = vscode.commands.registerCommand('pick.resetSurveyState', async () => {
+                await surveyPrompt.resetUsageTracking();
+                await provider.resetLocalWebviewState();
+                vscode.window.showInformationMessage('PICK local storage, history, and splash preference have been cleared.');
+        });
 
 	context.subscriptions.push(reportIssueCommand, resetSurveyCommand);
 }
