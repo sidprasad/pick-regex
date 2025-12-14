@@ -44,6 +44,29 @@ suite('PickController Test Suite', () => {
     assert.strictEqual(controller.getState(), PickState.VOTING);
   });
 
+  test('Should reuse example classifications entered before generating candidates', async () => {
+    controller.classifyExampleWord('abc', WordClassification.ACCEPT);
+    controller.classifyExampleWord('123', WordClassification.REJECT);
+
+    const patterns = ['[a-z]+', '[0-9]+'];
+    await controller.generateCandidates('test prompt', patterns);
+
+    const status = controller.getStatus();
+    const letterCandidate = status.candidateDetails.find(c => c.pattern === '[a-z]+');
+    const numberCandidate = status.candidateDetails.find(c => c.pattern === '[0-9]+');
+
+    assert.ok(letterCandidate);
+    assert.ok(numberCandidate);
+
+    assert.strictEqual(letterCandidate?.positiveVotes, 1, 'Existing positive example should count once candidates are available');
+    assert.strictEqual(letterCandidate?.negativeVotes, 0, 'Existing positive example should not penalize non-matching patterns');
+    assert.strictEqual(numberCandidate?.negativeVotes, 1, 'Existing negative example should penalize matching candidates');
+    assert.strictEqual(numberCandidate?.positiveVotes, 0);
+
+    assert.strictEqual(status.wordHistory.length, 2, 'Existing example classifications should remain in history');
+    assert.strictEqual(controller.getState(), PickState.VOTING);
+  });
+
   test('Should classify standalone example words during voting', async () => {
     const patterns = ['[a-z]+', '[0-9]+'];
     await controller.generateCandidates('test prompt', patterns);

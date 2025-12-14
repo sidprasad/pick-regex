@@ -110,10 +110,12 @@ export class PickController {
 
     await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
 
+    const preservedExamples = this.wordHistory.filter(record => record.fromExample);
+
     this.usedWords.clear();
     this.wordHistory = [];
 
-    this.applyUserExamples(positiveExamples, negativeExamples);
+    this.applyUserExamples(positiveExamples, negativeExamples, preservedExamples);
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state.');
   }
@@ -164,39 +166,48 @@ export class PickController {
     logger.info('Transitioned to VOTING state after refinement.');
   }
 
-  private applyUserExamples(positiveExamples: string[], negativeExamples: string[]): void {
-    const accepted = positiveExamples.map(example => example.trim()).filter(example => example.length > 0);
-    const rejected = negativeExamples.map(example => example.trim()).filter(example => example.length > 0);
+  private applyUserExamples(
+    positiveExamples: string[],
+    negativeExamples: string[],
+    preservedExamples: WordClassificationRecord[] = []
+  ): void {
+    const exampleMap = new Map<string, { classification: WordClassification; timestamp: number }>();
 
-    if (accepted.length === 0 && rejected.length === 0) {
+    const addExample = (word: string, classification: WordClassification, timestamp: number = Date.now()) => {
+      const trimmed = word.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      exampleMap.set(trimmed, { classification, timestamp });
+    };
+
+    preservedExamples.forEach(record => addExample(record.word, record.classification, record.timestamp));
+    positiveExamples.forEach(example => addExample(example, WordClassification.ACCEPT));
+    negativeExamples.forEach(example => addExample(example, WordClassification.REJECT));
+
+    if (exampleMap.size === 0) {
       return;
     }
 
-    logger.info(`Applying ${accepted.length} positive and ${rejected.length} negative user-provided example(s).`);
+    logger.info(`Applying ${exampleMap.size} user-provided example(s).`);
 
-    for (const word of accepted) {
+    for (const [word, meta] of exampleMap.entries()) {
+      if (this.wordHistory.some(record => record.word === word)) {
+        continue;
+      }
+
       const matchingRegexes = this.applyClassification(
         word,
-        WordClassification.ACCEPT,
-        /* penalizeAcceptMisses */ false
+        meta.classification,
+        meta.classification !== WordClassification.ACCEPT
       );
-      this.usedWords.add(word);
-      this.wordHistory.push({
-        word,
-        classification: WordClassification.ACCEPT,
-        timestamp: Date.now(),
-        matchingRegexes,
-        fromExample: true
-      });
-    }
 
-    for (const word of rejected) {
-      const matchingRegexes = this.applyClassification(word, WordClassification.REJECT);
       this.usedWords.add(word);
       this.wordHistory.push({
         word,
-        classification: WordClassification.REJECT,
-        timestamp: Date.now(),
+        classification: meta.classification,
+        timestamp: meta.timestamp,
         matchingRegexes,
         fromExample: true
       });
@@ -246,6 +257,10 @@ export class PickController {
    * Generate the next distinguishing word pair
    */
   async generateNextPair(): Promise<WordPair> {
+    if (this.candidates.length === 0) {
+      throw new Error('No candidates available to generate pairs');
+    }
+
     const activeCandidates = this.getActiveCandidates();
     
     if (activeCandidates.length === 0) {
@@ -384,6 +399,10 @@ export class PickController {
    * Check if we should transition to final result state
    */
   private checkFinalState(): void {
+    if (this.candidates.length === 0) {
+      return;
+    }
+
     const activeCandidates = this.getActiveCandidates();
     const activeCount = activeCandidates.length;
 
