@@ -462,6 +462,29 @@ export class PickController {
   }
 
   /**
+   * Update a word in the history (when a user edits an example)
+   */
+  updateWordInHistory(index: number, newWord: string): void {
+    if (index < 0 || index >= this.wordHistory.length) {
+      throw new Error('Invalid history index');
+    }
+
+    const record = this.wordHistory[index];
+    const oldWord = record.word;
+
+    // Update the word
+    record.word = newWord;
+    record.timestamp = Date.now();
+
+    logger.info(
+      `Updated word in history from "${oldWord}" to "${newWord}" (classification: ${record.classification})`
+    );
+
+    // Recalculate votes since the word changed and may now match different candidates
+    this.recalculateVotes();
+  }
+
+  /**
    * Recalculate all votes from word history
    */
   private recalculateVotes(): void {

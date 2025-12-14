@@ -1188,6 +1188,14 @@
                 case 'classificationUpdated':
                     updateStatus(message.status);
                     break;
+                case 'exampleUpdated':
+                    // Re-render the examples with updated data
+                    renderEditableExamples(wordsIn, message.wordsIn, 'accept');
+                    renderEditableExamples(wordsOut, message.wordsOut, 'reject');
+                    if (message.status) {
+                        updateStatus(message.status);
+                    }
+                    break;
                 case 'voteProcessed':
                     updateStatus(message.status);
                     break;
@@ -1982,6 +1990,107 @@
             vscode.postMessage({ type: 'vote', acceptedWord: word });
         }
 
+        /**
+         * Create an editable example word element
+         * @param {string} word - The word to display
+         * @param {string} classification - 'accept' or 'reject'
+         * @param {number} index - Index in the array
+         * @returns {HTMLElement} The word display element
+         */
+        function createEditableExample(word, classification, index) {
+            const wordDisplay = document.createElement('div');
+            wordDisplay.className = 'word-display editable-example';
+            wordDisplay.setAttribute('data-original-word', word);
+            wordDisplay.setAttribute('data-classification', classification);
+            wordDisplay.setAttribute('data-index', index);
+            
+            const readableSpan = document.createElement('span');
+            readableSpan.className = 'word-readable example-item';
+            readableSpan.contentEditable = 'true';
+            readableSpan.spellcheck = false;
+            readableSpan.textContent = word;
+            readableSpan.setAttribute('data-word', word);
+            readableSpan.title = 'Click to edit this example';
+            
+            const literalSpan = document.createElement('span');
+            literalSpan.className = 'word-literal example-item';
+            literalSpan.textContent = toLiteralString(word);
+            literalSpan.setAttribute('data-word', word);
+            
+            // Handle editing events
+            readableSpan.addEventListener('blur', function() {
+                const newWord = this.textContent.trim();
+                const originalWord = wordDisplay.getAttribute('data-original-word');
+                
+                if (newWord && newWord !== originalWord) {
+                    // Update the literal representation
+                    literalSpan.textContent = toLiteralString(newWord);
+                    this.setAttribute('data-word', newWord);
+                    literalSpan.setAttribute('data-word', newWord);
+                    wordDisplay.setAttribute('data-original-word', newWord);
+                    
+                    // Notify extension of the change
+                    vscode.postMessage({
+                        type: 'exampleEdited',
+                        originalWord: originalWord,
+                        newWord: newWord,
+                        classification: classification
+                    });
+                } else if (!newWord) {
+                    // Restore original if empty
+                    this.textContent = originalWord;
+                }
+            });
+            
+            readableSpan.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.blur();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    const originalWord = wordDisplay.getAttribute('data-original-word');
+                    this.textContent = originalWord;
+                    this.blur();
+                }
+            });
+            
+            // Update literal display as user types
+            readableSpan.addEventListener('input', function() {
+                literalSpan.textContent = toLiteralString(this.textContent);
+            });
+            
+            wordDisplay.appendChild(readableSpan);
+            wordDisplay.appendChild(literalSpan);
+            
+            return wordDisplay;
+        }
+
+        /**
+         * Render editable examples into a container
+         * @param {HTMLElement} container - The container element
+         * @param {string[]} words - Array of words
+         * @param {string} classification - 'accept' or 'reject'
+         */
+        function renderEditableExamples(container, words, classification) {
+            container.innerHTML = '';
+            
+            if (!words || words.length === 0) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'example-item';
+                emptyDiv.style.cssText = 'opacity: 0.6; font-style: italic;';
+                emptyDiv.textContent = classification === 'accept' 
+                    ? 'No words classified as IN' 
+                    : 'No words classified as OUT';
+                container.appendChild(emptyDiv);
+                return;
+            }
+            
+            words.forEach(function(word, index) {
+                const example = createEditableExample(word, classification, index);
+                container.appendChild(example);
+            });
+        }
+
         function showFinalResultWithContext(regex, inWords, outWords, status) {
             showSection('voting');
             statusBar.classList.add('hidden');
@@ -1999,6 +2108,10 @@
                 updateCandidatesWithWinner(status.candidateDetails, status.threshold, regex);
                 updateWordHistory(status.wordHistory);
             }
+            
+            // Render editable examples
+            renderEditableExamples(wordsIn, inWords, 'accept');
+            renderEditableExamples(wordsOut, outWords, 'reject');
 
             showStatusWithoutCancel('Classification complete! Selected regex highlighted below.');
         }
@@ -2084,23 +2197,9 @@
                 detailsContainer.appendChild(item);
             });
 
-            wordsIn.innerHTML = (inWords && inWords.length > 0) 
-                ? inWords.map(function(w) {
-                    return '<div class="word-display">' +
-                        '<span class="word-readable example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + w + '</span>' +
-                        '<span class="word-literal example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + toLiteralString(w) + '</span>' +
-                        '</div>';
-                }).join('')
-                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as IN</div>';
-
-            wordsOut.innerHTML = (outWords && outWords.length > 0)
-                ? outWords.map(function(w) {
-                    return '<div class="word-display">' +
-                        '<span class="word-readable example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + w + '</span>' +
-                        '<span class="word-literal example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + toLiteralString(w) + '</span>' +
-                        '</div>';
-                }).join('')
-                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as OUT</div>';
+            // Render editable examples
+            renderEditableExamples(wordsIn, inWords, 'accept');
+            renderEditableExamples(wordsOut, outWords, 'reject');
 
             if (candidateDetails && candidateDetails.length > 0) {
                 // Remove any previously inserted candidates note to avoid duplicates
