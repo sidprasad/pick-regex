@@ -669,6 +669,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       
       if (index === -1) {
         logger.warn(`Original word "${originalWord}" not found in history`);
+        this.sendMessage({
+          type: 'error',
+          message: `Could not update example: original word "${originalWord}" not found in history.`
+        });
         return;
       }
       

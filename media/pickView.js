@@ -1994,10 +1994,9 @@
          * Create an editable example word element
          * @param {string} word - The word to display
          * @param {string} classification - 'accept' or 'reject'
-         * @param {number} index - Index in the array
          * @returns {HTMLElement} The word display element
          */
-        function createEditableExample(word, classification, index) {
+        function createEditableExample(word, classification) {
             const wordDisplay = document.createElement('div');
             wordDisplay.className = 'word-display editable-example';
             wordDisplay.setAttribute('data-original-word', word);
@@ -2022,7 +2021,21 @@
                 const newWord = this.textContent.trim();
                 const originalWord = wordDisplay.getAttribute('data-original-word');
                 
-                if (newWord && newWord !== originalWord) {
+                // Validate the edited word
+                if (newWord.length === 0) {
+                    // Restore original if empty
+                    this.textContent = originalWord;
+                    return;
+                }
+                
+                // Check for reasonable length (max 1000 chars to prevent abuse)
+                if (newWord.length > 1000) {
+                    log('warn', 'Edited word too long, reverting to original');
+                    this.textContent = originalWord;
+                    return;
+                }
+                
+                if (newWord !== originalWord) {
                     // Update the literal representation
                     literalSpan.textContent = toLiteralString(newWord);
                     this.setAttribute('data-word', newWord);
@@ -2036,9 +2049,6 @@
                         newWord: newWord,
                         classification: classification
                     });
-                } else if (!newWord) {
-                    // Restore original if empty
-                    this.textContent = originalWord;
                 }
             });
             
@@ -2085,8 +2095,8 @@
                 return;
             }
             
-            words.forEach(function(word, index) {
-                const example = createEditableExample(word, classification, index);
+            words.forEach(function(word) {
+                const example = createEditableExample(word, classification);
                 container.appendChild(example);
             });
         }
