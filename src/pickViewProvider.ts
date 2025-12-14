@@ -179,21 +179,49 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   }
 
   private collectEdgeCaseSuggestions(candidates: RegexCandidate[]): string[] {
+    const config = vscode.workspace.getConfiguration('pick');
+    const maxSuggestions = Math.min(6, Math.max(0, Math.trunc(config.get<number>('maxSuggestedEdgeCases', 2))));
+
+    if (maxSuggestions === 0) {
+      logger.info('Skipping LLM-suggested edge cases because user limit is 0.');
+      return [];
+    }
+
     const allSuggestedWords = candidates
       .flatMap(candidate => candidate.edgeCases ?? [])
       .map(word => word.trim())
       .filter(word => word.length > 0);
 
-    const unique = Array.from(new Set(allSuggestedWords)).slice(0, 4);
-    if (unique.length % 2 === 1) {
-      unique.pop();
+    const uniqueWords = Array.from(new Set(allSuggestedWords));
+
+    const candidateRegexes = Array.from(new Set(candidates.map(candidate => candidate.regex)));
+    const scoredWords = uniqueWords
+      .map((word, index) => {
+        const matches = candidateRegexes.map(regex => this.analyzer.verifyMatch(word, regex));
+        const matchCount = matches.filter(Boolean).length;
+        const nonMatchCount = matches.length - matchCount;
+
+        if (matchCount === 0 || nonMatchCount === 0) {
+          return null;
+        }
+
+        const balanceScore = Math.min(matchCount, nonMatchCount);
+        return { word, score: balanceScore, index };
+      })
+      .filter((entry): entry is { word: string; score: number; index: number } => entry !== null)
+      .sort((a, b) => b.score - a.score || a.index - b.index);
+
+    const selected = scoredWords.slice(0, maxSuggestions).map(entry => entry.word);
+
+    if (selected.length % 2 === 1) {
+      selected.pop();
     }
 
-    if (unique.length > 0) {
-      logger.info(`Collected ${unique.length} LLM-suggested edge case word(s) to classify first.`);
+    if (selected.length > 0) {
+      logger.info(`Collected ${selected.length} distinguishing LLM-suggested edge case word(s) to classify first.`);
     }
 
-    return unique;
+    return selected;
   }
 
   private async handleGenerateCandidates(prompt: string, modelId?: string) {

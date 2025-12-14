@@ -62,6 +62,7 @@ export class PickController {
   private lastActiveCandidateCount = 0;
   private maxClassifications = 50;
   private maxPairsWithoutProgress = 2;
+  private maxSuggestedEdgeCases = 2;
   private searchTimeoutMs = 2000;
   private searchPoolSize = 30;
 
@@ -72,7 +73,18 @@ export class PickController {
     this.thresholdVotes = config.get<number>('eliminationThreshold', 2);
     this.maxClassifications = config.get<number>('maxClassifications', 50);
     this.maxPairsWithoutProgress = config.get<number>('maxPairsWithoutProgress', 2);
+    this.maxSuggestedEdgeCases = this.clampSuggestedEdgeCaseLimit(
+      config.get<number>('maxSuggestedEdgeCases', 2)
+    );
     logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}`);
+  }
+
+  private clampSuggestedEdgeCaseLimit(value: number | undefined): number {
+    if (value === undefined || Number.isNaN(value)) {
+      return 2;
+    }
+
+    return Math.min(6, Math.max(0, Math.trunc(value)));
   }
 
   private prepareSuggestedWordsQueue(suggestedWords: string[]): void {
@@ -82,12 +94,14 @@ export class PickController {
         .filter(word => word.length > 0 && !this.usedWords.has(word))
     ));
 
+    const limited = unique.slice(0, this.maxSuggestedEdgeCases);
+
     // Use an even number of suggestions so we can surface them as pairs
-    if (unique.length % 2 === 1) {
-      unique.pop();
+    if (limited.length % 2 === 1) {
+      limited.pop();
     }
 
-    this.suggestedWordsQueue = unique;
+    this.suggestedWordsQueue = limited;
 
     if (this.suggestedWordsQueue.length > 0) {
       logger.info(`Loaded ${this.suggestedWordsQueue.length} LLM-suggested edge case word(s) to classify first.`);
@@ -777,6 +791,13 @@ export class PickController {
    */
   getThreshold(): number {
     return this.thresholdVotes;
+  }
+
+  /**
+   * Set the maximum number of LLM-suggested edge cases to surface
+   */
+  setMaxSuggestedEdgeCases(limit: number): void {
+    this.maxSuggestedEdgeCases = this.clampSuggestedEdgeCaseLimit(limit);
   }
 
   /**

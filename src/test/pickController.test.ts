@@ -51,6 +51,8 @@ suite('PickController Test Suite', () => {
     const patterns = ['[a-z]+', '[0-9]+'];
     const suggestedWords = ['Alpha', '123', 'edge-case', 'another edge'];
 
+    controller.setMaxSuggestedEdgeCases(4);
+
     await controller.generateCandidates('test prompt', patterns, new Map(), undefined, suggestedWords);
 
     const firstPair = await controller.generateNextPair();
@@ -58,6 +60,21 @@ suite('PickController Test Suite', () => {
 
     const secondPair = await controller.generateNextPair();
     assert.deepStrictEqual([secondPair.word1, secondPair.word2], ['edge-case', 'another edge']);
+  });
+
+  test('Should limit LLM-suggested edge cases to configured even count', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    const suggestedWords = ['one', 'two', 'three', 'four', 'five'];
+
+    controller.setMaxSuggestedEdgeCases(3);
+
+    await controller.generateCandidates('test prompt', patterns, new Map(), undefined, suggestedWords);
+
+    const queueLength = (controller as any).suggestedWordsQueue.length;
+    assert.strictEqual(queueLength, 2);
+
+    const pair = await controller.generateNextPair();
+    assert.deepStrictEqual([pair.word1, pair.word2], ['one', 'two']);
   });
 
   test('Should skip non-distinguishing LLM edge cases', async () => {
