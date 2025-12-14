@@ -647,6 +647,63 @@ suite('PickController Test Suite', () => {
       const eliminatedCount = status.candidateDetails.filter(c => c.eliminated).length;
       assert.ok(eliminatedCount > 0, 'Some candidates should be eliminated');
     });
+
+    test('Should preserve word history when all candidates are eliminated', async () => {
+      // This test ensures the fix for the bug where words in/out weren't shown
+      // when no regex was found after all candidates were eliminated
+      const patterns = ['January \\d{1,2}', 'Jan(?:uary)? \\d{1,2}'];
+      controller.setThreshold(1);
+      await controller.generateCandidates('January birthdays', patterns);
+      
+      const classifiedWords: string[] = [];
+      
+      // Classify words to eliminate all candidates
+      for (let i = 0; i < 5; i++) {
+        try {
+          const pair = await controller.generateNextPair();
+          
+          // Reject both words to eliminate candidates
+          controller.classifyWord(pair.word1, WordClassification.REJECT);
+          classifiedWords.push(pair.word1);
+          
+          controller.classifyWord(pair.word2, WordClassification.REJECT);
+          classifiedWords.push(pair.word2);
+          
+          controller.clearCurrentPair();
+          
+          // Check if all candidates are eliminated
+          const status = controller.getStatus();
+          if (status.activeCandidates === 0) {
+            break;
+          }
+        } catch (error) {
+          // Expected to fail when all candidates eliminated or no more pairs
+          break;
+        }
+      }
+      
+      // Verify that even though all candidates are eliminated,
+      // the word history is still available
+      const wordHistory = controller.getWordHistory();
+      assert.ok(wordHistory.length > 0, 'Word history should be preserved');
+      
+      // All words should be marked as REJECT
+      const rejectWords = wordHistory.filter(record => record.classification === WordClassification.REJECT);
+      assert.strictEqual(rejectWords.length, wordHistory.length, 'All words should be classified as REJECT');
+      
+      // Verify getFinalRegex returns null (no regex found)
+      const finalRegex = controller.getFinalRegex();
+      assert.strictEqual(finalRegex, null, 'Final regex should be null when all candidates eliminated');
+      
+      // Verify state is FINAL_RESULT
+      assert.strictEqual(controller.getState(), PickState.FINAL_RESULT, 'State should be FINAL_RESULT');
+      
+      // Verify all classified words are in the history
+      for (const word of classifiedWords) {
+        const found = wordHistory.some(record => record.word === word);
+        assert.ok(found, `Classified word "${word}" should be in history`);
+      }
+    });
   });
 
   suite('Word history and tracking', () => {

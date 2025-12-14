@@ -576,8 +576,12 @@
                     }
                 };
                 
-                if (cloneSubmitBtn) cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
-                if (cloneCancelBtn) cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                if (cloneSubmitBtn) {
+                    cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
+                }
+                if (cloneCancelBtn) {
+                    cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                }
                 if (cloneInput) {
                     cloneInput.addEventListener('keypress', function(e) {
                         if (e.key === 'Enter') {
@@ -619,8 +623,12 @@
                     }
                 };
                 
-                if (cloneSubmitBtn) cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
-                if (cloneCancelBtn) cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                if (cloneSubmitBtn){
+                     cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
+                }
+                if (cloneCancelBtn) {
+                    cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                }
                 if (cloneInput) {
                     cloneInput.addEventListener('keypress', function(e) {
                         if (e.key === 'Enter') {
@@ -2024,6 +2032,8 @@
             const detailsContainer = document.createElement('div');
             
             candidateDetails.forEach(function(c) {
+                const info = createCandidateInfo(c);
+                
                 const item = document.createElement('div');
                 item.className = 'candidate-item eliminated';
                 item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 6px 0; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px;';
