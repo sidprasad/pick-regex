@@ -60,6 +60,25 @@ suite('PickController Test Suite', () => {
     assert.deepStrictEqual([secondPair.word1, secondPair.word2], ['edge-case', 'another edge']);
   });
 
+  test('Should skip non-distinguishing LLM edge cases', async () => {
+    const patterns = ['\\d+', '\\d{2,}'];
+    const suggestedWords = ['123', '456'];
+
+    await controller.generateCandidates('test prompt', patterns, new Map(), undefined, suggestedWords);
+
+    const pair = await controller.generateNextPair();
+
+    const matches1 = patterns.map(pattern => new RegExp(`^${pattern}$`).test(pair.word1));
+    const matches2 = patterns.map(pattern => new RegExp(`^${pattern}$`).test(pair.word2));
+
+    const distinguishes = (matches: boolean[]) => matches.some(match => match !== matches[0]);
+
+    assert.ok(
+      distinguishes(matches1) || distinguishes(matches2),
+      'Returned pair should distinguish between candidates even when LLM suggestions do not'
+    );
+  });
+
   test('Should handle UNSURE classification without affecting votes', async () => {
     const patterns = ['[a-z]+', '[0-9]+'];
     await controller.generateCandidates('test', patterns);

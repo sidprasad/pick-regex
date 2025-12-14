@@ -94,6 +94,19 @@ export class PickController {
     }
   }
 
+  private isDistinguishingPair(word1: string, word2: string, candidates: string[]): boolean {
+    if (candidates.length < 2) {
+      return false;
+    }
+
+    const matches1 = candidates.map(candidate => this.analyzer.verifyMatch(word1, candidate));
+    const matches2 = candidates.map(candidate => this.analyzer.verifyMatch(word2, candidate));
+
+    const distinguishes = (matches: boolean[]) => matches.some(match => match !== matches[0]);
+
+    return distinguishes(matches1) || distinguishes(matches2);
+  }
+
   /**
    * Get current state
    */
@@ -217,9 +230,16 @@ export class PickController {
       throw new Error('No active candidates to generate pairs');
     }
 
-    if (this.suggestedWordsQueue.length >= 2) {
+    while (this.suggestedWordsQueue.length >= 2) {
       const word1 = this.suggestedWordsQueue.shift()!;
       const word2 = this.suggestedWordsQueue.shift()!;
+
+      if (!this.isDistinguishingPair(word1, word2, activeCandidates)) {
+        logger.info(
+          `Skipping LLM-suggested pair "${word1}" vs "${word2}" because it doesn't distinguish between candidates.`
+        );
+        continue;
+      }
 
       this.currentPair = { word1, word2 };
       this.usedWords.add(word1);
