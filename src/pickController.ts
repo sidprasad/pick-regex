@@ -51,6 +51,7 @@ export class PickController {
   private analyzer: RegexAnalyzer;
   private candidates: CandidateRegex[] = [];
   private usedWords = new Set<string>();
+  private suggestedWordsQueue: string[] = [];
   private state: PickState = PickState.INITIAL;
   private thresholdVotes = 2;
   private currentPair: WordPair | null = null;
@@ -74,6 +75,25 @@ export class PickController {
     logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}`);
   }
 
+  private prepareSuggestedWordsQueue(suggestedWords: string[]): void {
+    const unique = Array.from(new Set(
+      suggestedWords
+        .map(word => word.trim())
+        .filter(word => word.length > 0 && !this.usedWords.has(word))
+    ));
+
+    // Use an even number of suggestions so we can surface them as pairs
+    if (unique.length % 2 === 1) {
+      unique.pop();
+    }
+
+    this.suggestedWordsQueue = unique;
+
+    if (this.suggestedWordsQueue.length > 0) {
+      logger.info(`Loaded ${this.suggestedWordsQueue.length} LLM-suggested edge case word(s) to classify first.`);
+    }
+  }
+
   /**
    * Get current state
    */
@@ -88,7 +108,8 @@ export class PickController {
     prompt: string,
     candidatePatterns: Array<string | CandidateSeed>,
     equivalenceMap: Map<string, string[]> = new Map(),
-    progressCallback?: (current: number, total: number) => void
+    progressCallback?: (current: number, total: number) => void,
+    suggestedWords: string[] = []
   ): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Generating candidates for prompt: ${prompt}`);
@@ -116,6 +137,8 @@ export class PickController {
     await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
 
     this.usedWords.clear();
+    this.suggestedWordsQueue = [];
+    this.prepareSuggestedWordsQueue(suggestedWords);
     this.wordHistory = [];
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state.');
@@ -129,7 +152,8 @@ export class PickController {
     newPrompt: string,
     newCandidatePatterns: Array<string | CandidateSeed>,
     equivalenceMap: Map<string, string[]> = new Map(),
-    progressCallback?: (current: number, total: number) => void
+    progressCallback?: (current: number, total: number) => void,
+    suggestedWords: string[] = []
   ): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Refining candidates with new prompt: ${newPrompt}`);
@@ -160,6 +184,9 @@ export class PickController {
 
     await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
 
+    this.suggestedWordsQueue = [];
+    this.prepareSuggestedWordsQueue(suggestedWords);
+
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state after refinement.');
   }
@@ -185,9 +212,24 @@ export class PickController {
    */
   async generateNextPair(): Promise<WordPair> {
     const activeCandidates = this.getActiveCandidates();
-    
+
     if (activeCandidates.length === 0) {
       throw new Error('No active candidates to generate pairs');
+    }
+
+    if (this.suggestedWordsQueue.length >= 2) {
+      const word1 = this.suggestedWordsQueue.shift()!;
+      const word2 = this.suggestedWordsQueue.shift()!;
+
+      this.currentPair = { word1, word2 };
+      this.usedWords.add(word1);
+      this.usedWords.add(word2);
+
+      logger.info(
+        `Using LLM-suggested edge cases: "${word1}" vs "${word2}". Remaining suggestions: ${this.suggestedWordsQueue.length}.`
+      );
+
+      return this.currentPair;
     }
 
     // If we're making no progress, increase search parameters to find harder distinguishing words

@@ -178,6 +178,24 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private collectEdgeCaseSuggestions(candidates: RegexCandidate[]): string[] {
+    const allSuggestedWords = candidates
+      .flatMap(candidate => candidate.edgeCases ?? [])
+      .map(word => word.trim())
+      .filter(word => word.length > 0);
+
+    const unique = Array.from(new Set(allSuggestedWords)).slice(0, 4);
+    if (unique.length % 2 === 1) {
+      unique.pop();
+    }
+
+    if (unique.length > 0) {
+      logger.info(`Collected ${unique.length} LLM-suggested edge case word(s) to classify first.`);
+    }
+
+    return unique;
+  }
+
   private async handleGenerateCandidates(prompt: string, modelId?: string) {
     try {
       const modelDescription = await this.getModelDescription(modelId);
@@ -416,6 +434,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         }
       });
 
+      const suggestedWords = this.collectEdgeCaseSuggestions(validCandidates);
+
       const seeds = uniqueCandidates.map(regex => {
         const meta = candidateMeta.get(regex);
         return {
@@ -428,7 +448,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       await this.controller.generateCandidates(prompt, seeds, equivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
         this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
-      });
+      }, suggestedWords);
       
       // Check cancellation before sending results
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -983,6 +1003,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         }
       });
 
+      const suggestedWords = this.collectEdgeCaseSuggestions(validCandidates);
+
       const seeds = uniqueCandidates.map(regex => {
         const meta = candidateMeta.get(regex);
         return {
@@ -995,7 +1017,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       await this.controller.refineCandidates(prompt, seeds, equivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
         this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
-      });
+      }, suggestedWords);
       
       // Check cancellation before sending results
       if (this.cancellationTokenSource?.token.isCancellationRequested) {

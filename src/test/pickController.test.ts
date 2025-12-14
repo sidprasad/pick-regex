@@ -47,6 +47,19 @@ suite('PickController Test Suite', () => {
     assert.strictEqual(history[1].classification, WordClassification.REJECT);
   });
 
+  test('Should surface LLM-suggested edge cases before analyzer pairs', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    const suggestedWords = ['Alpha', '123', 'edge-case', 'another edge'];
+
+    await controller.generateCandidates('test prompt', patterns, new Map(), undefined, suggestedWords);
+
+    const firstPair = await controller.generateNextPair();
+    assert.deepStrictEqual([firstPair.word1, firstPair.word2], ['Alpha', '123']);
+
+    const secondPair = await controller.generateNextPair();
+    assert.deepStrictEqual([secondPair.word1, secondPair.word2], ['edge-case', 'another edge']);
+  });
+
   test('Should handle UNSURE classification without affecting votes', async () => {
     const patterns = ['[a-z]+', '[0-9]+'];
     await controller.generateCandidates('test', patterns);
