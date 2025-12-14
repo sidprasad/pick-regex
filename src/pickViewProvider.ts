@@ -84,9 +84,6 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'updateClassification':
           this.handleUpdateClassification(data.index, data.classification);
           break;
-        case 'exampleEdited':
-          this.handleExampleEdited(data.originalWord, data.newWord, data.classification);
-          break;
         case 'vote':
           this.handleVote(data.acceptedWord);
           break;
@@ -652,57 +649,6 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.sendMessage({
         type: 'error',
         message: `Error updating classification: ${error}`
-      });
-    }
-  }
-
-  /**
-   * Handle when a user edits an example word
-   */
-  private handleExampleEdited(originalWord: string, newWord: string, classification: string) {
-    try {
-      logger.info(`Example edited: "${originalWord}" -> "${newWord}" (${classification})`);
-      
-      // Find the original word in the history and update it
-      const wordHistory = this.controller.getWordHistory();
-      const index = wordHistory.findIndex(record => record.word === originalWord);
-      
-      if (index === -1) {
-        logger.warn(`Original word "${originalWord}" not found in history`);
-        this.sendMessage({
-          type: 'error',
-          message: `Could not update example: original word "${originalWord}" not found in history.`
-        });
-        return;
-      }
-      
-      // Update the word in the controller's history
-      this.controller.updateWordInHistory(index, newWord);
-      
-      // Get updated status to send back to webview
-      const status = this.controller.getStatus();
-      const updatedHistory = this.controller.getWordHistory();
-      const wordsIn = updatedHistory
-        .filter(record => record.classification === 'accept')
-        .map(record => record.word);
-      const wordsOut = updatedHistory
-        .filter(record => record.classification === 'reject')
-        .map(record => record.word);
-      
-      // Send back updated data - reuse the same message type that populated the examples
-      this.sendMessage({
-        type: 'exampleUpdated',
-        wordsIn,
-        wordsOut,
-        status
-      });
-      
-      logger.info('Example updated successfully');
-    } catch (error) {
-      logger.error(error, 'Error updating example');
-      this.sendMessage({
-        type: 'error',
-        message: `Error updating example: ${error}`
       });
     }
   }

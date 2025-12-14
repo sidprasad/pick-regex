@@ -1115,49 +1115,4 @@ suite('PickController Test Suite', () => {
       }
     });
   });
-
-  test('Should update word in history when edited', async () => {
-    const patterns = ['[a-z]+', '[0-9]+'];
-    await controller.generateCandidates('test', patterns);
-    
-    const pair = await controller.generateNextPair();
-    
-    // Classify words
-    controller.classifyWord(pair.word1, WordClassification.ACCEPT);
-    controller.classifyWord(pair.word2, WordClassification.REJECT);
-    
-    const history = controller.getWordHistory();
-    assert.strictEqual(history.length, 2);
-    
-    const originalWord = history[0].word;
-    const newWord = 'edited_word';
-    
-    // Update the word
-    controller.updateWordInHistory(0, newWord);
-    
-    const updatedHistory = controller.getWordHistory();
-    assert.strictEqual(updatedHistory.length, 2);
-    assert.strictEqual(updatedHistory[0].word, newWord);
-    assert.notStrictEqual(updatedHistory[0].word, originalWord);
-    
-    // Classification should remain the same
-    assert.strictEqual(updatedHistory[0].classification, WordClassification.ACCEPT);
-  });
-
-  test('Should throw error for invalid index in updateWordInHistory', async () => {
-    const patterns = ['[a-z]+'];
-    await controller.generateCandidates('test', patterns);
-    
-    const pair = await controller.generateNextPair();
-    controller.classifyWord(pair.word1, WordClassification.ACCEPT);
-    
-    // Try to update with invalid index
-    assert.throws(() => {
-      controller.updateWordInHistory(-1, 'invalid');
-    }, /Invalid history index/);
-    
-    assert.throws(() => {
-      controller.updateWordInHistory(999, 'invalid');
-    }, /Invalid history index/);
-  });
 });

@@ -1188,14 +1188,6 @@
                 case 'classificationUpdated':
                     updateStatus(message.status);
                     break;
-                case 'exampleUpdated':
-                    // Re-render the examples with updated data
-                    renderEditableExamples(wordsIn, message.wordsIn, 'accept');
-                    renderEditableExamples(wordsOut, message.wordsOut, 'reject');
-                    if (message.status) {
-                        updateStatus(message.status);
-                    }
-                    break;
                 case 'voteProcessed':
                     updateStatus(message.status);
                     break;
@@ -1706,18 +1698,78 @@
                 const card = document.createElement('div');
                 card.className = 'word-card';
                 card.setAttribute('data-word', word);
+                card.setAttribute('data-original-word', word);
 
                 // Create display section
                 const display = document.createElement('div');
-                display.className = 'word-display';
+                display.className = 'word-display editable-word-display';
                 
                 const readableSpan = document.createElement('span');
                 readableSpan.className = 'word-readable';
-                readableSpan.innerHTML = readable;
+                readableSpan.contentEditable = 'true';
+                readableSpan.spellcheck = false;
+                if (diffOps) {
+                    readableSpan.innerHTML = readable;
+                } else {
+                    readableSpan.textContent = word;
+                }
+                readableSpan.title = 'Click to edit this word';
                 
                 const literalSpan = document.createElement('span');
                 literalSpan.className = 'word-literal';
                 literalSpan.innerHTML = literal;
+                
+                // Handle editing events
+                let currentWord = word;
+                readableSpan.addEventListener('blur', function() {
+                    const newWord = this.textContent.trim();
+                    
+                    // Validate the edited word
+                    if (newWord.length === 0) {
+                        // Restore original if empty
+                        const originalWord = card.getAttribute('data-original-word');
+                        this.textContent = originalWord;
+                        currentWord = originalWord;
+                        literalSpan.innerHTML = toLiteralString(originalWord);
+                        return;
+                    }
+                    
+                    // Check for reasonable length (max 1000 chars to prevent abuse)
+                    if (newWord.length > 1000) {
+                        log('warn', 'Edited word too long, reverting to original');
+                        const originalWord = card.getAttribute('data-original-word');
+                        this.textContent = originalWord;
+                        currentWord = originalWord;
+                        literalSpan.innerHTML = toLiteralString(originalWord);
+                        return;
+                    }
+                    
+                    if (newWord !== currentWord) {
+                        currentWord = newWord;
+                        card.setAttribute('data-word', newWord);
+                        literalSpan.innerHTML = toLiteralString(newWord);
+                        log('info', 'Word edited from "' + card.getAttribute('data-original-word') + '" to "' + newWord + '"');
+                    }
+                });
+                
+                readableSpan.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.blur();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        const originalWord = card.getAttribute('data-original-word');
+                        this.textContent = originalWord;
+                        currentWord = originalWord;
+                        literalSpan.innerHTML = toLiteralString(originalWord);
+                        this.blur();
+                    }
+                });
+                
+                // Update literal display as user types
+                readableSpan.addEventListener('input', function() {
+                    literalSpan.innerHTML = toLiteralString(this.textContent);
+                });
                 
                 display.appendChild(readableSpan);
                 display.appendChild(literalSpan);
@@ -1726,16 +1778,16 @@
                 const actions = document.createElement('div');
                 actions.className = 'word-actions';
 
-                // Create accept button
-                const acceptBtn = createButton('accept', 'Upvote', word);
+                // Create accept button - use current word from card attribute
+                const acceptBtn = createButton('accept', 'Upvote', card);
                 acceptBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▲</span>';
 
-                // Create reject button
-                const rejectBtn = createButton('reject', 'Downvote', word);
+                // Create reject button - use current word from card attribute
+                const rejectBtn = createButton('reject', 'Downvote', card);
                 rejectBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▼</span>';
 
-                // Create unsure button
-                const unsureBtn = createButton('unsure', 'Skip', word);
+                // Create unsure button - use current word from card attribute
+                const unsureBtn = createButton('unsure', 'Skip', card);
                 unsureBtn.innerHTML = '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
                     '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
                     '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
@@ -1753,14 +1805,18 @@
 
             /**
              * Helper function to create a classification button with proper event listener
+             * @param {string} classification - The classification type
+             * @param {string} title - The button title
+             * @param {HTMLElement} card - The word card element
              */
-            function createButton(classification, title, word) {
+            function createButton(classification, title, card) {
                 const button = document.createElement('button');
                 button.className = 'btn ' + classification;
                 button.title = title;
-                // Attach event listener directly - no escaping needed!
+                // Attach event listener directly - get word from card data attribute at click time
                 button.addEventListener('click', function() {
-                    classifyWord(word, classification);
+                    const currentWord = card.getAttribute('data-word');
+                    classifyWord(currentWord, classification);
                 });
                 return button;
             }
@@ -1990,117 +2046,6 @@
             vscode.postMessage({ type: 'vote', acceptedWord: word });
         }
 
-        /**
-         * Create an editable example word element
-         * @param {string} word - The word to display
-         * @param {string} classification - 'accept' or 'reject'
-         * @returns {HTMLElement} The word display element
-         */
-        function createEditableExample(word, classification) {
-            const wordDisplay = document.createElement('div');
-            wordDisplay.className = 'word-display editable-example';
-            wordDisplay.setAttribute('data-original-word', word);
-            wordDisplay.setAttribute('data-classification', classification);
-            wordDisplay.setAttribute('data-index', index);
-            
-            const readableSpan = document.createElement('span');
-            readableSpan.className = 'word-readable example-item';
-            readableSpan.contentEditable = 'true';
-            readableSpan.spellcheck = false;
-            readableSpan.textContent = word;
-            readableSpan.setAttribute('data-word', word);
-            readableSpan.title = 'Click to edit this example';
-            
-            const literalSpan = document.createElement('span');
-            literalSpan.className = 'word-literal example-item';
-            literalSpan.textContent = toLiteralString(word);
-            literalSpan.setAttribute('data-word', word);
-            
-            // Handle editing events
-            readableSpan.addEventListener('blur', function() {
-                const newWord = this.textContent.trim();
-                const originalWord = wordDisplay.getAttribute('data-original-word');
-                
-                // Validate the edited word
-                if (newWord.length === 0) {
-                    // Restore original if empty
-                    this.textContent = originalWord;
-                    return;
-                }
-                
-                // Check for reasonable length (max 1000 chars to prevent abuse)
-                if (newWord.length > 1000) {
-                    log('warn', 'Edited word too long, reverting to original');
-                    this.textContent = originalWord;
-                    return;
-                }
-                
-                if (newWord !== originalWord) {
-                    // Update the literal representation
-                    literalSpan.textContent = toLiteralString(newWord);
-                    this.setAttribute('data-word', newWord);
-                    literalSpan.setAttribute('data-word', newWord);
-                    wordDisplay.setAttribute('data-original-word', newWord);
-                    
-                    // Notify extension of the change
-                    vscode.postMessage({
-                        type: 'exampleEdited',
-                        originalWord: originalWord,
-                        newWord: newWord,
-                        classification: classification
-                    });
-                }
-            });
-            
-            readableSpan.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    this.blur();
-                } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    const originalWord = wordDisplay.getAttribute('data-original-word');
-                    this.textContent = originalWord;
-                    this.blur();
-                }
-            });
-            
-            // Update literal display as user types
-            readableSpan.addEventListener('input', function() {
-                literalSpan.textContent = toLiteralString(this.textContent);
-            });
-            
-            wordDisplay.appendChild(readableSpan);
-            wordDisplay.appendChild(literalSpan);
-            
-            return wordDisplay;
-        }
-
-        /**
-         * Render editable examples into a container
-         * @param {HTMLElement} container - The container element
-         * @param {string[]} words - Array of words
-         * @param {string} classification - 'accept' or 'reject'
-         */
-        function renderEditableExamples(container, words, classification) {
-            container.innerHTML = '';
-            
-            if (!words || words.length === 0) {
-                const emptyDiv = document.createElement('div');
-                emptyDiv.className = 'example-item';
-                emptyDiv.style.cssText = 'opacity: 0.6; font-style: italic;';
-                emptyDiv.textContent = classification === 'accept' 
-                    ? 'No words classified as IN' 
-                    : 'No words classified as OUT';
-                container.appendChild(emptyDiv);
-                return;
-            }
-            
-            words.forEach(function(word) {
-                const example = createEditableExample(word, classification);
-                container.appendChild(example);
-            });
-        }
-
         function showFinalResultWithContext(regex, inWords, outWords, status) {
             showSection('voting');
             statusBar.classList.add('hidden');
@@ -2118,10 +2063,6 @@
                 updateCandidatesWithWinner(status.candidateDetails, status.threshold, regex);
                 updateWordHistory(status.wordHistory);
             }
-            
-            // Render editable examples
-            renderEditableExamples(wordsIn, inWords, 'accept');
-            renderEditableExamples(wordsOut, outWords, 'reject');
 
             showStatusWithoutCancel('Classification complete! Selected regex highlighted below.');
         }
@@ -2207,9 +2148,23 @@
                 detailsContainer.appendChild(item);
             });
 
-            // Render editable examples
-            renderEditableExamples(wordsIn, inWords, 'accept');
-            renderEditableExamples(wordsOut, outWords, 'reject');
+            wordsIn.innerHTML = (inWords && inWords.length > 0) 
+                ? inWords.map(function(w) {
+                    return '<div class="word-display">' +
+                        '<span class="word-readable example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + w + '</span>' +
+                        '<span class="word-literal example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + toLiteralString(w) + '</span>' +
+                        '</div>';
+                }).join('')
+                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as IN</div>';
+
+            wordsOut.innerHTML = (outWords && outWords.length > 0)
+                ? outWords.map(function(w) {
+                    return '<div class="word-display">' +
+                        '<span class="word-readable example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + w + '</span>' +
+                        '<span class="word-literal example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + toLiteralString(w) + '</span>' +
+                        '</div>';
+                }).join('')
+                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as OUT</div>';
 
             if (candidateDetails && candidateDetails.length > 0) {
                 // Remove any previously inserted candidates note to avoid duplicates
