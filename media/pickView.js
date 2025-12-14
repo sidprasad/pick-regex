@@ -1717,7 +1717,7 @@
                 
                 const literalSpan = document.createElement('span');
                 literalSpan.className = 'word-literal';
-                literalSpan.innerHTML = literal;
+                literalSpan.textContent = literal;
                 
                 // Handle editing events
                 let currentWord = word;
@@ -1730,7 +1730,7 @@
                         const originalWord = card.getAttribute('data-original-word');
                         this.textContent = originalWord;
                         currentWord = originalWord;
-                        literalSpan.innerHTML = toLiteralString(originalWord);
+                        literalSpan.textContent = toLiteralString(originalWord);
                         return;
                     }
                     
@@ -1740,14 +1740,14 @@
                         const originalWord = card.getAttribute('data-original-word');
                         this.textContent = originalWord;
                         currentWord = originalWord;
-                        literalSpan.innerHTML = toLiteralString(originalWord);
+                        literalSpan.textContent = toLiteralString(originalWord);
                         return;
                     }
                     
                     if (newWord !== currentWord) {
                         currentWord = newWord;
                         card.setAttribute('data-word', newWord);
-                        literalSpan.innerHTML = toLiteralString(newWord);
+                        literalSpan.textContent = toLiteralString(newWord);
                         log('info', 'Word edited from "' + card.getAttribute('data-original-word') + '" to "' + newWord + '"');
                     }
                 });
@@ -1761,14 +1761,14 @@
                         const originalWord = card.getAttribute('data-original-word');
                         this.textContent = originalWord;
                         currentWord = originalWord;
-                        literalSpan.innerHTML = toLiteralString(originalWord);
+                        literalSpan.textContent = toLiteralString(originalWord);
                         this.blur();
                     }
                 });
                 
                 // Update literal display as user types
                 readableSpan.addEventListener('input', function() {
-                    literalSpan.innerHTML = toLiteralString(this.textContent);
+                    literalSpan.textContent = toLiteralString(this.textContent);
                 });
                 
                 display.appendChild(readableSpan);
