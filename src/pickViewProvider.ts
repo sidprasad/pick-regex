@@ -8,6 +8,71 @@ import { createRegexAnalyzer } from './regexAnalyzer';
 import { openIssueReport } from './issueReporter';
 import { SurveyPrompt } from './surveyPrompt';
 
+interface RegexMatchVerifier {
+  verifyMatch(word: string, pattern: string): boolean;
+}
+
+export function selectEdgeCaseSuggestions(
+  candidates: RegexCandidate[],
+  analyzer: RegexMatchVerifier,
+  maxSuggestions: number
+): string[] {
+  const maxAllowed = Math.min(6, Math.max(0, Math.trunc(maxSuggestions)));
+
+  if (maxAllowed === 0) {
+    logger.info('Skipping LLM-suggested edge cases because user limit is 0.');
+    return [];
+  }
+
+  const allSuggestedWords = candidates
+    .flatMap(candidate => candidate.edgeCases ?? [])
+    .map(word => word.trim())
+    .filter(word => word.length > 0);
+
+  const uniqueWords = Array.from(new Set(allSuggestedWords));
+
+  const candidateRegexes = Array.from(new Set(candidates.map(candidate => candidate.regex)));
+  const stats = uniqueWords.map((word, index) => {
+    const matches = candidateRegexes.map(regex => analyzer.verifyMatch(word, regex));
+    const matchCount = matches.filter(Boolean).length;
+    const nonMatchCount = matches.length - matchCount;
+
+    return { word, index, matchCount, nonMatchCount };
+  });
+
+  const distinguishing = stats
+    .filter(entry => entry.matchCount > 0 && entry.nonMatchCount > 0)
+    .map(entry => ({
+      word: entry.word,
+      score: Math.min(entry.matchCount, entry.nonMatchCount),
+      index: entry.index
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+
+  const unmatched = stats.filter(entry => entry.matchCount === 0).sort((a, b) => a.index - b.index);
+
+  const selected: string[] = distinguishing.slice(0, maxAllowed).map(entry => entry.word);
+
+  const remainingSlots = Math.max(0, maxAllowed - selected.length);
+  const unmatchedToInclude = Math.min(2, remainingSlots);
+  selected.push(...unmatched.slice(0, unmatchedToInclude).map(entry => entry.word));
+
+  if (selected.length % 2 === 1) {
+    selected.pop();
+  }
+
+  if (selected.length > 0) {
+    const unmatchedCount = unmatched.slice(0, unmatchedToInclude).length;
+    const distinguishingCount = selected.length - unmatchedCount;
+    logger.info(
+      `Collected ${selected.length} LLM-suggested edge case word(s) to classify first ` +
+      `(distinguishing: ${distinguishingCount}, unmatched: ${unmatchedCount}).`
+    );
+  }
+
+  return selected;
+}
+
 export class PickViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'pick.pickView';
   private view?: vscode.WebviewView;
@@ -180,48 +245,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private collectEdgeCaseSuggestions(candidates: RegexCandidate[]): string[] {
     const config = vscode.workspace.getConfiguration('pick');
-    const maxSuggestions = Math.min(6, Math.max(0, Math.trunc(config.get<number>('maxSuggestedEdgeCases', 2))));
+    const maxSuggestions = config.get<number>('maxSuggestedEdgeCases', 2);
 
-    if (maxSuggestions === 0) {
-      logger.info('Skipping LLM-suggested edge cases because user limit is 0.');
-      return [];
-    }
-
-    const allSuggestedWords = candidates
-      .flatMap(candidate => candidate.edgeCases ?? [])
-      .map(word => word.trim())
-      .filter(word => word.length > 0);
-
-    const uniqueWords = Array.from(new Set(allSuggestedWords));
-
-    const candidateRegexes = Array.from(new Set(candidates.map(candidate => candidate.regex)));
-    const scoredWords = uniqueWords
-      .map((word, index) => {
-        const matches = candidateRegexes.map(regex => this.analyzer.verifyMatch(word, regex));
-        const matchCount = matches.filter(Boolean).length;
-        const nonMatchCount = matches.length - matchCount;
-
-        if (matchCount === 0 || nonMatchCount === 0) {
-          return null;
-        }
-
-        const balanceScore = Math.min(matchCount, nonMatchCount);
-        return { word, score: balanceScore, index };
-      })
-      .filter((entry): entry is { word: string; score: number; index: number } => entry !== null)
-      .sort((a, b) => b.score - a.score || a.index - b.index);
-
-    const selected = scoredWords.slice(0, maxSuggestions).map(entry => entry.word);
-
-    if (selected.length % 2 === 1) {
-      selected.pop();
-    }
-
-    if (selected.length > 0) {
-      logger.info(`Collected ${selected.length} distinguishing LLM-suggested edge case word(s) to classify first.`);
-    }
-
-    return selected;
+    return selectEdgeCaseSuggestions(candidates, this.analyzer, maxSuggestions);
   }
 
   private async handleGenerateCandidates(prompt: string, modelId?: string) {
