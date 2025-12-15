@@ -2198,11 +2198,37 @@
             vscode.postMessage({ type: 'vote', acceptedWord: word });
         }
 
+        function clearHistoryNotice() {
+            if (!wordHistory) {
+                return;
+            }
+            const existingNotice = wordHistory.querySelector('.history-note');
+            if (existingNotice) {
+                existingNotice.remove();
+            }
+        }
+
+        function addHistoryNotice(message) {
+            if (!wordHistory || !historyItems) {
+                return;
+            }
+            clearHistoryNotice();
+
+            const notice = document.createElement('div');
+            notice.className = 'history-note';
+            notice.style.cssText = 'margin: 8px 0 12px 0; padding: 10px; border-radius: 6px; background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-errorForeground);';
+            notice.textContent = message;
+
+            wordHistory.insertBefore(notice, historyItems);
+        }
+
         function showFinalResultWithContext(regex, inWords, outWords, status) {
             showSection('voting');
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
+
+            clearHistoryNotice();
 
             wordPair.innerHTML = '<div style="text-align: center; padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--pick-accept-color); border-radius: 8px;">' +
                 '<h2 style="margin: 0 0 10px 0; color: var(--pick-accept-color);">Final Regex Selected</h2>' +
@@ -2220,7 +2246,7 @@
         }
 
         function showNoRegexFound(message, candidateDetails, inWords, outWords) {
-            // Keep the voting experience visible so users can re-classify and iterate
+            // Keep the classification history visible so users can re-classify and iterate
             showSection('voting');
             if (statusMessage) {
                 statusMessage.innerHTML = '';
@@ -2259,6 +2285,11 @@
                 ];
 
             updateWordHistory(history);
+            addHistoryNotice('No regex survived. Review or re-classify your previously categorized examples below.');
+
+            if (wordHistory && typeof wordHistory.scrollIntoView === 'function') {
+                wordHistory.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
 
             showStatusWithoutCancel('All candidates were eliminated. Review your classifications below or start fresh.');
         }
@@ -2280,7 +2311,9 @@
             if (existingCandidatesNote) {
                 existingCandidatesNote.remove();
             }
-            
+
+            clearHistoryNotice();
+
             showSection('prompt');
             if (statusMessage) {
                 statusMessage.innerHTML = '';
