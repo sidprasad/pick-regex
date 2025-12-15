@@ -1698,18 +1698,86 @@
                 const card = document.createElement('div');
                 card.className = 'word-card';
                 card.setAttribute('data-word', word);
+                card.setAttribute('data-original-word', word);
 
                 // Create display section
                 const display = document.createElement('div');
-                display.className = 'word-display';
+                display.className = 'word-display editable-word-display';
                 
                 const readableSpan = document.createElement('span');
                 readableSpan.className = 'word-readable';
-                readableSpan.innerHTML = readable;
+                readableSpan.contentEditable = 'true';
+                readableSpan.spellcheck = false;
+                if (diffOps) {
+                    readableSpan.innerHTML = readable;
+                } else {
+                    readableSpan.textContent = word;
+                }
+                readableSpan.title = 'Click to edit this word';
                 
                 const literalSpan = document.createElement('span');
                 literalSpan.className = 'word-literal';
-                literalSpan.innerHTML = literal;
+                literalSpan.textContent = literal;
+                
+                // Handle editing events
+                let currentWord = word;
+                readableSpan.addEventListener('blur', function() {
+                    const newWord = this.textContent.trim();
+                    
+                    // Validate the edited word
+                    if (newWord.length === 0) {
+                        // Restore original if empty
+                        const originalWord = card.getAttribute('data-original-word');
+                        this.textContent = originalWord;
+                        currentWord = originalWord;
+                        literalSpan.textContent = toLiteralString(originalWord);
+                        return;
+                    }
+                    
+                    // Check for reasonable length (max 1000 chars to prevent abuse)
+                    if (newWord.length > 1000) {
+                        log('warn', 'Edited word too long, reverting to original');
+                        const originalWord = card.getAttribute('data-original-word');
+                        this.textContent = originalWord;
+                        currentWord = originalWord;
+                        literalSpan.textContent = toLiteralString(originalWord);
+                        return;
+                    }
+                    
+                    if (newWord !== currentWord) {
+                        const previousWord = currentWord;
+                        currentWord = newWord;
+                        card.setAttribute('data-word', newWord);
+                        literalSpan.textContent = toLiteralString(newWord);
+                        log('info', 'Word edited from "' + card.getAttribute('data-original-word') + '" to "' + newWord + '"');
+                        
+                        // Notify backend about the word edit
+                        vscode.postMessage({
+                            type: 'wordEdited',
+                            originalWord: previousWord,
+                            newWord: newWord
+                        });
+                    }
+                });
+                
+                readableSpan.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.blur();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        const originalWord = card.getAttribute('data-original-word');
+                        this.textContent = originalWord;
+                        currentWord = originalWord;
+                        literalSpan.textContent = toLiteralString(originalWord);
+                        this.blur();
+                    }
+                });
+                
+                // Update literal display as user types
+                readableSpan.addEventListener('input', function() {
+                    literalSpan.textContent = toLiteralString(this.textContent);
+                });
                 
                 display.appendChild(readableSpan);
                 display.appendChild(literalSpan);
@@ -1718,16 +1786,16 @@
                 const actions = document.createElement('div');
                 actions.className = 'word-actions';
 
-                // Create accept button
-                const acceptBtn = createButton('accept', 'Upvote', word);
+                // Create accept button - use current word from card attribute
+                const acceptBtn = createButton('accept', 'Upvote', card);
                 acceptBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▲</span>';
 
-                // Create reject button
-                const rejectBtn = createButton('reject', 'Downvote', word);
+                // Create reject button - use current word from card attribute
+                const rejectBtn = createButton('reject', 'Downvote', card);
                 rejectBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▼</span>';
 
-                // Create unsure button
-                const unsureBtn = createButton('unsure', 'Skip', word);
+                // Create unsure button - use current word from card attribute
+                const unsureBtn = createButton('unsure', 'Skip', card);
                 unsureBtn.innerHTML = '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
                     '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
                     '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
@@ -1745,14 +1813,18 @@
 
             /**
              * Helper function to create a classification button with proper event listener
+             * @param {string} classification - The classification type
+             * @param {string} title - The button title
+             * @param {HTMLElement} card - The word card element
              */
-            function createButton(classification, title, word) {
+            function createButton(classification, title, card) {
                 const button = document.createElement('button');
                 button.className = 'btn ' + classification;
                 button.title = title;
-                // Attach event listener directly - no escaping needed!
+                // Attach event listener directly - get word from card data attribute at click time
                 button.addEventListener('click', function() {
-                    classifyWord(word, classification);
+                    const currentWord = card.getAttribute('data-word');
+                    classifyWord(currentWord, classification);
                 });
                 return button;
             }

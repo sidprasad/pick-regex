@@ -411,6 +411,28 @@
             color: var(--pick-reject-color);
         }
 
+        /* Editable word display styles */
+        .editable-word-display .word-readable[contenteditable="true"] {
+            cursor: text;
+            outline: none;
+            transition: background-color 0.2s, border-color 0.2s;
+            border: 1px solid transparent;
+            padding: 3px 7px;
+            margin: -3px -7px;
+            border-radius: 3px;
+        }
+
+        .editable-word-display .word-readable[contenteditable="true"]:hover {
+            background: var(--vscode-list-hoverBackground);
+            border-color: var(--vscode-input-border);
+        }
+
+        .editable-word-display .word-readable[contenteditable="true"]:focus {
+            background: var(--vscode-input-background);
+            border-color: var(--vscode-focusBorder);
+            box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+        }
+
         .word-actions {
             display: inline-flex;
             gap: 6px;

@@ -439,6 +439,29 @@ export class PickController {
   }
 
   /**
+   * Update a word in the current pair (when user edits it)
+   * @param originalWord The original word to replace
+   * @param newWord The new word to use
+   */
+  updateWordInPair(originalWord: string, newWord: string): void {
+    if (!this.currentPair) {
+      throw new Error('No current pair to update');
+    }
+
+    const { word1, word2 } = this.currentPair;
+    
+    if (word1 === originalWord) {
+      this.currentPair.word1 = newWord;
+      logger.info(`Updated word1 in current pair from "${originalWord}" to "${newWord}"`);
+    } else if (word2 === originalWord) {
+      this.currentPair.word2 = newWord;
+      logger.info(`Updated word2 in current pair from "${originalWord}" to "${newWord}"`);
+    } else {
+      logger.warn(`Original word "${originalWord}" not found in current pair (${word1}, ${word2})`);
+    }
+  }
+
+  /**
    * Check if we should transition to final result state
    */
   private checkFinalState(): void {
