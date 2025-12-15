@@ -1745,10 +1745,18 @@
                     }
                     
                     if (newWord !== currentWord) {
+                        const previousWord = currentWord;
                         currentWord = newWord;
                         card.setAttribute('data-word', newWord);
                         literalSpan.textContent = toLiteralString(newWord);
                         log('info', 'Word edited from "' + card.getAttribute('data-original-word') + '" to "' + newWord + '"');
+                        
+                        // Notify backend about the word edit
+                        vscode.postMessage({
+                            type: 'wordEdited',
+                            originalWord: previousWord,
+                            newWord: newWord
+                        });
                     }
                 });
                 

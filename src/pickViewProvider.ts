@@ -84,6 +84,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'updateClassification':
           this.handleUpdateClassification(data.index, data.classification);
           break;
+        case 'wordEdited':
+          this.handleWordEdited(data.originalWord, data.newWord);
+          break;
         case 'vote':
           this.handleVote(data.acceptedWord);
           break;
@@ -650,6 +653,20 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         type: 'error',
         message: `Error updating classification: ${error}`
       });
+    }
+  }
+
+  /**
+   * Handle word edit in the current voting pair
+   */
+  private handleWordEdited(originalWord: string, newWord: string) {
+    try {
+      logger.info(`Word edited: "${originalWord}" -> "${newWord}"`);
+      this.controller.updateWordInPair(originalWord, newWord);
+    } catch (error) {
+      logger.error(error, 'Error updating word in pair');
+      // Don't send an error message to the UI since the edit already happened in the frontend
+      // The backend will just use the updated word when classification happens
     }
   }
 
