@@ -1089,14 +1089,14 @@
 
         .history-item {
             position: relative;
-            padding: 12px 8px 10px 48px;
-            margin: 6px 0;
+            padding: 9px 8px 8px 44px;
+            margin: 4px 0;
             background: var(--vscode-list-inactiveSelectionBackground);
             border-radius: 4px;
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            gap: 12px;
+            gap: 10px;
             overflow: visible;
         }
 
@@ -1107,7 +1107,7 @@
         .history-word {
             font-family: monospace;
             font-weight: bold;
-            font-size: 1.1em;
+            font-size: 1.02em;
             overflow-x: auto;
             white-space: nowrap;
         }
@@ -1115,16 +1115,30 @@
         .history-classification {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
 
-        .history-classification select {
-            padding: 6px 10px;
-            background: var(--vscode-dropdown-background);
-            color: var(--vscode-dropdown-foreground);
-            border: 1px solid var(--vscode-dropdown-border);
-            border-radius: 2px;
-            cursor: pointer;
+        .history-classification .btn {
+            min-width: 26px;
+            height: 26px;
+            padding: 3px;
+            border: 1px solid transparent;
+            background: transparent;
+        }
+
+        .history-classification .btn:hover {
+            background: var(--vscode-list-hoverBackground);
+        }
+
+        .history-classification .btn.active {
+            background: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground));
+            border-color: var(--vscode-focusBorder);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-focusBorder) 60%, transparent);
+        }
+
+        .history-classification .btn:focus-visible {
+            outline: 1px solid var(--vscode-focusBorder);
+            outline-offset: 1px;
         }
 
         .classification-badge {
@@ -1164,13 +1178,13 @@
         .history-matches {
             font-size: 0.85em;
             color: var(--vscode-descriptionForeground);
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
         .history-matches__header {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
         }
 

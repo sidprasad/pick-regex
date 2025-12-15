@@ -2103,41 +2103,62 @@
                 // Create classification selector
                 const classificationDiv = document.createElement('div');
                 classificationDiv.className = 'history-classification';
-                
-                const select = document.createElement('select');
-                
-                const acceptOption = document.createElement('option');
-                acceptOption.value = 'accept';
-                acceptOption.textContent = 'Accept';
-                if (item.classification === 'accept') {
-                    acceptOption.selected = true;
-                }
-                
-                const rejectOption = document.createElement('option');
-                rejectOption.value = 'reject';
-                rejectOption.textContent = 'Reject';
-                if (item.classification === 'reject') {
-                    rejectOption.selected = true;
-                }
-                
-                const unsureOption = document.createElement('option');
-                unsureOption.value = 'unsure';
-                unsureOption.textContent = 'Unsure';
-                if (item.classification === 'unsure') {
-                    unsureOption.selected = true;
-                }
-                
-                select.appendChild(acceptOption);
-                select.appendChild(rejectOption);
-                select.appendChild(unsureOption);
-                
-                // Attach event listener for classification change
-                select.addEventListener('change', function() {
-                    applyHistoryTone(historyItem, this.value);
-                    updateClassification(index, this.value);
-                });
-                
-                classificationDiv.appendChild(select);
+
+                let currentClassification = item.classification;
+
+                const setActiveButton = function(selectedClassification) {
+                    const buttons = classificationDiv.querySelectorAll('button');
+                    buttons.forEach(btn => {
+                        const isActive = btn.getAttribute('data-classification') === selectedClassification;
+                        btn.classList.toggle('active', isActive);
+                        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                    });
+                };
+
+                const createHistoryButton = function(classification, label, iconHtml) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'btn ' + classification + ' history-classification__btn';
+                    button.setAttribute('data-classification', classification);
+                    button.title = label;
+                    button.setAttribute('aria-label', label);
+                    button.innerHTML = iconHtml;
+                    button.addEventListener('click', function() {
+                        if (currentClassification === classification) {
+                            return;
+                        }
+                        currentClassification = classification;
+                        applyHistoryTone(historyItem, classification);
+                        setActiveButton(classification);
+                        updateClassification(index, classification);
+                    });
+                    return button;
+                };
+
+                const acceptBtn = createHistoryButton(
+                    'accept',
+                    'Upvote (this should match)',
+                    '<span aria-hidden="true" style="font-size: 18px; line-height: 1;">▲</span>'
+                );
+                const rejectBtn = createHistoryButton(
+                    'reject',
+                    'Downvote (this should NOT match)',
+                    '<span aria-hidden="true" style="font-size: 18px; line-height: 1;">▼</span>'
+                );
+                const unsureBtn = createHistoryButton(
+                    'unsure',
+                    'Unsure / skip',
+                    '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                        '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+                        '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '</svg>'
+                );
+
+                classificationDiv.appendChild(acceptBtn);
+                classificationDiv.appendChild(rejectBtn);
+                classificationDiv.appendChild(unsureBtn);
+
+                setActiveButton(currentClassification);
 
                 // Assemble the history item
                 historyItem.appendChild(contentDiv);
@@ -2228,6 +2249,19 @@
         }
 
         function showFinalResultWithContext(regex, inWords, outWords, status) {
+            // Defensive check: if regex is null/undefined, treat as noRegexFound
+            if (!regex) {
+                console.warn('showFinalResultWithContext called with null/undefined regex, redirecting to showNoRegexFound');
+                showNoRegexFound(
+                    'No candidate regexes match your requirements.',
+                    status ? status.candidateDetails : [],
+                    inWords,
+                    outWords,
+                    status ? status.wordHistory : null
+                );
+                return;
+            }
+
             showSection('voting');
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');

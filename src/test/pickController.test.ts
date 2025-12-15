@@ -1278,5 +1278,96 @@ suite('PickController Test Suite', () => {
       assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,
         'State should be FINAL_RESULT');
     });
+
+    test('Reclassifying same word repeatedly should not advance to next pair', async () => {
+      // Regression test: updating classification shouldn't skip to next pair
+      // if both words haven't been classified yet
+      const patterns = ['[a-z]+', '[0-9]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      const pair = await controller.generateNextPair();
+      const { word1, word2 } = pair;
+      
+      // Classify first word as REJECT
+      controller.classifyWord(word1, WordClassification.REJECT);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Only one word should be classified');
+      
+      // Update classification to ACCEPT
+      controller.updateClassification(0, WordClassification.ACCEPT);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Still only one word should be classified after update');
+      
+      // Update again to UNSURE
+      controller.updateClassification(0, WordClassification.UNSURE);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Still only one word should be classified after another update');
+      
+      // Update back to REJECT
+      controller.updateClassification(0, WordClassification.REJECT);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Still only one word should be classified');
+      
+      // Verify the word history only has one entry (same word, updated multiple times)
+      const history = controller.getWordHistory();
+      assert.strictEqual(history.length, 1,
+        'Should only have one entry in history for the same word');
+      assert.strictEqual(history[0].word, word1,
+        'History entry should be for word1');
+      assert.strictEqual(history[0].classification, WordClassification.REJECT,
+        'Classification should be the latest value (REJECT)');
+      
+      // Current pair should still be the same
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Current pair should still be waiting for second word');
+    });
+
+    test('Refinement correctly replays classification history', async () => {
+      // This test ensures that refinement preserves and replays classification history
+      
+      const patterns = [
+        'India|Pakistan|Bangladesh',
+        '(?:India|Pakistan|Bangladesh)s?'
+      ];
+      
+      const controller = new PickController();
+      controller.setMaxClassifications(100);
+      await controller.generateCandidates('test', patterns);
+      
+      // Apply some classifications
+      controller.classifyDirectWords([
+        { word: 'India', classification: WordClassification.ACCEPT },
+        { word: 'Indias', classification: WordClassification.REJECT }
+      ]);
+      
+      const beforeRefinement = controller.getStatus();
+      const wordHistoryBefore = controller.getWordHistory();
+      
+      // Refine with same candidates
+      await controller.refineCandidates('test refined', patterns);
+      
+      const afterRefinement = controller.getStatus();
+      const wordHistoryAfter = controller.getWordHistory();
+      
+      // Verify word history is preserved
+      assert.strictEqual(wordHistoryAfter.length, wordHistoryBefore.length,
+        'Word history length should be preserved');
+      
+      for (let i = 0; i < wordHistoryBefore.length; i++) {
+        assert.strictEqual(wordHistoryAfter[i].word, wordHistoryBefore[i].word,
+          `Word history entry ${i} word should match`);
+        assert.strictEqual(wordHistoryAfter[i].classification, wordHistoryBefore[i].classification,
+          `Word history entry ${i} classification should match`);
+      }
+      
+      // Verify candidates have same patterns in same order
+      assert.strictEqual(afterRefinement.candidateDetails.length, beforeRefinement.candidateDetails.length,
+        'Should have same number of candidates');
+      
+      for (let i = 0; i < beforeRefinement.candidateDetails.length; i++) {
+        assert.strictEqual(afterRefinement.candidateDetails[i].pattern, beforeRefinement.candidateDetails[i].pattern,
+          `Candidate ${i} pattern should match`);
+      }
+    });
   });
 });

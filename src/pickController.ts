@@ -208,10 +208,11 @@ export class PickController {
     }));
     logger.info(`Initialized ${this.candidates.length} new candidate regexes.`);
 
-    // Re-apply existing classifications to new candidates
-    this.recalculateVotes();
-
+    // Set thresholds based on distinguishability BEFORE replaying votes
     await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
+
+    // Re-apply existing classifications to new candidates with correct thresholds
+    this.recalculateVotes();
 
     this.suggestedWordsQueue = [];
     this.prepareSuggestedWordsQueue(suggestedWords);
@@ -334,7 +335,7 @@ export class PickController {
       throw new Error('Word is not in the current pair');
     }
 
-    this.applyClassification(word, classification);
+    this.applyClassification(word, classification, true);
   }
 
   /**
@@ -365,8 +366,11 @@ export class PickController {
 
   /**
    * Core classification logic shared across pair-based and direct submissions.
+   * @param word The word being classified
+   * @param classification The classification for the word
+   * @param fromPair Whether this classification is part of the current pair flow
    */
-  private applyClassification(word: string, classification: WordClassification): void {
+  private applyClassification(word: string, classification: WordClassification, fromPair: boolean = false): void {
     // Get matching regexes for this word
     const matchingRegexes = this.candidates
       .filter(c => !c.eliminated && this.analyzer.verifyMatch(word, c.pattern))
@@ -444,7 +448,9 @@ export class PickController {
     // If UNSURE, don't update any votes
 
     // Check if we need to transition to final result
-    this.checkFinalState();
+    // Only update stale counter if this completes a pair (both words classified)
+    const shouldUpdateStaleCounter = fromPair && this.areBothWordsClassified();
+    this.checkFinalState(shouldUpdateStaleCounter);
   }
 
   /**
@@ -499,23 +505,26 @@ export class PickController {
 
   /**
    * Check if we should transition to final result state
+   * @param updateStaleCounter If true, update the stale progress counter (only when completing a pair)
    */
-  checkFinalState(): void {
+  checkFinalState(updateStaleCounter: boolean = false): void {
     const activeCandidates = this.getActiveCandidates();
     const activeCount = activeCandidates.length;
 
-    // Check if we made progress (eliminated at least one candidate)
-    if (activeCount < this.lastActiveCandidateCount) {
-      this.pairsWithoutProgress = 0;
-    } else if (this.lastActiveCandidateCount > 0) {
-      this.pairsWithoutProgress++;
+    // Only update stale progress tracking when explicitly requested (completing a pair)
+    if (updateStaleCounter) {
+      // Check if we made progress (eliminated at least one candidate)
+      if (activeCount < this.lastActiveCandidateCount) {
+        this.pairsWithoutProgress = 0;
+      } else if (this.lastActiveCandidateCount > 0) {
+        this.pairsWithoutProgress++;
+      }
+      this.lastActiveCandidateCount = activeCount;
     }
-    this.lastActiveCandidateCount = activeCount;
 
     // Check termination conditions
     const totalClassifications = this.wordHistory.length;
     const reachedMaxClassifications = totalClassifications >= this.maxClassifications;
-    const staleProgress = this.pairsWithoutProgress >= this.maxPairsWithoutProgress;
 
     if (activeCount === 1) {
       // Check if user has accepted a word that matches this regex
@@ -550,21 +559,9 @@ export class PickController {
             'No candidate has received a positive vote; treating as no valid regex.'
         );
       }
-    } else if (staleProgress && activeCount > 1) {
-      // No progress for too many pairs - candidates are indistinguishable
-      this.state = PickState.FINAL_RESULT;
-      const best = this.selectBestCandidate();
-      this.finalRegex = best;
-      if (best) {
-        logger.info(`No progress after ${this.pairsWithoutProgress} consecutive pairs. Forcing termination with best candidate: "${best}"`);
-      } else {
-        logger.info(
-          `No progress after ${this.pairsWithoutProgress} consecutive pairs. ` +
-            'No candidate has received a positive vote; treating as no valid regex.'
-        );
-      }
     }
     // When there's 1 candidate but no accepted word yet, continue showing pairs
+    // Stale progress counter is used only to increase search effort, not to terminate
   }
 
   /**
@@ -614,47 +611,77 @@ export class PickController {
       `Updated classification for word "${record.word}" from ${oldClassification} to ${newClassification}.`
     );
 
-    // Recalculate all votes from scratch
+    // Recalculate all votes - this also resets progress tracking like a refinement
     this.recalculateVotes();
   }
 
   /**
    * Recalculate all votes from word history
+   * Completely resets state and replays all classifications from scratch
    */
   private recalculateVotes(): void {
-    // Reset all votes
+    // Reset ALL state - votes, eliminations, and progress tracking
     for (const candidate of this.candidates) {
       candidate.negativeVotes = 0;
       candidate.positiveVotes = 0;
       candidate.eliminated = false;
     }
 
-    logger.info('Recalculating votes from word history.');
+    // Reset progress tracking - treat as fresh start
+    this.pairsWithoutProgress = 0;
+    this.lastActiveCandidateCount = 0;
+    
+    // Reset search parameters to defaults
+    this.searchTimeoutMs = 2000;
+    this.searchPoolSize = 30;
+
+    logger.info('Recalculating votes from word history (full state reset).');
 
     // Replay all classifications
     for (const record of this.wordHistory) {
       if (record.classification === WordClassification.ACCEPT) {
         for (const candidate of this.candidates) {
+          if (candidate.eliminated) {
+            continue;
+          }
           if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
             candidate.positiveVotes++;
+          } else {
+            // Candidate fails to match an accepted word - negative vote
+            candidate.negativeVotes++;
+            if (candidate.negativeVotes >= candidate.eliminationThreshold) {
+              candidate.eliminated = true;
+              logger.info(
+                `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) - failed to match accepted word "${record.word}".`
+              );
+            }
           }
         }
       } else if (record.classification === WordClassification.REJECT) {
         for (const candidate of this.candidates) {
+          if (candidate.eliminated) {
+            continue;
+          }
           if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
             candidate.negativeVotes++;
             if (candidate.negativeVotes >= candidate.eliminationThreshold) {
               candidate.eliminated = true;
+              logger.info(
+                `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) - incorrectly matched rejected word "${record.word}".`
+              );
             }
           }
         }
       }
     }
 
+    // Set lastActiveCandidateCount to current count after replay
+    this.lastActiveCandidateCount = this.getActiveCandidateCount();
+
     logger.info('Finished recalculating votes. Checking final state.');
 
-    // Check if state needs to change
-    this.checkFinalState();
+    // Check if state needs to change (don't update stale counter - we just reset)
+    this.checkFinalState(false);
   }
 
   /**
@@ -888,6 +915,13 @@ export class PickController {
    */
   setMaxClassifications(limit: number): void {
     this.maxClassifications = Math.max(1, Math.trunc(limit));
+  }
+
+  /**
+   * Set the maximum number of pairs without progress before forcing termination
+   */
+  setMaxPairsWithoutProgress(limit: number): void {
+    this.maxPairsWithoutProgress = Math.max(1, Math.trunc(limit));
   }
 
   /**
