@@ -884,6 +884,13 @@ export class PickController {
   }
 
   /**
+   * Set the maximum number of classifications before forcing termination
+   */
+  setMaxClassifications(limit: number): void {
+    this.maxClassifications = Math.max(1, Math.trunc(limit));
+  }
+
+  /**
    * Set elimination threshold for each candidate based on pairwise distinguishing words.
    * 
    * For each candidate, the threshold is the SMALLEST number of distinguishing words
