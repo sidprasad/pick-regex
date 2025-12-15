@@ -665,8 +665,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.controller.updateWordInPair(originalWord, newWord);
     } catch (error) {
       logger.error(error, 'Error updating word in pair');
-      // Don't send an error message to the UI since the edit already happened in the frontend
-      // The backend will just use the updated word when classification happens
+      // Don't send an error message to the UI since the edit already happened in the frontend.
+      // If the original word isn't found in the current pair, the update is silently ignored
+      // and the backend will use whichever word is actually in the pair when classification happens.
+      // This handles edge cases where the pair might have changed between edit and vote.
     }
   }
 
