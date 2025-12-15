@@ -257,18 +257,18 @@ export class PickController {
 
       const unmatchedCount = (matchCount1 === 0 ? 1 : 0) + (matchCount2 === 0 ? 1 : 0);
       const unmatchedAllowed = Math.min(2, this.maxSuggestedEdgeCases);
+      const isDistinguishing = this.isDistinguishingPair(word1, word2, activeCandidates);
 
-      if (
-        !this.isDistinguishingPair(word1, word2, activeCandidates) &&
-        !(unmatchedCount > 0 && this.unmatchedSuggestionsUsed + unmatchedCount <= unmatchedAllowed)
-      ) {
-        logger.info(
-          `Skipping LLM-suggested pair "${word1}" vs "${word2}" because it doesn't distinguish between candidates.`
-        );
-        continue;
+      if (!isDistinguishing) {
+        if (unmatchedCount === 0 || this.unmatchedSuggestionsUsed + unmatchedCount > unmatchedAllowed) {
+          logger.info(
+            `Skipping LLM-suggested pair "${word1}" vs "${word2}" because it doesn't distinguish between candidates.`
+          );
+          continue;
+        }
+
+        this.unmatchedSuggestionsUsed += unmatchedCount;
       }
-
-      this.unmatchedSuggestionsUsed += unmatchedCount;
 
       this.currentPair = { word1, word2 };
       this.usedWords.add(word1);
