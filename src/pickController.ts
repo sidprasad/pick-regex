@@ -52,6 +52,7 @@ export class PickController {
   private candidates: CandidateRegex[] = [];
   private usedWords = new Set<string>();
   private suggestedWordsQueue: string[] = [];
+  private unmatchedSuggestionsUsed = 0;
   private state: PickState = PickState.INITIAL;
   private thresholdVotes = 2;
   private currentPair: WordPair | null = null;
@@ -102,6 +103,7 @@ export class PickController {
     }
 
     this.suggestedWordsQueue = limited;
+    this.unmatchedSuggestionsUsed = 0;
 
     if (this.suggestedWordsQueue.length > 0) {
       logger.info(`Loaded ${this.suggestedWordsQueue.length} LLM-suggested edge case word(s) to classify first.`);
@@ -248,12 +250,25 @@ export class PickController {
       const word1 = this.suggestedWordsQueue.shift()!;
       const word2 = this.suggestedWordsQueue.shift()!;
 
-      if (!this.isDistinguishingPair(word1, word2, activeCandidates)) {
+      const matches1 = activeCandidates.map(candidate => this.analyzer.verifyMatch(word1, candidate));
+      const matches2 = activeCandidates.map(candidate => this.analyzer.verifyMatch(word2, candidate));
+      const matchCount1 = matches1.filter(Boolean).length;
+      const matchCount2 = matches2.filter(Boolean).length;
+
+      const unmatchedCount = (matchCount1 === 0 ? 1 : 0) + (matchCount2 === 0 ? 1 : 0);
+      const unmatchedAllowed = Math.min(2, this.maxSuggestedEdgeCases);
+
+      if (
+        !this.isDistinguishingPair(word1, word2, activeCandidates) &&
+        !(unmatchedCount > 0 && this.unmatchedSuggestionsUsed + unmatchedCount <= unmatchedAllowed)
+      ) {
         logger.info(
           `Skipping LLM-suggested pair "${word1}" vs "${word2}" because it doesn't distinguish between candidates.`
         );
         continue;
       }
+
+      this.unmatchedSuggestionsUsed += unmatchedCount;
 
       this.currentPair = { word1, word2 };
       this.usedWords.add(word1);
@@ -665,6 +680,8 @@ export class PickController {
     this.lastActiveCandidateCount = 0;
     this.searchTimeoutMs = 2000;
     this.searchPoolSize = 30;
+    this.suggestedWordsQueue = [];
+    this.unmatchedSuggestionsUsed = 0;
     
     if (!preserveClassifications) {
       this.usedWords.clear();
