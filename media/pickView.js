@@ -1780,12 +1780,6 @@
             const summary = parts.length > 0 ? `Added ${parts.join(', ')}.` : 'Examples applied.';
             clearExamplesForm(true);
             setExamplesStatus(summary, 'success');
-
-            if (customExamplesPanel && !customExamplesPanel.classList.contains('hidden')) {
-                setTimeout(function() {
-                    toggleExamplesPanel(false);
-                }, 200);
-            }
         }
 
         function handleExamplesRejected(errorMessage) {
