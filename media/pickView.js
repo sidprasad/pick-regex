@@ -1751,6 +1751,10 @@
         }
 
         function updateStatus(status) {
+            lastStatus = status;
+            if (status.activeCandidates > 0) {
+                clearHistoryNotice();
+            }
             updateCandidates(status.candidateDetails, status.threshold);
             updateWordHistory(status.wordHistory);
             const fallbackMatches = lastPairMatches && lastPair
@@ -1815,6 +1819,7 @@
             lastPair = pair;
             lastStatus = status;
             lastPairMatches = pairMatches || null;
+            clearHistoryNotice();
             closeMatchPopovers();
 
             showSection('voting');

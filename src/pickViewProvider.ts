@@ -713,17 +713,27 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private handleUpdateClassification(index: number, classification: string) {
+  private async handleUpdateClassification(index: number, classification: string) {
     try {
       const classificationEnum = classification as WordClassification;
       this.controller.updateClassification(index, classificationEnum);
-      
+
+      const state = this.controller.getState();
       const status = this.controller.getStatus();
-      
+
+      if (state === PickState.FINAL_RESULT) {
+        await this.handleFinalResult();
+        return;
+      }
+
       this.sendMessage({
         type: 'classificationUpdated',
         status
       });
+
+      if (state === PickState.VOTING && status.activeCandidates > 0) {
+        this.handleRequestNextPair();
+      }
     } catch (error) {
       logger.error(error, 'Error updating classification');
       this.sendMessage({
