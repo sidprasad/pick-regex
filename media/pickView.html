@@ -163,6 +163,46 @@
             </div>
             <div class="word-pair" id="wordPair"></div>
 
+            <div class="word-edit-hint" id="wordEditHint">
+                <span aria-hidden="true">✎</span>
+                Words are editable — click to tweak, or add your own examples below.
+            </div>
+
+            <div class="custom-examples" id="customExamples">
+                <button id="customExamplesToggle" class="pill-btn" aria-expanded="false" aria-controls="customExamplesPanel">
+                    <span aria-hidden="true">＋</span>
+                    Add your own examples
+                </button>
+                <div id="customExamplesPanel" class="custom-examples__panel hidden" role="region" aria-label="Add your own examples">
+                    <div class="custom-examples__header">
+                        <div>
+                            <div class="custom-examples__title">Add your own examples</div>
+                            <div class="custom-examples__hint">Enter one example, then upvote if it should match or downvote if it should not.</div>
+                        </div>
+                        <button id="customExamplesCancel" class="icon-btn subtle" title="Close custom examples" aria-label="Close custom examples">
+                            ✕
+                        </button>
+                    </div>
+                    <div class="custom-examples__controls">
+                        <label class="custom-examples__field">
+                            <span class="custom-examples__label">Example</span>
+                            <input id="customExamplesInput" type="text" placeholder="e.g., 2024-01-15" />
+                        </label>
+                        <div class="custom-examples__actions">
+                            <button id="customExamplesVoteUp" class="btn accept" title="Upvote (this should match)">
+                                <span aria-hidden="true">▲</span>
+                                <span class="btn-label">Upvote</span>
+                            </button>
+                            <button id="customExamplesVoteDown" class="btn reject" title="Downvote (this should NOT match)">
+                                <span aria-hidden="true">▼</span>
+                                <span class="btn-label">Downvote</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="customExamplesStatus" class="custom-examples__status" role="status" aria-live="polite"></div>
+                </div>
+            </div>
+
             <div class="candidates-list" id="candidatesList"></div>
             <div class="word-history" id="wordHistory">
                 <h3>Word Classification History</h3>

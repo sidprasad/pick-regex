@@ -373,6 +373,134 @@
             margin: 12px 0;
         }
 
+        .word-edit-hint {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--vscode-descriptionForeground);
+            font-size: 0.9em;
+            margin: -2px 0 10px 0;
+        }
+
+        .word-edit-hint span[aria-hidden="true"] {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .custom-examples {
+            margin: 6px 0 14px;
+        }
+
+        .pill-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--vscode-panel-border);
+            background: var(--vscode-editorWidget-background, var(--vscode-input-background));
+            color: var(--vscode-foreground);
+            border-radius: 999px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 0.95em;
+        }
+
+        .pill-btn:hover,
+        .pill-btn:focus-visible {
+            border-color: var(--vscode-focusBorder);
+            box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+            outline: none;
+        }
+
+        .custom-examples__panel {
+            margin-top: 8px;
+            padding: 10px 12px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 8px;
+            background: var(--vscode-editorWidget-background, var(--vscode-input-background));
+        }
+
+        .custom-examples__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .custom-examples__title {
+            font-weight: 600;
+        }
+
+        .custom-examples__hint {
+            color: var(--vscode-descriptionForeground);
+            font-size: 0.9em;
+        }
+
+        .custom-examples__controls {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: end;
+            margin: 10px 0 4px;
+        }
+
+        .custom-examples__field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .custom-examples__label {
+            font-size: 0.95em;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        .custom-examples__field input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 6px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+        }
+
+        .custom-examples__status {
+            font-size: 0.9em;
+            color: var(--vscode-descriptionForeground);
+            min-height: 18px;
+            margin-top: 4px;
+        }
+
+        .custom-examples__status[data-tone="error"] {
+            color: var(--vscode-errorForeground);
+        }
+
+        .custom-examples__status[data-tone="success"] {
+            color: var(--pick-accept-color);
+        }
+
+        .custom-examples__actions {
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .custom-examples__actions .btn {
+            border: 1px solid var(--vscode-input-border);
+            background: var(--vscode-editor-background);
+            padding: 6px 10px;
+            height: auto;
+            min-width: 0;
+        }
+
+        .custom-examples__actions .btn:hover,
+        .custom-examples__actions .btn:focus-visible {
+            border-color: var(--vscode-focusBorder);
+            box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+            outline: none;
+        }
+
         .word-card {
             flex: 1;
             position: relative;
