@@ -1311,7 +1311,7 @@
                     }, 2000);
                     break;
                 case 'noRegexFound':
-                    showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut);
+                    showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut, message.wordHistory);
                     break;
                 case 'insufficientWords':
                     showInsufficientWords(message.candidates, message.status);
@@ -2250,7 +2250,7 @@
             showStatusWithoutCancel('Classification complete! Selected regex highlighted below.');
         }
 
-        function showNoRegexFound(message, candidateDetails, inWords, outWords) {
+        function showNoRegexFound(message, candidateDetails, inWords, outWords, wordHistory) {
             // Keep the classification history visible so users can re-classify and iterate
             showSection('voting');
             if (statusMessage) {
@@ -2274,7 +2274,10 @@
             // Refresh candidates and word history so users can keep iterating
             updateCandidates(candidateDetails || [], lastStatus ? lastStatus.threshold : undefined);
 
-            const history = (lastStatus && Array.isArray(lastStatus.wordHistory))
+            // Use the provided wordHistory if available, otherwise fall back to constructing from inWords/outWords
+            const history = (wordHistory && Array.isArray(wordHistory))
+                ? wordHistory
+                : (lastStatus && Array.isArray(lastStatus.wordHistory))
                 ? lastStatus.wordHistory
                 : [
                     ...(Array.isArray(inWords) ? inWords.map(word => ({

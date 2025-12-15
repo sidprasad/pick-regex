@@ -500,7 +500,7 @@ export class PickController {
   /**
    * Check if we should transition to final result state
    */
-  private checkFinalState(): void {
+  checkFinalState(): void {
     const activeCandidates = this.getActiveCandidates();
     const activeCount = activeCandidates.length;
 
