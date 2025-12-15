@@ -650,6 +650,9 @@ export class PickController {
             candidate.negativeVotes++;
             if (candidate.negativeVotes >= candidate.eliminationThreshold) {
               candidate.eliminated = true;
+              logger.info(
+                `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) from replaying word "${record.word}".`
+              );
             }
           }
         }
