@@ -47,6 +47,55 @@ suite('PickController Test Suite', () => {
     assert.strictEqual(history[1].classification, WordClassification.REJECT);
   });
 
+  test('Should surface LLM-suggested edge cases before analyzer pairs', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    const suggestedWords = ['Alpha', '123', 'edge-case', 'another edge'];
+
+    controller.setMaxSuggestedEdgeCases(4);
+
+    await controller.generateCandidates('test prompt', patterns, new Map(), undefined, suggestedWords);
+
+    const firstPair = await controller.generateNextPair();
+    assert.deepStrictEqual([firstPair.word1, firstPair.word2], ['Alpha', '123']);
+
+    const secondPair = await controller.generateNextPair();
+    assert.deepStrictEqual([secondPair.word1, secondPair.word2], ['edge-case', 'another edge']);
+  });
+
+  test('Should limit LLM-suggested edge cases to configured even count', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    const suggestedWords = ['one', 'two', 'three', 'four', 'five'];
+
+    controller.setMaxSuggestedEdgeCases(3);
+
+    await controller.generateCandidates('test prompt', patterns, new Map(), undefined, suggestedWords);
+
+    const queueLength = (controller as any).suggestedWordsQueue.length;
+    assert.strictEqual(queueLength, 2);
+
+    const pair = await controller.generateNextPair();
+    assert.deepStrictEqual([pair.word1, pair.word2], ['one', 'two']);
+  });
+
+  test('Should skip non-distinguishing LLM edge cases', async () => {
+    const patterns = ['\\d+', '\\d{2,}'];
+    const suggestedWords = ['123', '456'];
+
+    await controller.generateCandidates('test prompt', patterns, new Map(), undefined, suggestedWords);
+
+    const pair = await controller.generateNextPair();
+
+    const matches1 = patterns.map(pattern => new RegExp(`^${pattern}$`).test(pair.word1));
+    const matches2 = patterns.map(pattern => new RegExp(`^${pattern}$`).test(pair.word2));
+
+    const distinguishes = (matches: boolean[]) => matches.some(match => match !== matches[0]);
+
+    assert.ok(
+      distinguishes(matches1) || distinguishes(matches2),
+      'Returned pair should distinguish between candidates even when LLM suggestions do not'
+    );
+  });
+
   test('Should handle UNSURE classification without affecting votes', async () => {
     const patterns = ['[a-z]+', '[0-9]+'];
     await controller.generateCandidates('test', patterns);

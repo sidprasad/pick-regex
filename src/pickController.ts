@@ -51,6 +51,8 @@ export class PickController {
   private analyzer: RegexAnalyzer;
   private candidates: CandidateRegex[] = [];
   private usedWords = new Set<string>();
+  private suggestedWordsQueue: string[] = [];
+  private unmatchedSuggestionsUsed = 0;
   private state: PickState = PickState.INITIAL;
   private thresholdVotes = 2;
   private currentPair: WordPair | null = null;
@@ -61,6 +63,7 @@ export class PickController {
   private lastActiveCandidateCount = 0;
   private maxClassifications = 50;
   private maxPairsWithoutProgress = 2;
+  private maxSuggestedEdgeCases = 2;
   private searchTimeoutMs = 2000;
   private searchPoolSize = 30;
 
@@ -71,7 +74,53 @@ export class PickController {
     this.thresholdVotes = config.get<number>('eliminationThreshold', 2);
     this.maxClassifications = config.get<number>('maxClassifications', 50);
     this.maxPairsWithoutProgress = config.get<number>('maxPairsWithoutProgress', 2);
+    this.maxSuggestedEdgeCases = this.clampSuggestedEdgeCaseLimit(
+      config.get<number>('maxSuggestedEdgeCases', 2)
+    );
     logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}`);
+  }
+
+  private clampSuggestedEdgeCaseLimit(value: number | undefined): number {
+    if (value === undefined || Number.isNaN(value)) {
+      return 2;
+    }
+
+    return Math.min(6, Math.max(0, Math.trunc(value)));
+  }
+
+  private prepareSuggestedWordsQueue(suggestedWords: string[]): void {
+    const unique = Array.from(new Set(
+      suggestedWords
+        .map(word => word.trim())
+        .filter(word => word.length > 0 && !this.usedWords.has(word))
+    ));
+
+    const limited = unique.slice(0, this.maxSuggestedEdgeCases);
+
+    // Use an even number of suggestions so we can surface them as pairs
+    if (limited.length % 2 === 1) {
+      limited.pop();
+    }
+
+    this.suggestedWordsQueue = limited;
+    this.unmatchedSuggestionsUsed = 0;
+
+    if (this.suggestedWordsQueue.length > 0) {
+      logger.info(`Loaded ${this.suggestedWordsQueue.length} LLM-suggested edge case word(s) to classify first.`);
+    }
+  }
+
+  private isDistinguishingPair(word1: string, word2: string, candidates: string[]): boolean {
+    if (candidates.length < 2) {
+      return false;
+    }
+
+    const matches1 = candidates.map(candidate => this.analyzer.verifyMatch(word1, candidate));
+    const matches2 = candidates.map(candidate => this.analyzer.verifyMatch(word2, candidate));
+
+    const distinguishes = (matches: boolean[]) => matches.some(match => match !== matches[0]);
+
+    return distinguishes(matches1) || distinguishes(matches2);
   }
 
   /**
@@ -88,7 +137,8 @@ export class PickController {
     prompt: string,
     candidatePatterns: Array<string | CandidateSeed>,
     equivalenceMap: Map<string, string[]> = new Map(),
-    progressCallback?: (current: number, total: number) => void
+    progressCallback?: (current: number, total: number) => void,
+    suggestedWords: string[] = []
   ): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Generating candidates for prompt: ${prompt}`);
@@ -116,6 +166,8 @@ export class PickController {
     await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
 
     this.usedWords.clear();
+    this.suggestedWordsQueue = [];
+    this.prepareSuggestedWordsQueue(suggestedWords);
     this.wordHistory = [];
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state.');
@@ -129,7 +181,8 @@ export class PickController {
     newPrompt: string,
     newCandidatePatterns: Array<string | CandidateSeed>,
     equivalenceMap: Map<string, string[]> = new Map(),
-    progressCallback?: (current: number, total: number) => void
+    progressCallback?: (current: number, total: number) => void,
+    suggestedWords: string[] = []
   ): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Refining candidates with new prompt: ${newPrompt}`);
@@ -160,6 +213,9 @@ export class PickController {
 
     await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
 
+    this.suggestedWordsQueue = [];
+    this.prepareSuggestedWordsQueue(suggestedWords);
+
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state after refinement.');
   }
@@ -185,9 +241,44 @@ export class PickController {
    */
   async generateNextPair(): Promise<WordPair> {
     const activeCandidates = this.getActiveCandidates();
-    
+
     if (activeCandidates.length === 0) {
       throw new Error('No active candidates to generate pairs');
+    }
+
+    while (this.suggestedWordsQueue.length >= 2) {
+      const word1 = this.suggestedWordsQueue.shift()!;
+      const word2 = this.suggestedWordsQueue.shift()!;
+
+      const matches1 = activeCandidates.map(candidate => this.analyzer.verifyMatch(word1, candidate));
+      const matches2 = activeCandidates.map(candidate => this.analyzer.verifyMatch(word2, candidate));
+      const matchCount1 = matches1.filter(Boolean).length;
+      const matchCount2 = matches2.filter(Boolean).length;
+
+      const unmatchedCount = (matchCount1 === 0 ? 1 : 0) + (matchCount2 === 0 ? 1 : 0);
+      const unmatchedAllowed = Math.min(2, this.maxSuggestedEdgeCases);
+      const isDistinguishing = this.isDistinguishingPair(word1, word2, activeCandidates);
+
+      if (!isDistinguishing) {
+        if (unmatchedCount === 0 || this.unmatchedSuggestionsUsed + unmatchedCount > unmatchedAllowed) {
+          logger.info(
+            `Skipping LLM-suggested pair "${word1}" vs "${word2}" because it doesn't distinguish between candidates.`
+          );
+          continue;
+        }
+
+        this.unmatchedSuggestionsUsed += unmatchedCount;
+      }
+
+      this.currentPair = { word1, word2 };
+      this.usedWords.add(word1);
+      this.usedWords.add(word2);
+
+      logger.info(
+        `Using LLM-suggested edge cases: "${word1}" vs "${word2}". Remaining suggestions: ${this.suggestedWordsQueue.length}.`
+      );
+
+      return this.currentPair;
     }
 
     // If we're making no progress, increase search parameters to find harder distinguishing words
@@ -589,6 +680,8 @@ export class PickController {
     this.lastActiveCandidateCount = 0;
     this.searchTimeoutMs = 2000;
     this.searchPoolSize = 30;
+    this.suggestedWordsQueue = [];
+    this.unmatchedSuggestionsUsed = 0;
     
     if (!preserveClassifications) {
       this.usedWords.clear();
@@ -715,6 +808,13 @@ export class PickController {
    */
   getThreshold(): number {
     return this.thresholdVotes;
+  }
+
+  /**
+   * Set the maximum number of LLM-suggested edge cases to surface
+   */
+  setMaxSuggestedEdgeCases(limit: number): void {
+    this.maxSuggestedEdgeCases = this.clampSuggestedEdgeCaseLimit(limit);
   }
 
   /**
