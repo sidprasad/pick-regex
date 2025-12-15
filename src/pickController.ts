@@ -542,13 +542,27 @@ export class PickController {
       this.state = PickState.FINAL_RESULT;
       const best = this.selectBestCandidate();
       this.finalRegex = best;
-      logger.info(`Reached maximum classifications (${totalClassifications}/${this.maxClassifications}). Forcing termination with best candidate: "${best}"`);
+      if (best) {
+        logger.info(`Reached maximum classifications (${totalClassifications}/${this.maxClassifications}). Forcing termination with best candidate: "${best}"`);
+      } else {
+        logger.info(
+          `Reached maximum classifications (${totalClassifications}/${this.maxClassifications}). ` +
+            'No candidate has received a positive vote; treating as no valid regex.'
+        );
+      }
     } else if (staleProgress && activeCount > 1) {
       // No progress for too many pairs - candidates are indistinguishable
       this.state = PickState.FINAL_RESULT;
-      const best = this.selectBestCandidate(); 
+      const best = this.selectBestCandidate();
       this.finalRegex = best;
-      logger.info(`No progress after ${this.pairsWithoutProgress} consecutive pairs. Forcing termination with best candidate: "${best}"`);
+      if (best) {
+        logger.info(`No progress after ${this.pairsWithoutProgress} consecutive pairs. Forcing termination with best candidate: "${best}"`);
+      } else {
+        logger.info(
+          `No progress after ${this.pairsWithoutProgress} consecutive pairs. ` +
+            'No candidate has received a positive vote; treating as no valid regex.'
+        );
+      }
     }
     // When there's 1 candidate but no accepted word yet, continue showing pairs
   }
@@ -556,34 +570,27 @@ export class PickController {
   /**
    * Select the best candidate from active or all candidates
    */
-  private selectBestCandidate(): string {
-    const activeCandidates = this.candidates.filter(c => !c.eliminated);
-    
-    if (activeCandidates.length === 0) {
-      // Pick best from all candidates
-      const best = this.candidates.reduce((prev, curr) => {
-        if (curr.positiveVotes > prev.positiveVotes) {
-          return curr;
-        }
-        if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
-          return curr;
-        }
-        return prev;
-      });
-      return best.pattern;
-    } else {
-      // Pick best from active candidates
-      const best = activeCandidates.reduce((prev, curr) => {
-        if (curr.positiveVotes > prev.positiveVotes) {
-          return curr;
-        }
-        if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
-          return curr;
-        }
-        return prev;
-      });
-      return best.pattern;
+  private selectBestCandidate(): string | null {
+    const positiveActive = this.candidates.filter(c => !c.eliminated && c.positiveVotes > 0);
+    const positiveAny = this.candidates.filter(c => c.positiveVotes > 0);
+
+    if (positiveActive.length === 0 && positiveAny.length === 0) {
+      return null;
     }
+
+    const bestFrom = positiveActive.length > 0 ? positiveActive : positiveAny;
+
+    const best = bestFrom.reduce((prev, curr) => {
+      if (curr.positiveVotes > prev.positiveVotes) {
+        return curr;
+      }
+      if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
+        return curr;
+      }
+      return prev;
+    });
+
+    return best.pattern;
   }
 
   /**
