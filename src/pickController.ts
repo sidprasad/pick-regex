@@ -208,10 +208,11 @@ export class PickController {
     }));
     logger.info(`Initialized ${this.candidates.length} new candidate regexes.`);
 
-    // Re-apply existing classifications to new candidates
-    this.recalculateVotes();
-
+    // Set thresholds based on distinguishability BEFORE replaying votes
     await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
+
+    // Re-apply existing classifications to new candidates with correct thresholds
+    this.recalculateVotes();
 
     this.suggestedWordsQueue = [];
     this.prepareSuggestedWordsQueue(suggestedWords);
@@ -640,18 +641,33 @@ export class PickController {
     for (const record of this.wordHistory) {
       if (record.classification === WordClassification.ACCEPT) {
         for (const candidate of this.candidates) {
+          if (candidate.eliminated) {
+            continue;
+          }
           if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
             candidate.positiveVotes++;
+          } else {
+            // Candidate fails to match an accepted word - negative vote
+            candidate.negativeVotes++;
+            if (candidate.negativeVotes >= candidate.eliminationThreshold) {
+              candidate.eliminated = true;
+              logger.info(
+                `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) - failed to match accepted word "${record.word}".`
+              );
+            }
           }
         }
       } else if (record.classification === WordClassification.REJECT) {
         for (const candidate of this.candidates) {
+          if (candidate.eliminated) {
+            continue;
+          }
           if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
             candidate.negativeVotes++;
             if (candidate.negativeVotes >= candidate.eliminationThreshold) {
               candidate.eliminated = true;
               logger.info(
-                `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) from replaying word "${record.word}".`
+                `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) - incorrectly matched rejected word "${record.word}".`
               );
             }
           }
