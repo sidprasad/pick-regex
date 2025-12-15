@@ -732,8 +732,14 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         status
       });
 
+      // Only generate next pair if both words in current pair are classified
       if (state === PickState.VOTING && status.activeCandidates > 0) {
-        this.handleRequestNextPair();
+        const bothClassified = this.controller.areBothWordsClassified();
+        if (bothClassified) {
+          this.handleRequestNextPair();
+        } else {
+          logger.info('Only one word classified after update, waiting for second word');
+        }
       }
     } catch (error) {
       logger.error(error, 'Error updating classification');
@@ -907,6 +913,21 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       
       // Get status to send along with the final result
       const status = this.controller.getStatus();
+      
+      // Safety check: should never send finalResult with null regex
+      if (finalRegex === null) {
+        logger.error(new Error('Attempted to send finalResult with null regex'), 'Invalid state');
+        this.sendMessage({
+          type: 'noRegexFound',
+          message: 'No candidate regexes match your requirements.',
+          candidateDetails: status.candidateDetails,
+          wordsIn,
+          wordsOut,
+          wordHistory
+        });
+        await this.surveyPrompt.incrementUsageAndCheckPrompt();
+        return;
+      }
       
       this.sendMessage({
         type: 'finalResult',

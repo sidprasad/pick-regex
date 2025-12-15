@@ -1278,5 +1278,48 @@ suite('PickController Test Suite', () => {
       assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,
         'State should be FINAL_RESULT');
     });
+
+    test('Reclassifying same word repeatedly should not advance to next pair', async () => {
+      // Regression test: updating classification shouldn't skip to next pair
+      // if both words haven't been classified yet
+      const patterns = ['[a-z]+', '[0-9]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      const pair = await controller.generateNextPair();
+      const { word1, word2 } = pair;
+      
+      // Classify first word as REJECT
+      controller.classifyWord(word1, WordClassification.REJECT);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Only one word should be classified');
+      
+      // Update classification to ACCEPT
+      controller.updateClassification(0, WordClassification.ACCEPT);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Still only one word should be classified after update');
+      
+      // Update again to UNSURE
+      controller.updateClassification(0, WordClassification.UNSURE);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Still only one word should be classified after another update');
+      
+      // Update back to REJECT
+      controller.updateClassification(0, WordClassification.REJECT);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Still only one word should be classified');
+      
+      // Verify the word history only has one entry (same word, updated multiple times)
+      const history = controller.getWordHistory();
+      assert.strictEqual(history.length, 1,
+        'Should only have one entry in history for the same word');
+      assert.strictEqual(history[0].word, word1,
+        'History entry should be for word1');
+      assert.strictEqual(history[0].classification, WordClassification.REJECT,
+        'Classification should be the latest value (REJECT)');
+      
+      // Current pair should still be the same
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Current pair should still be waiting for second word');
+    });
   });
 });
