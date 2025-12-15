@@ -1164,4 +1164,119 @@ suite('PickController Test Suite', () => {
       }
     });
   });
+
+  suite('Regression tests', () => {
+    test('Word history should include matchingRegexes when all candidates are eliminated', async () => {
+      // Regression test for bug where matchingRegexes was empty when no regex found
+      const patterns = ['[a-z]+', '[0-9]+', '[A-Z]+'];
+      controller.setThreshold(1);
+      await controller.generateCandidates('test', patterns);
+      
+      // Classify enough words to eliminate all candidates
+      for (let i = 0; i < 5; i++) {
+        try {
+          const pair = await controller.generateNextPair();
+          
+          // Reject both words
+          controller.classifyWord(pair.word1, WordClassification.REJECT);
+          controller.classifyWord(pair.word2, WordClassification.REJECT);
+          controller.clearCurrentPair();
+          
+          // Check if all eliminated
+          if (controller.getActiveCandidateCount() === 0) {
+            break;
+          }
+        } catch (error) {
+          break;
+        }
+      }
+      
+      // Verify word history has matchingRegexes even though all candidates eliminated
+      const wordHistory = controller.getWordHistory();
+      assert.ok(wordHistory.length > 0, 'Word history should not be empty');
+      
+      // Each record should have matchingRegexes array (might be empty if word didn't match any)
+      wordHistory.forEach((record, index) => {
+        assert.ok(Array.isArray(record.matchingRegexes), 
+          `Record ${index} should have matchingRegexes array`);
+        assert.ok('word' in record && typeof record.word === 'string',
+          `Record ${index} should have word field`);
+        assert.ok('classification' in record,
+          `Record ${index} should have classification field`);
+        assert.ok('timestamp' in record && typeof record.timestamp === 'number',
+          `Record ${index} should have timestamp field`);
+      });
+      
+      // Verify getFinalRegex returns null
+      assert.strictEqual(controller.getFinalRegex(), null,
+        'Final regex should be null when all candidates eliminated');
+      assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,
+        'State should be FINAL_RESULT');
+    });
+
+    test('Final regex must have at least one upvote (positive vote)', async () => {
+      // Regression test to ensure we never select a regex that has no positive votes
+      const patterns = ['[a-z]+', '[0-9]+', '[A-Z]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      controller.setMaxClassifications(5);
+      
+      // Classify only with UNSURE and REJECT - no ACCEPT votes
+      for (let i = 0; i < 5; i++) {
+        try {
+          const pair = await controller.generateNextPair();
+          
+          // Use only UNSURE and REJECT, never ACCEPT
+          controller.classifyWord(pair.word1, i % 2 === 0 ? WordClassification.UNSURE : WordClassification.REJECT);
+          controller.classifyWord(pair.word2, WordClassification.REJECT);
+          controller.clearCurrentPair();
+        } catch (error) {
+          break;
+        }
+      }
+      
+      // Force check final state (happens after max classifications)
+      controller.checkFinalState();
+      
+      // Verify final regex is null because no candidate has positive votes
+      const finalRegex = controller.getFinalRegex();
+      assert.strictEqual(finalRegex, null,
+        'Final regex should be null when no candidate has positive votes');
+      
+      // Verify all candidates have zero positive votes
+      const status = controller.getStatus();
+      const candidatesWithPositiveVotes = status.candidateDetails.filter(c => c.positiveVotes > 0);
+      assert.strictEqual(candidatesWithPositiveVotes.length, 0,
+        'No candidates should have positive votes');
+    });
+
+    test('Final regex is selected only when it has at least one upvote', async () => {
+      // Positive test: verify final regex IS selected when candidate has upvotes
+      const patterns = ['[a-z]+', '[0-9]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      const pair = await controller.generateNextPair();
+      
+      // Accept one word to give positive vote
+      controller.classifyWord(pair.word1, WordClassification.ACCEPT);
+      controller.classifyWord(pair.word2, WordClassification.REJECT);
+      
+      // Check that at least one candidate has positive votes
+      const status = controller.getStatus();
+      const candidatesWithPositiveVotes = status.candidateDetails.filter(c => c.positiveVotes > 0);
+      assert.ok(candidatesWithPositiveVotes.length > 0,
+        'At least one candidate should have positive votes after ACCEPT classification');
+      
+      // Force termination by maxing out classifications
+      controller.setMaxClassifications(2);
+      controller.checkFinalState();
+      
+      // Verify a final regex was selected
+      const finalRegex = controller.getFinalRegex();
+      assert.ok(finalRegex !== null,
+        'Final regex should be selected when candidates have positive votes');
+      assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,
+        'State should be FINAL_RESULT');
+    });
+  });
 });

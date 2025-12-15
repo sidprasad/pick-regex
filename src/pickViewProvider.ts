@@ -577,7 +577,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
             message: `All ${this.controller.getStatus().totalCandidates} candidate regexes were eliminated after re-applying your ${wordHistory.length} previous classification${wordHistory.length === 1 ? '' : 's'}. Try revising your prompt or starting fresh.`,
             candidateDetails: this.controller.getStatus().candidateDetails,
             wordsIn: wordHistory.filter(r => r.classification === 'accept').map(r => r.word),
-            wordsOut: wordHistory.filter(r => r.classification === 'reject').map(r => r.word)
+            wordsOut: wordHistory.filter(r => r.classification === 'reject').map(r => r.word),
+            wordHistory
           });
         } else {
           // This is an unexpected error with no classifications
@@ -713,17 +714,27 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private handleUpdateClassification(index: number, classification: string) {
+  private async handleUpdateClassification(index: number, classification: string) {
     try {
       const classificationEnum = classification as WordClassification;
       this.controller.updateClassification(index, classificationEnum);
-      
+
+      const state = this.controller.getState();
       const status = this.controller.getStatus();
-      
+
+      if (state === PickState.FINAL_RESULT) {
+        await this.handleFinalResult();
+        return;
+      }
+
       this.sendMessage({
         type: 'classificationUpdated',
         status
       });
+
+      if (state === PickState.VOTING && status.activeCandidates > 0) {
+        this.handleRequestNextPair();
+      }
     } catch (error) {
       logger.error(error, 'Error updating classification');
       this.sendMessage({
@@ -884,7 +895,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           message: 'No candidate regexes match your requirements.',
           candidateDetails: this.controller.getStatus().candidateDetails,
           wordsIn,
-          wordsOut
+          wordsOut,
+          wordHistory
         });
         
         // Track usage completion and potentially show survey prompt

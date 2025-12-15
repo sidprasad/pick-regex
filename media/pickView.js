@@ -1311,7 +1311,7 @@
                     }, 2000);
                     break;
                 case 'noRegexFound':
-                    showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut);
+                    showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut, message.wordHistory);
                     break;
                 case 'insufficientWords':
                     showInsufficientWords(message.candidates, message.status);
@@ -1751,6 +1751,10 @@
         }
 
         function updateStatus(status) {
+            lastStatus = status;
+            if (status.activeCandidates > 0) {
+                clearHistoryNotice();
+            }
             updateCandidates(status.candidateDetails, status.threshold);
             updateWordHistory(status.wordHistory);
             const fallbackMatches = lastPairMatches && lastPair
@@ -1815,6 +1819,7 @@
             lastPair = pair;
             lastStatus = status;
             lastPairMatches = pairMatches || null;
+            clearHistoryNotice();
             closeMatchPopovers();
 
             showSection('voting');
@@ -2198,11 +2203,37 @@
             vscode.postMessage({ type: 'vote', acceptedWord: word });
         }
 
+        function clearHistoryNotice() {
+            if (!wordHistory) {
+                return;
+            }
+            const existingNotice = wordHistory.querySelector('.history-note');
+            if (existingNotice) {
+                existingNotice.remove();
+            }
+        }
+
+        function addHistoryNotice(message) {
+            if (!wordHistory || !historyItems) {
+                return;
+            }
+            clearHistoryNotice();
+
+            const notice = document.createElement('div');
+            notice.className = 'history-note';
+            notice.style.cssText = 'margin: 8px 0 12px 0; padding: 10px; border-radius: 6px; background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-errorForeground);';
+            notice.textContent = message;
+
+            wordHistory.insertBefore(notice, historyItems);
+        }
+
         function showFinalResultWithContext(regex, inWords, outWords, status) {
             showSection('voting');
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
+
+            clearHistoryNotice();
 
             wordPair.innerHTML = '<div style="text-align: center; padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--pick-accept-color); border-radius: 8px;">' +
                 '<h2 style="margin: 0 0 10px 0; color: var(--pick-accept-color);">Final Regex Selected</h2>' +
@@ -2219,20 +2250,15 @@
             showStatusWithoutCancel('Classification complete! Selected regex highlighted below.');
         }
 
-        function showNoRegexFound(message, candidateDetails, inWords, outWords) {
-            showSection('final');
+        function showNoRegexFound(message, candidateDetails, inWords, outWords, wordHistory) {
+            // Keep the classification history visible so users can re-classify and iterate
+            showSection('voting');
             if (statusMessage) {
                 statusMessage.innerHTML = '';
             }
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
-
-            // Display the current prompt with revise button
-            const currentPrompt = promptInput.value;
-            if (currentPrompt) {
-                updatePromptDisplay(currentPrompt);
-            }
 
             const container = document.createElement('div');
             container.style.cssText = 'padding:10px; background:var(--vscode-inputValidation-errorBackground); color:var(--vscode-errorForeground); border-radius:4px; margin-bottom:10px; max-width:100%; box-sizing:border-box;';
@@ -2242,107 +2268,38 @@
             p.textContent = message; // use textContent to avoid injecting HTML
 
             container.appendChild(p);
-            finalRegex.innerHTML = '';
-            finalRegex.appendChild(container);
+            wordPair.innerHTML = '';
+            wordPair.appendChild(container);
 
-            const detailsContainer = document.createElement('div');
-            
-            candidateDetails.forEach(function(c) {
-                const info = createCandidateInfo(c);
-                
-                const item = document.createElement('div');
-                item.className = 'candidate-item eliminated';
-                item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 6px 0; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px;';
-                
-                const patternSpan = document.createElement('span');
-                patternSpan.className = 'candidate-pattern';
-                patternSpan.style.cssText = 'flex: 1; overflow-x: auto; white-space: nowrap; margin-right: 10px; font-family: monospace;';
-                patternSpan.innerHTML = highlightRegex(c.pattern);
-                
-                const votesDiv = document.createElement('div');
-                votesDiv.className = 'candidate-votes';
-                votesDiv.style.cssText = 'display:flex; gap:8px; align-items:center;';
-                
-                // Create copy button with event listener
-                const copyBtn = document.createElement('button');
-                copyBtn.className = 'btn copy';
-                copyBtn.title = 'Copy regex';
-                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                    '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
-                    '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
-                    '</svg>';
-                copyBtn.addEventListener('click', function() {
-                    copyRegex(c.pattern);
-                });
-                
-                const positiveBadge = document.createElement('span');
-                positiveBadge.className = 'badge positive';
-                positiveBadge.textContent = '✓ ' + c.positiveVotes;
-                
-                const negativeBadge = document.createElement('span');
-                negativeBadge.className = 'badge negative';
-                negativeBadge.textContent = '✗ ' + c.negativeVotes;
-                
-                votesDiv.appendChild(copyBtn);
-                if (info) {
-                    votesDiv.appendChild(info.button);
-                }
-                votesDiv.appendChild(positiveBadge);
-                votesDiv.appendChild(negativeBadge);
+            // Refresh candidates and word history so users can keep iterating
+            updateCandidates(candidateDetails || [], lastStatus ? lastStatus.threshold : undefined);
 
-                item.appendChild(patternSpan);
-                item.appendChild(votesDiv);
+            // Use the provided wordHistory if available, otherwise fall back to constructing from inWords/outWords
+            const history = (wordHistory && Array.isArray(wordHistory))
+                ? wordHistory
+                : (lastStatus && Array.isArray(lastStatus.wordHistory))
+                ? lastStatus.wordHistory
+                : [
+                    ...(Array.isArray(inWords) ? inWords.map(word => ({
+                        word,
+                        classification: 'accept',
+                        matchingRegexes: []
+                    })) : []),
+                    ...(Array.isArray(outWords) ? outWords.map(word => ({
+                        word,
+                        classification: 'reject',
+                        matchingRegexes: []
+                    })) : [])
+                ];
 
-                if (info) {
-                    item.appendChild(info.panel);
-                }
+            updateWordHistory(history);
+            addHistoryNotice('No regex survived. Review or re-classify your previously categorized examples below.');
 
-                detailsContainer.appendChild(item);
-            });
-
-            wordsIn.innerHTML = (inWords && inWords.length > 0) 
-                ? inWords.map(function(w) {
-                    return '<div class="word-display">' +
-                        '<span class="word-readable example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + w + '</span>' +
-                        '<span class="word-literal example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + toLiteralString(w) + '</span>' +
-                        '</div>';
-                }).join('')
-                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as IN</div>';
-
-            wordsOut.innerHTML = (outWords && outWords.length > 0)
-                ? outWords.map(function(w) {
-                    return '<div class="word-display">' +
-                        '<span class="word-readable example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + w + '</span>' +
-                        '<span class="word-literal example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + toLiteralString(w) + '</span>' +
-                        '</div>';
-                }).join('')
-                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as OUT</div>';
-
-            if (candidateDetails && candidateDetails.length > 0) {
-                // Remove any previously inserted candidates note to avoid duplicates
-                const existingCandidatesNote = document.querySelector('.candidates-eliminated-note');
-                if (existingCandidatesNote) {
-                    existingCandidatesNote.remove();
-                }
-                
-                const candidatesNote = document.createElement('div');
-                candidatesNote.className = 'candidates-eliminated-note';
-                candidatesNote.style.cssText = 'margin-top: 20px; padding: 10px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px;';
-                
-                const header = document.createElement('div');
-                header.style.cssText = 'font-size: 12px; opacity: 0.8; margin-bottom: 8px;';
-                const strong = document.createElement('strong');
-                strong.textContent = 'All candidates were eliminated:';
-                header.appendChild(strong);
-                
-                candidatesNote.appendChild(header);
-                candidatesNote.appendChild(detailsContainer);
-                
-                const examplesGrid = document.querySelector('.examples');
-                if (examplesGrid && examplesGrid.parentNode) {
-                    examplesGrid.parentNode.insertBefore(candidatesNote, examplesGrid.nextSibling);
-                }
+            if (wordHistory && typeof wordHistory.scrollIntoView === 'function') {
+                wordHistory.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
+
+            showStatusWithoutCancel('All candidates were eliminated. Review your classifications below or start fresh.');
         }
 
         function resetUI(preserveClassifications) {
@@ -2362,7 +2319,9 @@
             if (existingCandidatesNote) {
                 existingCandidatesNote.remove();
             }
-            
+
+            clearHistoryNotice();
+
             showSection('prompt');
             if (statusMessage) {
                 statusMessage.innerHTML = '';
