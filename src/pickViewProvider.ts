@@ -170,6 +170,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
             this.sendMessage({ type: 'error', message: 'Failed to copy to clipboard' });
           }
           break;
+        case 'submitExamples':
+          await this.handleSubmitExamples(data.acceptWords, data.rejectWords);
+          break;
         case 'cancel':
           this.handleCancel();
           break;
@@ -728,6 +731,93 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         message: `Error updating classification: ${error}`
       });
     }
+  }
+
+  /**
+   * Apply user-provided examples outside the current word pair flow.
+   */
+  private async handleSubmitExamples(acceptWords: string[] = [], rejectWords: string[] = []) {
+    try {
+      const normalizedAccept = this.normalizeExampleWords(acceptWords);
+      const normalizedReject = this.normalizeExampleWords(rejectWords);
+
+      const conflicts = normalizedAccept.filter(word => normalizedReject.includes(word));
+      if (conflicts.length > 0) {
+        this.sendMessage({
+          type: 'examplesRejected',
+          message: `The same word appears in both lists: ${conflicts.join(', ')}. Remove duplicates and try again.`
+        });
+        return;
+      }
+
+      const combined = [
+        ...normalizedAccept.map(word => ({ word, classification: WordClassification.ACCEPT })),
+        ...normalizedReject.map(word => ({ word, classification: WordClassification.REJECT }))
+      ];
+
+      if (combined.length === 0) {
+        this.sendMessage({
+          type: 'examplesRejected',
+          message: 'Add at least one example that should match or should not match.'
+        });
+        return;
+      }
+
+      const maxExamples = 12;
+      const limited = combined.slice(0, maxExamples);
+      const truncated = combined.length - limited.length;
+
+      const applied = this.controller.classifyDirectWords(limited);
+      logger.info(`Applied ${applied} direct classification(s) from user-provided examples.`);
+
+      const state = this.controller.getState();
+      const status = this.controller.getStatus();
+
+      this.sendMessage({
+        type: 'examplesApplied',
+        status,
+        acceptCount: limited.filter(entry => entry.classification === WordClassification.ACCEPT).length,
+        rejectCount: limited.filter(entry => entry.classification === WordClassification.REJECT).length,
+        truncated
+      });
+
+      if (state === PickState.FINAL_RESULT) {
+        await this.handleFinalResult();
+      }
+    } catch (error) {
+      logger.error(error, 'Error applying custom examples');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.sendMessage({
+        type: 'error',
+        message: `Error applying your examples: ${errorMessage}`
+      });
+    }
+  }
+
+  /**
+   * Normalize user-provided examples by trimming whitespace and removing duplicates.
+   */
+  private normalizeExampleWords(words: unknown): string[] {
+    if (!Array.isArray(words)) {
+      return [];
+    }
+
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+
+    for (const entry of words) {
+      if (typeof entry !== 'string') {
+        continue;
+      }
+      const word = entry.trim();
+      if (word.length === 0 || seen.has(word)) {
+        continue;
+      }
+      seen.add(word);
+      normalized.push(word);
+    }
+
+    return normalized;
   }
 
   /**

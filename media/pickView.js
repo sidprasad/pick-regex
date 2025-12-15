@@ -137,7 +137,7 @@
         if (refreshModelsBtn) {
             refreshModelsBtn.addEventListener('click', refreshModels);
         }
-        
+
         const wordPair = document.getElementById('wordPair');
         const candidatesList = document.getElementById('candidatesList');
         const wordHistory = document.getElementById('wordHistory');
@@ -145,6 +145,68 @@
         const finalRegex = document.getElementById('finalRegex');
         const wordsIn = document.getElementById('wordsIn');
         const wordsOut = document.getElementById('wordsOut');
+        const wordEditHint = document.getElementById('wordEditHint');
+        const customExamples = document.getElementById('customExamples');
+        const customExamplesToggle = document.getElementById('customExamplesToggle');
+        const customExamplesPanel = document.getElementById('customExamplesPanel');
+        const customExamplesInput = document.getElementById('customExamplesInput');
+        const customExamplesVoteUp = document.getElementById('customExamplesVoteUp');
+        const customExamplesVoteDown = document.getElementById('customExamplesVoteDown');
+        const customExamplesCancel = document.getElementById('customExamplesCancel');
+        const customExamplesStatus = document.getElementById('customExamplesStatus');
+
+        if (customExamplesToggle) {
+            customExamplesToggle.addEventListener('click', function() {
+                if (customExamplesPanel && customExamplesPanel.classList.contains('hidden')) {
+                    setExamplesStatus('');
+                }
+                toggleExamplesPanel();
+            });
+        }
+
+        if (customExamplesCancel) {
+            customExamplesCancel.addEventListener('click', function() {
+                toggleExamplesPanel(false);
+            });
+        }
+
+        function submitSingleExample(classification) {
+            if (!customExamplesInput) {
+                return;
+            }
+            const word = (customExamplesInput.value || '').trim();
+            if (!word) {
+                setExamplesStatus('Enter an example first.', 'error');
+                toggleExamplesPanel(true);
+                customExamplesInput.focus();
+                return;
+            }
+
+            setExamplesStatus('Applying your example...', 'muted');
+            setExampleButtonsDisabled(true);
+
+            vscode.postMessage({
+                type: 'submitExamples',
+                acceptWords: classification === 'accept' ? [word] : [],
+                rejectWords: classification === 'reject' ? [word] : []
+            });
+        }
+
+        if (customExamplesVoteUp) {
+            customExamplesVoteUp.addEventListener('click', function() {
+                submitSingleExample('accept');
+            });
+        }
+
+        if (customExamplesVoteDown) {
+            customExamplesVoteDown.addEventListener('click', function() {
+                submitSingleExample('reject');
+            });
+        }
+
+        if (wordEditHint) {
+            wordEditHint.setAttribute('role', 'note');
+        }
 
         // Track literal mode state (persisted; default off)
         const savedLiteralMode = typeof viewState.literalMode === 'boolean'
@@ -235,6 +297,47 @@
         updateLiteralModeUI();
         updateDiffModeUI();
         updateCandidatesUI();
+
+        function toggleExamplesPanel(forceOpen) {
+            if (!customExamplesPanel || !customExamplesToggle) {
+                return;
+            }
+            const shouldOpen = typeof forceOpen === 'boolean'
+                ? forceOpen
+                : customExamplesPanel.classList.contains('hidden');
+            customExamplesPanel.classList.toggle('hidden', !shouldOpen);
+            customExamplesToggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            if (shouldOpen && customExamplesInput) {
+                customExamplesInput.focus();
+            }
+        }
+
+        function setExamplesStatus(message, tone) {
+            if (!customExamplesStatus) {
+                return;
+            }
+            customExamplesStatus.textContent = message || '';
+            customExamplesStatus.setAttribute('data-tone', tone || 'muted');
+        }
+
+        function clearExamplesForm(preserveStatus) {
+            if (customExamplesInput) {
+                customExamplesInput.value = '';
+            }
+            if (!preserveStatus) {
+                setExamplesStatus('');
+            }
+            setExampleButtonsDisabled(false);
+        }
+
+        function setExampleButtonsDisabled(disabled) {
+            if (customExamplesVoteUp) {
+                customExamplesVoteUp.disabled = disabled;
+            }
+            if (customExamplesVoteDown) {
+                customExamplesVoteDown.disabled = disabled;
+            }
+        }
 
         function persistViewState() {
             viewState = { ...viewState, promptHistory: promptHistory.slice(0, 5) };
@@ -1188,6 +1291,13 @@
                 case 'classificationUpdated':
                     updateStatus(message.status);
                     break;
+                case 'examplesApplied':
+                    updateStatus(message.status);
+                    handleExamplesApplied(message);
+                    break;
+                case 'examplesRejected':
+                    handleExamplesRejected(message.message);
+                    break;
                 case 'voteProcessed':
                     updateStatus(message.status);
                     break;
@@ -1256,6 +1366,14 @@
                 }
             }
 
+            if (customExamplesPanel) {
+                customExamplesPanel.classList.add('hidden');
+            }
+            if (customExamplesToggle) {
+                customExamplesToggle.setAttribute('aria-expanded', 'false');
+            }
+            clearExamplesForm();
+            
             // Show the splash again
             if (splashScreen) {
                 splashScreen.classList.remove('hidden');
@@ -1287,6 +1405,7 @@
             if (statusMessage) {
                 statusMessage.innerHTML = '';
             }
+            setExampleButtonsDisabled(false);
             // Reset to prompt section
             showSection('prompt');
             // statusCancelBtn needs explicit hiding since showSection doesn't manage it
@@ -1642,6 +1761,31 @@
                 : undefined;
             decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
             showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
+        }
+
+        function handleExamplesApplied(message) {
+            setExampleButtonsDisabled(false);
+
+            const parts = [];
+            if (message && message.acceptCount) {
+                parts.push(`${message.acceptCount} should match`);
+            }
+            if (message && message.rejectCount) {
+                parts.push(`${message.rejectCount} should not match`);
+            }
+            if (message && typeof message.truncated === 'number' && message.truncated > 0) {
+                parts.push(`Ignored ${message.truncated} extra entr${message.truncated === 1 ? 'y' : 'ies'}`);
+            }
+
+            const summary = parts.length > 0 ? `Added ${parts.join(', ')}.` : 'Examples applied.';
+            clearExamplesForm(true);
+            setExamplesStatus(summary, 'success');
+        }
+
+        function handleExamplesRejected(errorMessage) {
+            setExampleButtonsDisabled(false);
+            toggleExamplesPanel(true);
+            setExamplesStatus(errorMessage || 'Unable to use those examples.', 'error');
         }
 
         function classifyWord(word, classification) {

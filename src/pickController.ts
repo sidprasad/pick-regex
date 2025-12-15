@@ -334,10 +334,46 @@ export class PickController {
       throw new Error('Word is not in the current pair');
     }
 
+    this.applyClassification(word, classification);
+  }
+
+  /**
+   * Apply classifications provided directly by the user (outside the generated pair flow).
+   * Returns the number of successfully applied words so callers can surface feedback.
+   */
+  classifyDirectWords(
+    entries: Array<{ word: string; classification: WordClassification }>
+  ): number {
+    let applied = 0;
+
+    for (const entry of entries) {
+      if (!entry || typeof entry.word !== 'string') {
+        continue;
+      }
+
+      const word = entry.word;
+      if (word.length === 0) {
+        continue;
+      }
+
+      this.applyClassification(word, entry.classification);
+      applied++;
+    }
+
+    return applied;
+  }
+
+  /**
+   * Core classification logic shared across pair-based and direct submissions.
+   */
+  private applyClassification(word: string, classification: WordClassification): void {
     // Get matching regexes for this word
     const matchingRegexes = this.candidates
       .filter(c => !c.eliminated && this.analyzer.verifyMatch(word, c.pattern))
       .map(c => c.pattern);
+
+    // Track the word as used so it is not resurfaced in later generated pairs
+    this.usedWords.add(word);
 
     // Record classification
     this.wordHistory.push({
