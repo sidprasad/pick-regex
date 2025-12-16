@@ -1460,4 +1460,70 @@ suite('PickController Test Suite', () => {
       }
     });
   });
+
+  // Test for the bug where changing a vote from REJECT to ACCEPT doesn't update state
+  suite('Vote Change State Update', () => {
+    test('Should transition from FINAL_RESULT back to VOTING when classification change makes candidates active', async () => {
+      // Setup: Create 4 candidates similar to the cricket example
+      const patterns = [
+        '(?:deep|short|silly)?\\s*(?:mid|long|fine|square)?\\s*(?:on|off|leg|wicket)?\\s*(?:slip|gully|point)',
+        '[a-zA-Z]+(?:\\s+[a-zA-Z]+){0,3}(?:\\s+(?:slip|point|cover|leg|wicket|on|off|man|gully))',
+        '(?:first|second|third)?\\s*slip|(?:deep|short)?\\s*(?:point|cover|leg)',
+        '(?:wicket[\\s-]?keeper|keeper)|(?:[a-zA-Z]+\\s+)*(?:slip|gully|point|cover|leg)'
+      ];
+      
+      await controller.generateCandidates('test positions', patterns);
+      assert.strictEqual(controller.getState(), PickState.VOTING);
+      
+      // Classify words to eliminate all candidates
+      // Word 1: "silly mid off" - ACCEPT
+      controller.classifyDirectWords([{ word: 'silly mid off', classification: WordClassification.ACCEPT }]);
+      
+      // Word 2: "backward short leg" - REJECT (should eliminate candidates 2 and 4 that match it)
+      controller.classifyDirectWords([{ word: 'backward short leg', classification: WordClassification.REJECT }]);
+      
+      // Word 3: "forward short leg" - ACCEPT (should eliminate candidate 3 that doesn't match it)
+      controller.classifyDirectWords([{ word: 'forward short leg', classification: WordClassification.ACCEPT }]);
+      
+      // Word 4: "wicket leg" - REJECT (should eliminate remaining candidates that match it)
+      controller.classifyDirectWords([{ word: 'wicket leg', classification: WordClassification.REJECT }]);
+      
+      // At this point, all candidates should be eliminated
+      const stateBeforeChange = controller.getState();
+      const activeBeforeChange = controller.getActiveCandidateCount();
+      
+      console.log(`Before change: state=${stateBeforeChange}, active=${activeBeforeChange}`);
+      console.log(`Candidate details:`, controller.getStatus().candidateDetails.map(c => ({
+        pattern: c.pattern.substring(0, 30) + '...',
+        eliminated: c.eliminated,
+        negVotes: c.negativeVotes,
+        posVotes: c.positiveVotes
+      })));
+      
+      // Now change "wicket leg" from REJECT to ACCEPT
+      const wordHistory = controller.getWordHistory();
+      const wicketLegIndex = wordHistory.findIndex(r => r.word === 'wicket leg');
+      assert.notStrictEqual(wicketLegIndex, -1, 'Should find "wicket leg" in history');
+      
+      controller.updateClassification(wicketLegIndex, WordClassification.ACCEPT);
+      
+      // After the change, some candidates should become active again
+      const stateAfterChange = controller.getState();
+      const activeAfterChange = controller.getActiveCandidateCount();
+      
+      console.log(`After change: state=${stateAfterChange}, active=${activeAfterChange}`);
+      console.log(`Candidate details:`, controller.getStatus().candidateDetails.map(c => ({
+        pattern: c.pattern.substring(0, 30) + '...',
+        eliminated: c.eliminated,
+        negVotes: c.negativeVotes,
+        posVotes: c.positiveVotes
+      })));
+      
+      // The bug is: state remains FINAL_RESULT even though we have active candidates
+      // Expected: state should transition back to VOTING
+      assert.ok(activeAfterChange > 0, 'Should have active candidates after changing vote');
+      assert.strictEqual(stateAfterChange, PickState.VOTING, 
+        `State should transition to VOTING when candidates become active (was ${stateAfterChange})`);
+    });
+  });
 });
