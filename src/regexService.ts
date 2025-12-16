@@ -12,6 +12,14 @@ export interface RegexGenerationResult {
   candidates: RegexCandidate[];
 }
 
+export interface RegexGenerationOptions {
+  /**
+   * Positive examples that should match the intended regex.
+   * Used to provide lightweight grounding context to the LLM.
+   */
+  positiveExamples?: string[];
+}
+
 /**
  * Represents an available LLM chat model
  */
@@ -198,7 +206,8 @@ function sanitizeEdgeCases(rawEdgeCases: unknown): string[] {
 export async function generateRegexFromDescription(
   description: string,
   token: vscode.CancellationToken,
-  modelId?: string
+  modelId?: string,
+  options: RegexGenerationOptions = {}
 ): Promise<RegexGenerationResult> {
   logger.info(`User prompt: ${description}`);
 
@@ -220,6 +229,17 @@ export async function generateRegexFromDescription(
     }
   }
   logger.info(`Using model: ${model.name} (vendor: ${model.vendor}, family: ${model.family})`);
+
+  const positiveExamples = (options.positiveExamples ?? [])
+    .map(example => example.trim())
+    .filter(example => example.length > 0);
+  const exampleLines = positiveExamples.length > 0
+    ? [
+        '',
+        'Positive examples that SHOULD match (based on user classifications):',
+        ...positiveExamples.map(example => `- ${example}`)
+      ]
+    : [];
 
   // Build prompt: ask for multiple candidate regexes with explanations and confidence scores
   const messages: vscode.LanguageModelChatMessage[] = [
@@ -249,6 +269,7 @@ export async function generateRegexFromDescription(
       "- If a disallowed feature would be ideal, approximate it using only allowed syntax and mention the limitation in the explanation.",
       "",
       `Description: ${description}`,
+      ...exampleLines,
     ].join('\n')
     )
   ];

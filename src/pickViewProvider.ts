@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PickController, PickState, WordClassification } from './pickController';
+import { PickController, PickState, WordClassification, WordClassificationRecord } from './pickController';
 import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, ModelNotEnabledError, getAvailableChatModels, RegexCandidate } from './regexService';
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
@@ -254,6 +254,63 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     const maxSuggestions = config.get<number>('maxSuggestedEdgeCases', 2);
 
     return selectEdgeCaseSuggestions(candidates, this.analyzer, maxSuggestions);
+  }
+
+  private collectPositiveExamplesForRefinement(wordHistory: WordClassificationRecord[]): string[] {
+    const MAX_EXAMPLES = 6;
+    const MAX_TOTAL_CHARS = 240;
+    const MAX_EXAMPLE_LENGTH = 80;
+
+    const normalize = (records: WordClassificationRecord[]) =>
+      records
+        .filter(record => record.classification === WordClassification.ACCEPT)
+        .map(record => ({ ...record, word: record.word.trim() }))
+        .filter(record => record.word.length > 0)
+        .sort((a, b) => b.timestamp - a.timestamp);
+
+    const directAccepts = normalize(wordHistory.filter(record => record.source === 'direct'));
+    const pairAccepts = normalize(wordHistory.filter(record => record.source !== 'direct'));
+
+    const examples: string[] = [];
+    const seen = new Set<string>();
+    let totalChars = 0;
+
+    const tryAddExamples = (records: WordClassificationRecord[]) => {
+      for (const record of records) {
+        if (examples.length >= MAX_EXAMPLES || totalChars >= MAX_TOTAL_CHARS) {
+          return;
+        }
+
+        const word = record.word;
+        if (seen.has(word)) {
+          continue;
+        }
+
+        if (word.length > MAX_EXAMPLE_LENGTH) {
+          logger.info(
+            `Skipping positive example longer than ${MAX_EXAMPLE_LENGTH} characters to avoid bloating the prompt: "${word}".`
+          );
+          continue;
+        }
+
+        if (totalChars + word.length > MAX_TOTAL_CHARS) {
+          logger.info(
+            `Skipping positive example to stay within prompt size limit (${MAX_TOTAL_CHARS} chars total): "${word}".`
+          );
+          return;
+        }
+
+        seen.add(word);
+        examples.push(word);
+        totalChars += word.length;
+      }
+    };
+
+    // Prefer user-provided direct examples, then fall back to pair-based accepts.
+    tryAddExamples(directAccepts);
+    tryAddExamples(pairAccepts);
+
+    return examples;
   }
 
   private async handleGenerateCandidates(prompt: string, modelId?: string) {
@@ -980,10 +1037,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         this.cancellationTokenSource.dispose();
       }
       this.cancellationTokenSource = new vscode.CancellationTokenSource();
-      
+
+      const positiveExamples = this.collectPositiveExamplesForRefinement(sessionData.wordHistory);
+      if (positiveExamples.length > 0) {
+        logger.info(`Including ${positiveExamples.length} positive example(s) in refinement prompt.`);
+      }
+
       let candidates: RegexCandidate[] = [];
       try {
-        const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId);
+        const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId, {
+          positiveExamples
+        });
         candidates = result.candidates;
         logger.info(`Generated ${candidates.length} candidates from LLM for refinement`);
 

@@ -35,6 +35,7 @@ export interface WordClassificationRecord {
   classification: WordClassification;
   timestamp: number;
   matchingRegexes: string[];
+  source: 'pair' | 'direct';
 }
 
 export enum PickState {
@@ -384,7 +385,8 @@ export class PickController {
       word,
       classification,
       timestamp: Date.now(),
-      matchingRegexes
+      matchingRegexes,
+      source: fromPair ? 'pair' : 'direct'
     });
 
     // Process classification
