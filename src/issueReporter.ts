@@ -15,6 +15,9 @@ export async function openIssueReport(): Promise<void> {
   const extension = vscode.extensions.getExtension('SiddharthaPrasad.pick-regex');
   const logs = logger.getLogs(200) || 'No logs captured this session.';
 
+  // Keep logs fenced so GitHub doesn't treat them as lists/bullets when pasted.
+  const fencedLogs = ['```text', logs, '```'].join('\n');
+
   // Build a markdown issue skeleton that users can paste and tweak.
   // Keep it in the body only; do NOT pack it into the URL to avoid
   // header length or query-size issues in GitHub/new-issue redirects.
@@ -31,9 +34,7 @@ export async function openIssueReport(): Promise<void> {
     '## Actual Behavior',
     '',
     '## Logs',
-    '```',
-    logs,
-    '```',
+    fencedLogs,
     '',
     '## Environment',
     `- Extension version: ${extension?.packageJSON.version ?? 'unknown'}`,
