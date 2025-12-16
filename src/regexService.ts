@@ -236,7 +236,7 @@ export async function generateRegexFromDescription(
   const exampleLines = positiveExamples.length > 0
     ? [
         '',
-        'Positive examples that SHOULD match (based on user classifications):',
+        'Positive examples that SHOULD match:',
         ...positiveExamples.map(example => `- ${example}`)
       ]
     : [];
