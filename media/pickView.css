@@ -829,7 +829,8 @@
             background: var(--vscode-textCodeBlock-background);
             border: 1px solid var(--vscode-panel-border);
             border-radius: 4px;
-            padding: 6px 8px;
+            /* Remove horizontal padding so alternatives align with the primary pattern */
+            padding: 6px 0;
             display: flex;
             flex-direction: column;
             gap: 4px;
