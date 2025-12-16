@@ -1591,7 +1591,7 @@
             if (threshold !== undefined) {
                 const thresholdDiv = document.createElement('div');
                 thresholdDiv.className = 'threshold-info';
-                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative votes';
+                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative vote(s)';
                 candidatesList.appendChild(thresholdDiv);
             }
 
@@ -1683,7 +1683,7 @@
             if (threshold !== undefined) {
                 const thresholdDiv = document.createElement('div');
                 thresholdDiv.className = 'threshold-info';
-                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative votes';
+                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative vote(s)';
                 candidatesList.appendChild(thresholdDiv);
             }
 
@@ -1866,7 +1866,12 @@
                 
                 const literalSpan = document.createElement('span');
                 literalSpan.className = 'word-literal';
-                literalSpan.textContent = literal;
+                // Render HTML when diff mode is active (literal contains span markup), otherwise use textContent
+                if (diffOps) {
+                    literalSpan.innerHTML = literal;
+                } else {
+                    literalSpan.textContent = literal;
+                }
                 
                 // Handle editing events
                 let currentWord = word;
