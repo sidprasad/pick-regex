@@ -1591,7 +1591,7 @@
             if (threshold !== undefined) {
                 const thresholdDiv = document.createElement('div');
                 thresholdDiv.className = 'threshold-info';
-                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative votes';
+                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative vote(s)';
                 candidatesList.appendChild(thresholdDiv);
             }
 
@@ -1683,7 +1683,7 @@
             if (threshold !== undefined) {
                 const thresholdDiv = document.createElement('div');
                 thresholdDiv.className = 'threshold-info';
-                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative votes';
+                thresholdDiv.textContent = 'Rejection threshold: ' + threshold + ' negative vote(s)';
                 candidatesList.appendChild(thresholdDiv);
             }
 
