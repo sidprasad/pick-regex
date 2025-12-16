@@ -13,6 +13,17 @@ interface CandidateRegex {
   equivalents: string[];
 }
 
+export interface CandidateRelationship {
+  a: string;
+  b: string;
+  relation: 'equivalent' | 'subset' | 'superset' | 'overlap' | 'unknown';
+  countANotB?: string;
+  countBNotA?: string;
+  examplesANotB?: string[];
+  examplesBNotA?: string[];
+  examplesBoth?: string[];
+}
+
 interface CandidateSeed {
   pattern: string;
   explanation?: string;
@@ -51,6 +62,7 @@ export enum PickState {
 export class PickController {
   private analyzer: RegexAnalyzer;
   private candidates: CandidateRegex[] = [];
+  private candidateRelationships: CandidateRelationship[] = [];
   private usedWords = new Set<string>();
   private suggestedWordsQueue: string[] = [];
   private unmatchedSuggestionsUsed = 0;
@@ -144,6 +156,7 @@ export class PickController {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Generating candidates for prompt: ${prompt}`);
     this.currentPrompt = prompt;
+    this.candidateRelationships = [];
 
     // Initialize candidates
     const normalizedCandidates: CandidateSeed[] = candidatePatterns.map(candidate =>
@@ -189,6 +202,7 @@ export class PickController {
     logger.info(`Refining candidates with new prompt: ${newPrompt}`);
     logger.info(`Preserving ${this.wordHistory.length} existing classifications`);
     this.currentPrompt = newPrompt;
+    this.candidateRelationships = [];
 
     // Initialize new candidates
     const normalizedCandidates: CandidateSeed[] = newCandidatePatterns.map(candidate =>
@@ -768,6 +782,7 @@ export class PickController {
    */
   reset(preserveClassifications = false): void {
     this.candidates = [];
+    this.candidateRelationships = [];
     this.state = PickState.INITIAL;
     this.currentPair = null;
     this.finalRegex = null;
@@ -855,6 +870,7 @@ export class PickController {
     totalCandidates: number;
     usedWords: number;
     threshold: number;
+    candidateRelationships: CandidateRelationship[];
     candidateDetails: Array<{
       pattern: string;
       explanation?: string;
@@ -873,6 +889,7 @@ export class PickController {
       totalCandidates: this.candidates.length,
       usedWords: this.usedWords.size,
       threshold: this.thresholdVotes,
+      candidateRelationships: this.candidateRelationships,
       candidateDetails: this.candidates.map(c => ({
         pattern: c.pattern,
         explanation: c.explanation,
@@ -903,6 +920,50 @@ export class PickController {
    */
   getThreshold(): number {
     return this.thresholdVotes;
+  }
+
+  private determineRelationship(
+    countANotB?: bigint,
+    countBNotA?: bigint
+  ): CandidateRelationship['relation'] {
+    if (countANotB === undefined || countBNotA === undefined) {
+      return 'unknown';
+    }
+
+    if (countANotB === 0n && countBNotA === 0n) {
+      return 'equivalent';
+    }
+
+    if (countANotB === 0n) {
+      return 'subset';
+    }
+
+    if (countBNotA === 0n) {
+      return 'superset';
+    }
+
+    return 'overlap';
+  }
+
+  private recordCandidateRelationship(
+    patternA: string,
+    patternB: string,
+    countANotB?: bigint,
+    countBNotA?: bigint,
+    examplesANotB: string[] = [],
+    examplesBNotA: string[] = [],
+    examplesBoth: string[] = []
+  ) {
+    this.candidateRelationships.push({
+      a: patternA,
+      b: patternB,
+      relation: this.determineRelationship(countANotB, countBNotA),
+      countANotB: countANotB !== undefined ? countANotB.toString() : undefined,
+      countBNotA: countBNotA !== undefined ? countBNotA.toString() : undefined,
+      examplesANotB,
+      examplesBNotA,
+      examplesBoth
+    });
   }
 
   /**
@@ -952,33 +1013,38 @@ export class PickController {
     // Calculate total comparisons for progress
     const totalComparisons = (candidatePatterns.length * (candidatePatterns.length - 1)) / 2;
     let completedComparisons = 0;
-    let foundMinThreshold = false;
 
     // Compare all pairs
-    for (let i = 0; i < candidatePatterns.length && !foundMinThreshold; i++) {
-      for (let j = i + 1; j < candidatePatterns.length && !foundMinThreshold; j++) {
+    for (let i = 0; i < candidatePatterns.length; i++) {
+      for (let j = i + 1; j < candidatePatterns.length; j++) {
         try {
           // Add timeout to prevent hanging on complex regex comparisons
           const timeoutPromise = new Promise<void>((_, reject) => {
             setTimeout(() => reject(new Error('Timeout')), 5000); // 5 second timeout per comparison
           });
-          
+
           const countPromise = (async () => {
-            const countANotB = await this.analyzer.countWordsInANotInB(
+            const analysis = await this.analyzer.analyzeRelationship(
               candidatePatterns[i],
               candidatePatterns[j]
             );
-            const countBNotA = await this.analyzer.countWordsInANotInB(
+
+            this.recordCandidateRelationship(
+              candidatePatterns[i],
               candidatePatterns[j],
-              candidatePatterns[i]
+              analysis.countANotB,
+              analysis.countBNotA,
+              analysis.examplesANotB,
+              analysis.examplesBNotA,
+              analysis.examplesBoth
             );
 
             // Convert bigint to number, capping at default threshold
-            const countA = countANotB !== undefined 
-              ? Math.min(Number(countANotB), defaultThreshold)
+            const countA = analysis.countANotB !== undefined
+              ? Math.min(Number(analysis.countANotB), defaultThreshold)
               : defaultThreshold;
-            const countB = countBNotA !== undefined 
-              ? Math.min(Number(countBNotA), defaultThreshold)
+            const countB = analysis.countBNotA !== undefined
+              ? Math.min(Number(analysis.countBNotA), defaultThreshold)
               : defaultThreshold;
 
             // Update minimum for each candidate
@@ -987,11 +1053,6 @@ export class PickController {
             minDistinguishing.set(candidatePatterns[i], Math.min(currentMinA, countA));
             minDistinguishing.set(candidatePatterns[j], Math.min(currentMinB, countB));
             
-            // Check if we've reached minimum threshold - can stop early
-            if (Math.min(currentMinA, countA) === 1 || Math.min(currentMinB, countB) === 1) {
-              foundMinThreshold = true;
-              logger.info('Found minimum threshold of 1 - stopping early');
-            }
           })();
 
           await Promise.race([countPromise, timeoutPromise]);
@@ -1003,9 +1064,10 @@ export class PickController {
             // Set both to 1 (safest/most conservative) if we timeout
             minDistinguishing.set(candidatePatterns[i], 1);
             minDistinguishing.set(candidatePatterns[j], 1);
-            foundMinThreshold = true; // Can stop since we hit minimum
+            this.recordCandidateRelationship(candidatePatterns[i], candidatePatterns[j]);
           } else {
             logger.warn(`Could not count distinguishing words for '${candidatePatterns[i]}' vs '${candidatePatterns[j]}': ${error}`);
+            this.recordCandidateRelationship(candidatePatterns[i], candidatePatterns[j]);
           }
         } finally {
           completedComparisons++;

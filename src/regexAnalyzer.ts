@@ -165,6 +165,91 @@ export class RegexAnalyzer {
   }
 
   /**
+   * Analyze the relationship between two regexes.
+   * Returns counts for A \ B and B \ A (undefined if infinite/too complex)
+   * along with small example sets from each region (A \ B, B \ A, and A ∩ B).
+   */
+  async analyzeRelationship(
+    regexA: string,
+    regexB: string,
+    sampleLimit = 3
+  ): Promise<{
+    countANotB?: bigint;
+    countBNotA?: bigint;
+    examplesANotB: string[];
+    examplesBNotA: string[];
+    examplesBoth: string[];
+  }> {
+    const sampleFromSet = (rbSet: RegexBuilder | undefined): string[] => {
+      const samples: string[] = [];
+      if (!rbSet) { return samples; }
+
+      try {
+        for (const word of rbSet.enumerate()) {
+          samples.push(word);
+          if (samples.length >= sampleLimit) { break; }
+        }
+      } catch {
+        // Enumeration can fail on complex expressions; ignore samples
+      }
+
+      return samples;
+    };
+
+    try {
+      const rbA = await createRb(regexA);
+      const rbB = await createRb(regexB);
+
+      const diffAB = rbA.without(rbB);
+      const diffBA = rbB.without(rbA);
+      const intersection = rbA.without(diffAB); // A ∩ B = A \ (A \ B)
+
+      let countANotB: bigint | undefined;
+      let countBNotA: bigint | undefined;
+
+      try {
+        countANotB = diffAB.size();
+      } catch (error) {
+        if (isCacheOverflowError(error)) {
+          logger.warn(`Regex too complex for set difference: '${regexA}' \\ '${regexB}'`);
+          countANotB = undefined;
+        } else {
+          throw error;
+        }
+      }
+
+      try {
+        countBNotA = diffBA.size();
+      } catch (error) {
+        if (isCacheOverflowError(error)) {
+          logger.warn(`Regex too complex for set difference: '${regexB}' \\ '${regexA}'`);
+          countBNotA = undefined;
+        } else {
+          throw error;
+        }
+      }
+
+      return {
+        countANotB,
+        countBNotA,
+        examplesANotB: sampleFromSet(diffAB),
+        examplesBNotA: sampleFromSet(diffBA),
+        examplesBoth: sampleFromSet(intersection)
+      };
+    } catch (error) {
+      if (isCacheOverflowError(error)) {
+        logger.warn(`Regex too complex for relationship analysis: '${regexA}' vs '${regexB}'`);
+        return {
+          examplesANotB: [],
+          examplesBNotA: [],
+          examplesBoth: []
+        };
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Generate a word that matches and a word that doesn't match a regex
    */
   async generateWordPair(regex: string, excludedWords: string[] = []): Promise<WordPairResult> {

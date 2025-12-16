@@ -577,9 +577,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      const status = this.controller.getStatus();
       this.sendMessage({
         type: 'candidatesGenerated',
-        candidates: this.controller.getStatus().candidateDetails
+        candidates: status.candidateDetails,
+        candidateRelationships: status.candidateRelationships,
+        threshold: status.threshold
       });
 
       // Check cancellation before generating first pair
@@ -1289,9 +1292,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      const status = this.controller.getStatus();
       this.sendMessage({
         type: 'candidatesRefined',
-        candidates: this.controller.getStatus().candidateDetails,
+        candidates: status.candidateDetails,
+        candidateRelationships: status.candidateRelationships,
+        threshold: status.threshold,
         preservedClassifications: sessionData.wordHistory.length
       });
 
