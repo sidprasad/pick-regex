@@ -520,6 +520,8 @@ export class PickController {
     const activeCandidates = this.getActiveCandidates();
     const activeCount = activeCandidates.length;
 
+    logger.info(`checkFinalState: activeCount=${activeCount}, currentState=${this.state}, updateStaleCounter=${updateStaleCounter}`);
+
     // Only update stale progress tracking when explicitly requested (completing a pair)
     if (updateStaleCounter) {
       // Check if we made progress (eliminated at least one candidate)
@@ -536,6 +538,7 @@ export class PickController {
     const reachedMaxClassifications = totalClassifications >= this.maxClassifications;
 
     if (activeCount === 1) {
+      logger.info(`checkFinalState: Branch - activeCount === 1`);
       // Check if user has accepted a word that matches this regex
       const remainingRegex = activeCandidates[0];
       const hasAcceptedMatchingWord = this.wordHistory.some(
@@ -557,11 +560,13 @@ export class PickController {
         logger.info('Re-opening voting: single candidate remains but no accepted word matches it yet');
       }
     } else if (activeCount === 0) {
+      logger.info(`checkFinalState: Branch - activeCount === 0`);
       // All eliminated - NO REGEX IS CORRECT
       this.state = PickState.FINAL_RESULT;
       this.finalRegex = null;
       logger.info('All candidates eliminated - no correct regex found');
     } else if (reachedMaxClassifications) {
+      logger.info(`checkFinalState: Branch - reachedMaxClassifications (${totalClassifications}/${this.maxClassifications})`);
       // Hit maximum classification limit - force termination
       this.state = PickState.FINAL_RESULT;
       const best = this.selectBestCandidate();
@@ -575,11 +580,14 @@ export class PickController {
         );
       }
     } else if (activeCount > 1 && this.state === PickState.FINAL_RESULT) {
+      logger.info(`checkFinalState: Branch - activeCount > 1 && state === FINAL_RESULT`);
       // Was in final state but now we have multiple candidates again - reopen voting
       this.state = PickState.VOTING;
       this.finalRegex = null;
       this.currentPair = null; // Clear current pair to start fresh
       logger.info(`Re-opening voting: ${activeCount} active candidates remain after classification change`);
+    } else {
+      logger.info(`checkFinalState: Branch - no condition matched (activeCount=${activeCount}, state=${this.state})`);
     }
     // When there's 1 candidate but no accepted word yet, continue showing pairs
     // Stale progress counter is used only to increase search effort, not to terminate
@@ -655,6 +663,15 @@ export class PickController {
     // Reset search parameters to defaults
     this.searchTimeoutMs = 2000;
     this.searchPoolSize = 30;
+
+    // If we were in FINAL_RESULT state, reset to VOTING since we're recalculating
+    // checkFinalState will set it back to FINAL_RESULT if appropriate
+    if (this.state === PickState.FINAL_RESULT) {
+      this.state = PickState.VOTING;
+      this.finalRegex = null;
+      this.currentPair = null;
+      logger.info('Resetting state from FINAL_RESULT to VOTING for recalculation.');
+    }
 
     logger.info('Recalculating votes from word history (full state reset).');
 
