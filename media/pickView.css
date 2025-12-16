@@ -754,14 +754,100 @@
 
         .relationship-detail {
             color: var(--vscode-descriptionForeground);
-            margin-bottom: 6px;
+            margin-bottom: 10px;
         }
 
-        .relationship-counts {
+        .relationship-venn {
+            position: relative;
+            height: 140px;
+            margin-bottom: 12px;
+        }
+
+        .relationship-venn-circle {
+            position: absolute;
+            width: 160px;
+            height: 120px;
+            border-radius: 50%;
+            background: color-mix(in srgb, var(--vscode-tab-activeForeground) 10%, transparent);
+            border: 1px solid color-mix(in srgb, var(--vscode-tab-activeForeground) 20%, transparent);
+            top: 10px;
+        }
+
+        .relationship-venn-circle-a {
+            left: 10px;
+            background: color-mix(in srgb, var(--pick-accept-color) 14%, transparent);
+            border-color: color-mix(in srgb, var(--pick-accept-color) 40%, transparent);
+        }
+
+        .relationship-venn-circle-b {
+            right: 10px;
+            background: color-mix(in srgb, var(--pick-reject-color) 14%, transparent);
+            border-color: color-mix(in srgb, var(--pick-reject-color) 40%, transparent);
+        }
+
+        .relationship-venn-label {
+            position: absolute;
+            font-size: 12px;
+            color: var(--vscode-foreground);
+            padding: 4px 6px;
+            border-radius: 4px;
+            background: color-mix(in srgb, var(--pick-regex-surface) 75%, transparent);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+            max-width: 120px;
+        }
+
+        .relationship-venn-label-a {
+            left: 24px;
+            top: 18px;
+        }
+
+        .relationship-venn-label-b {
+            right: 24px;
+            top: 18px;
+            text-align: right;
+        }
+
+        .relationship-venn-label-overlap {
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 16px;
+            text-align: center;
+            background: color-mix(in srgb, var(--vscode-editorHoverWidget-background) 80%, transparent);
+        }
+
+        .relationship-example-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 6px;
+            gap: 8px;
+        }
+
+        .relationship-example {
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            padding: 6px;
+            background: color-mix(in srgb, var(--pick-regex-surface) 70%, transparent);
+        }
+
+        .relationship-example-title {
+            font-weight: 600;
+            margin-bottom: 4px;
             font-size: 12px;
+        }
+
+        .relationship-example-list {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+            display: grid;
+            gap: 3px;
+            font-family: var(--pick-font-mono);
+            word-break: break-word;
+            font-size: 12px;
+        }
+
+        .relationship-example-empty {
+            color: var(--vscode-descriptionForeground);
+            font-style: italic;
         }
 
         .relationship-empty {

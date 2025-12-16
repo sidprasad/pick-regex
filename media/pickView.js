@@ -1600,8 +1600,37 @@
 
             const legend = document.createElement('div');
             legend.className = 'relationship-legend';
-            legend.textContent = 'Set relationships are estimated from pairwise comparisons between candidates.';
+            legend.textContent = 'Pairwise comparisons include small witness sets inspired by regex-utils\' equivalence checker.';
             panel.appendChild(legend);
+
+            const buildExampleColumn = (title, items, modifier) => {
+                const column = document.createElement('div');
+                column.className = `relationship-example ${modifier || ''}`.trim();
+
+                const heading = document.createElement('div');
+                heading.className = 'relationship-example-title';
+                heading.textContent = title;
+                column.appendChild(heading);
+
+                const list = document.createElement('ul');
+                list.className = 'relationship-example-list';
+
+                if (Array.isArray(items) && items.length > 0) {
+                    items.slice(0, 5).forEach(item => {
+                        const li = document.createElement('li');
+                        li.textContent = item;
+                        list.appendChild(li);
+                    });
+                } else {
+                    const li = document.createElement('li');
+                    li.className = 'relationship-example-empty';
+                    li.textContent = 'No witness found';
+                    list.appendChild(li);
+                }
+
+                column.appendChild(list);
+                return column;
+            };
 
             relationships.forEach(function(rel) {
                 const card = document.createElement('div');
@@ -1627,14 +1656,44 @@
                 detail.textContent = description.description;
                 card.appendChild(detail);
 
-                if (rel.countANotB || rel.countBNotA) {
-                    const counts = document.createElement('div');
-                    counts.className = 'relationship-counts';
-                    counts.innerHTML =
-                        `<div><strong>A \ B:</strong> ${formatRelationshipCount(rel.countANotB)}</div>` +
-                        `<div><strong>B \ A:</strong> ${formatRelationshipCount(rel.countBNotA)}</div>`;
-                    card.appendChild(counts);
-                }
+                const venn = document.createElement('div');
+                venn.className = 'relationship-venn';
+
+                const circleA = document.createElement('div');
+                circleA.className = 'relationship-venn-circle relationship-venn-circle-a';
+                const circleB = document.createElement('div');
+                circleB.className = 'relationship-venn-circle relationship-venn-circle-b';
+
+                const countA = document.createElement('div');
+                countA.className = 'relationship-venn-label relationship-venn-label-a';
+                countA.textContent = `A \\ B: ${formatRelationshipCount(rel.countANotB)}`;
+
+                const countOverlap = document.createElement('div');
+                countOverlap.className = 'relationship-venn-label relationship-venn-label-overlap';
+                const overlapExamples = Array.isArray(rel.examplesBoth) ? rel.examplesBoth : [];
+                countOverlap.textContent = overlapExamples.length > 0
+                    ? `Shared sample: ${overlapExamples[0]}`
+                    : 'Shared region';
+
+                const countB = document.createElement('div');
+                countB.className = 'relationship-venn-label relationship-venn-label-b';
+                countB.textContent = `B \\ A: ${formatRelationshipCount(rel.countBNotA)}`;
+
+                venn.appendChild(circleA);
+                venn.appendChild(circleB);
+                venn.appendChild(countA);
+                venn.appendChild(countOverlap);
+                venn.appendChild(countB);
+
+                card.appendChild(venn);
+
+                const exampleGrid = document.createElement('div');
+                exampleGrid.className = 'relationship-example-grid';
+                exampleGrid.appendChild(buildExampleColumn('Only A', rel.examplesANotB, 'a'));
+                exampleGrid.appendChild(buildExampleColumn('Shared (A ∩ B)', rel.examplesBoth, 'overlap'));
+                exampleGrid.appendChild(buildExampleColumn('Only B', rel.examplesBNotA, 'b'));
+
+                card.appendChild(exampleGrid);
 
                 panel.appendChild(card);
             });

@@ -19,6 +19,9 @@ export interface CandidateRelationship {
   relation: 'equivalent' | 'subset' | 'superset' | 'overlap' | 'unknown';
   countANotB?: string;
   countBNotA?: string;
+  examplesANotB?: string[];
+  examplesBNotA?: string[];
+  examplesBoth?: string[];
 }
 
 interface CandidateSeed {
@@ -758,14 +761,20 @@ export class PickController {
     patternA: string,
     patternB: string,
     countANotB?: bigint,
-    countBNotA?: bigint
+    countBNotA?: bigint,
+    examplesANotB: string[] = [],
+    examplesBNotA: string[] = [],
+    examplesBoth: string[] = []
   ) {
     this.candidateRelationships.push({
       a: patternA,
       b: patternB,
       relation: this.determineRelationship(countANotB, countBNotA),
       countANotB: countANotB !== undefined ? countANotB.toString() : undefined,
-      countBNotA: countBNotA !== undefined ? countBNotA.toString() : undefined
+      countBNotA: countBNotA !== undefined ? countBNotA.toString() : undefined,
+      examplesANotB,
+      examplesBNotA,
+      examplesBoth
     });
   }
 
@@ -804,30 +813,29 @@ export class PickController {
           const timeoutPromise = new Promise<void>((_, reject) => {
             setTimeout(() => reject(new Error('Timeout')), 5000); // 5 second timeout per comparison
           });
-          
+
           const countPromise = (async () => {
-            const countANotB = await this.analyzer.countWordsInANotInB(
+            const analysis = await this.analyzer.analyzeRelationship(
               candidatePatterns[i],
               candidatePatterns[j]
-            );
-            const countBNotA = await this.analyzer.countWordsInANotInB(
-              candidatePatterns[j],
-              candidatePatterns[i]
             );
 
             this.recordCandidateRelationship(
               candidatePatterns[i],
               candidatePatterns[j],
-              countANotB,
-              countBNotA
+              analysis.countANotB,
+              analysis.countBNotA,
+              analysis.examplesANotB,
+              analysis.examplesBNotA,
+              analysis.examplesBoth
             );
 
             // Convert bigint to number, capping at default threshold
-            const countA = countANotB !== undefined 
-              ? Math.min(Number(countANotB), defaultThreshold)
+            const countA = analysis.countANotB !== undefined
+              ? Math.min(Number(analysis.countANotB), defaultThreshold)
               : defaultThreshold;
-            const countB = countBNotA !== undefined 
-              ? Math.min(Number(countBNotA), defaultThreshold)
+            const countB = analysis.countBNotA !== undefined
+              ? Math.min(Number(analysis.countBNotA), defaultThreshold)
               : defaultThreshold;
 
             // Update minimum for each candidate

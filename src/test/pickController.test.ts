@@ -823,6 +823,10 @@ suite('PickController Test Suite', () => {
         assert.strictEqual(letterVsAlnum.relation, 'superset');
       }
 
+      assert.ok(Array.isArray(letterVsAlnum?.examplesANotB), 'Should expose witness examples for A \\ B');
+      assert.ok(Array.isArray(letterVsAlnum?.examplesBNotA), 'Should expose witness examples for B \\ A');
+      assert.ok(Array.isArray(letterVsAlnum?.examplesBoth), 'Should expose shared witness examples');
+
       const alnumVsDigits = relationships.find(rel =>
         (rel.a === '[a-z0-9]+' && rel.b === '[0-9]+') ||
         (rel.a === '[0-9]+' && rel.b === '[a-z0-9]+')
@@ -834,6 +838,10 @@ suite('PickController Test Suite', () => {
       } else if (alnumVsDigits) {
         assert.strictEqual(alnumVsDigits.relation, 'subset');
       }
+
+      assert.ok(Array.isArray(alnumVsDigits?.examplesANotB), 'Should expose witness examples for A \\ B');
+      assert.ok(Array.isArray(alnumVsDigits?.examplesBNotA), 'Should expose witness examples for B \\ A');
+      assert.ok(Array.isArray(alnumVsDigits?.examplesBoth), 'Should expose shared witness examples');
     });
   });
 
