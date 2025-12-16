@@ -789,13 +789,21 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         status
       });
 
-      // Only generate next pair if both words in current pair are classified
+      // If we transitioned back to VOTING, generate a new pair
       if (state === PickState.VOTING && status.activeCandidates > 0) {
-        const bothClassified = this.controller.areBothWordsClassified();
-        if (bothClassified) {
+        const currentPair = this.controller.getCurrentPair();
+        if (!currentPair) {
+          // No current pair - we just transitioned back to voting, generate a new pair
+          logger.info('No current pair after state transition, generating new pair');
           this.handleRequestNextPair();
         } else {
-          logger.info('Only one word classified after update, waiting for second word');
+          // There's a current pair - only generate next if both words are classified
+          const bothClassified = this.controller.areBothWordsClassified();
+          if (bothClassified) {
+            this.handleRequestNextPair();
+          } else {
+            logger.info('Only one word classified after update, waiting for second word');
+          }
         }
       }
     } catch (error) {

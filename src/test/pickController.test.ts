@@ -1335,9 +1335,11 @@ suite('PickController Test Suite', () => {
       await controller.generateCandidates('test', patterns);
       
       // Classify words to reach a final state
-      controller.classifyWord('Greenland', WordClassification.ACCEPT);
-      controller.classifyWord('Bermuda', WordClassification.REJECT);
-      controller.classifyWord('USA', WordClassification.ACCEPT);
+      controller.classifyDirectWords([
+        { word: 'Greenland', classification: WordClassification.ACCEPT },
+        { word: 'Bermuda', classification: WordClassification.REJECT },
+        { word: 'USA', classification: WordClassification.ACCEPT }
+      ]);
       
       // Should converge to single candidate
       assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,
@@ -1374,15 +1376,18 @@ suite('PickController Test Suite', () => {
       // the accepted word classification, voting should re-open
       
       const patterns = [
-        'Canada|United States|Mexico',
+        'Canada|Mexico',
         'USA|US|CAN|MEX'
       ];
       
       await controller.generateCandidates('test', patterns);
       
-      // Classify to converge to second candidate
-      controller.classifyWord('United States', WordClassification.REJECT);
-      controller.classifyWord('USA', WordClassification.ACCEPT);
+      // Classify to converge to second candidate (eliminate first by accepting USA which only second matches)
+      controller.classifyDirectWords([
+        { word: 'Canada', classification: WordClassification.REJECT },
+        { word: 'Mexico', classification: WordClassification.REJECT },
+        { word: 'USA', classification: WordClassification.ACCEPT }
+      ]);
       
       // Should converge to single candidate
       assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,

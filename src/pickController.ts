@@ -476,6 +476,13 @@ export class PickController {
   }
 
   /**
+   * Get the current word pair
+   */
+  getCurrentPair(): WordPair | null {
+    return this.currentPair;
+  }
+
+  /**
    * Clear current pair (call after both words are classified)
    */
   clearCurrentPair(): void {
@@ -546,6 +553,7 @@ export class PickController {
         // Was in final state but now we need more votes - reopen voting
         this.state = PickState.VOTING;
         this.finalRegex = null;
+        this.currentPair = null; // Clear current pair to start fresh
         logger.info('Re-opening voting: single candidate remains but no accepted word matches it yet');
       }
     } else if (activeCount === 0) {
@@ -570,6 +578,7 @@ export class PickController {
       // Was in final state but now we have multiple candidates again - reopen voting
       this.state = PickState.VOTING;
       this.finalRegex = null;
+      this.currentPair = null; // Clear current pair to start fresh
       logger.info(`Re-opening voting: ${activeCount} active candidates remain after classification change`);
     }
     // When there's 1 candidate but no accepted word yet, continue showing pairs
