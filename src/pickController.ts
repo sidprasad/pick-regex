@@ -664,6 +664,15 @@ export class PickController {
     this.searchTimeoutMs = 2000;
     this.searchPoolSize = 30;
 
+    // If we were in FINAL_RESULT state, reset to VOTING since we're recalculating
+    // checkFinalState will set it back to FINAL_RESULT if appropriate
+    if (this.state === PickState.FINAL_RESULT) {
+      this.state = PickState.VOTING;
+      this.finalRegex = null;
+      this.currentPair = null;
+      logger.info('Resetting state from FINAL_RESULT to VOTING for recalculation.');
+    }
+
     logger.info('Recalculating votes from word history (full state reset).');
 
     // Replay all classifications
