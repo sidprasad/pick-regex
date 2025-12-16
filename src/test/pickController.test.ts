@@ -1322,6 +1322,96 @@ suite('PickController Test Suite', () => {
         'Current pair should still be waiting for second word');
     });
 
+    test('Voting should re-open when changing classifications from FINAL_RESULT state', async () => {
+      // Regression test: When in FINAL_RESULT state, changing classifications
+      // should transition back to VOTING if there are now multiple active candidates
+      
+      const patterns = [
+        'Canada|United States|Mexico',
+        'Canada|United States(?: of America)?|Mexico|Greenland|Bermuda',
+        'USA|US|CAN|MEX'
+      ];
+      
+      await controller.generateCandidates('test', patterns);
+      
+      // Classify words to reach a final state
+      controller.classifyDirectWords([
+        { word: 'Greenland', classification: WordClassification.ACCEPT },
+        { word: 'Bermuda', classification: WordClassification.REJECT },
+        { word: 'USA', classification: WordClassification.ACCEPT }
+      ]);
+      
+      // Should converge to single candidate
+      assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,
+        'Should be in FINAL_RESULT state');
+      assert.strictEqual(controller.getActiveCandidateCount(), 1,
+        'Should have one active candidate');
+      
+      // Now change classifications so that multiple candidates are active again
+      // Change "Greenland" from ACCEPT to UNSURE
+      const history = controller.getWordHistory();
+      const greenlandIndex = history.findIndex(h => h.word === 'Greenland');
+      controller.updateClassification(greenlandIndex, WordClassification.UNSURE);
+      
+      // Change "Bermuda" from REJECT to UNSURE
+      const bermudaIndex = history.findIndex(h => h.word === 'Bermuda');
+      controller.updateClassification(bermudaIndex, WordClassification.UNSURE);
+      
+      // Change "USA" from ACCEPT to UNSURE
+      const usaIndex = history.findIndex(h => h.word === 'USA');
+      controller.updateClassification(usaIndex, WordClassification.UNSURE);
+      
+      // Now we should have multiple active candidates and be back in VOTING state
+      const activeCandidates = controller.getActiveCandidateCount();
+      assert.ok(activeCandidates > 1,
+        `Should have multiple active candidates, got ${activeCandidates}`);
+      assert.strictEqual(controller.getState(), PickState.VOTING,
+        'Should transition back to VOTING state when multiple candidates are active');
+      assert.strictEqual(controller.getFinalRegex(), null,
+        'Final regex should be null when back in VOTING state');
+    });
+
+    test('Voting should re-open with single candidate when accepted word no longer matches', async () => {
+      // Regression test: When in FINAL_RESULT with 1 candidate, if the user changes
+      // the accepted word classification, voting should re-open
+      
+      const patterns = [
+        'Canada|Mexico',
+        'USA|US|CAN|MEX'
+      ];
+      
+      await controller.generateCandidates('test', patterns);
+      
+      // Classify to converge to second candidate (eliminate first by accepting USA which only second matches)
+      controller.classifyDirectWords([
+        { word: 'Canada', classification: WordClassification.REJECT },
+        { word: 'Mexico', classification: WordClassification.REJECT },
+        { word: 'USA', classification: WordClassification.ACCEPT }
+      ]);
+      
+      // Should converge to single candidate
+      assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,
+        'Should be in FINAL_RESULT state');
+      assert.strictEqual(controller.getActiveCandidateCount(), 1,
+        'Should have one active candidate');
+      assert.strictEqual(controller.getFinalRegex(), 'USA|US|CAN|MEX',
+        'Final regex should be the abbreviations pattern');
+      
+      // Now change "USA" from ACCEPT to UNSURE
+      const history = controller.getWordHistory();
+      const usaIndex = history.findIndex(h => h.word === 'USA');
+      controller.updateClassification(usaIndex, WordClassification.UNSURE);
+      
+      // With only one candidate remaining but no accepted word matching it,
+      // voting should re-open
+      assert.strictEqual(controller.getState(), PickState.VOTING,
+        'Should transition back to VOTING state when accepted word is removed');
+      assert.strictEqual(controller.getFinalRegex(), null,
+        'Final regex should be null when back in VOTING state');
+      assert.strictEqual(controller.getActiveCandidateCount(), 1,
+        'Should still have one active candidate');
+    });
+
     test('Refinement correctly replays classification history', async () => {
       // This test ensures that refinement preserves and replays classification history
       
