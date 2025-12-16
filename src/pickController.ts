@@ -46,6 +46,7 @@ export interface WordClassificationRecord {
   classification: WordClassification;
   timestamp: number;
   matchingRegexes: string[];
+  source: 'pair' | 'direct';
 }
 
 export enum PickState {
@@ -63,6 +64,8 @@ export class PickController {
   private candidates: CandidateRegex[] = [];
   private candidateRelationships: CandidateRelationship[] = [];
   private usedWords = new Set<string>();
+  private suggestedWordsQueue: string[] = [];
+  private unmatchedSuggestionsUsed = 0;
   private state: PickState = PickState.INITIAL;
   private thresholdVotes = 2;
   private currentPair: WordPair | null = null;
@@ -73,6 +76,7 @@ export class PickController {
   private lastActiveCandidateCount = 0;
   private maxClassifications = 50;
   private maxPairsWithoutProgress = 2;
+  private maxSuggestedEdgeCases = 2;
   private searchTimeoutMs = 2000;
   private searchPoolSize = 30;
 
@@ -83,7 +87,53 @@ export class PickController {
     this.thresholdVotes = config.get<number>('eliminationThreshold', 2);
     this.maxClassifications = config.get<number>('maxClassifications', 50);
     this.maxPairsWithoutProgress = config.get<number>('maxPairsWithoutProgress', 2);
+    this.maxSuggestedEdgeCases = this.clampSuggestedEdgeCaseLimit(
+      config.get<number>('maxSuggestedEdgeCases', 2)
+    );
     logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}`);
+  }
+
+  private clampSuggestedEdgeCaseLimit(value: number | undefined): number {
+    if (value === undefined || Number.isNaN(value)) {
+      return 2;
+    }
+
+    return Math.min(6, Math.max(0, Math.trunc(value)));
+  }
+
+  private prepareSuggestedWordsQueue(suggestedWords: string[]): void {
+    const unique = Array.from(new Set(
+      suggestedWords
+        .map(word => word.trim())
+        .filter(word => word.length > 0 && !this.usedWords.has(word))
+    ));
+
+    const limited = unique.slice(0, this.maxSuggestedEdgeCases);
+
+    // Use an even number of suggestions so we can surface them as pairs
+    if (limited.length % 2 === 1) {
+      limited.pop();
+    }
+
+    this.suggestedWordsQueue = limited;
+    this.unmatchedSuggestionsUsed = 0;
+
+    if (this.suggestedWordsQueue.length > 0) {
+      logger.info(`Loaded ${this.suggestedWordsQueue.length} LLM-suggested edge case word(s) to classify first.`);
+    }
+  }
+
+  private isDistinguishingPair(word1: string, word2: string, candidates: string[]): boolean {
+    if (candidates.length < 2) {
+      return false;
+    }
+
+    const matches1 = candidates.map(candidate => this.analyzer.verifyMatch(word1, candidate));
+    const matches2 = candidates.map(candidate => this.analyzer.verifyMatch(word2, candidate));
+
+    const distinguishes = (matches: boolean[]) => matches.some(match => match !== matches[0]);
+
+    return distinguishes(matches1) || distinguishes(matches2);
   }
 
   /**
@@ -100,7 +150,8 @@ export class PickController {
     prompt: string,
     candidatePatterns: Array<string | CandidateSeed>,
     equivalenceMap: Map<string, string[]> = new Map(),
-    progressCallback?: (current: number, total: number) => void
+    progressCallback?: (current: number, total: number) => void,
+    suggestedWords: string[] = []
   ): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Generating candidates for prompt: ${prompt}`);
@@ -129,6 +180,8 @@ export class PickController {
     await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
 
     this.usedWords.clear();
+    this.suggestedWordsQueue = [];
+    this.prepareSuggestedWordsQueue(suggestedWords);
     this.wordHistory = [];
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state.');
@@ -142,7 +195,8 @@ export class PickController {
     newPrompt: string,
     newCandidatePatterns: Array<string | CandidateSeed>,
     equivalenceMap: Map<string, string[]> = new Map(),
-    progressCallback?: (current: number, total: number) => void
+    progressCallback?: (current: number, total: number) => void,
+    suggestedWords: string[] = []
   ): Promise<void> {
     this.state = PickState.GENERATING_CANDIDATES;
     logger.info(`Refining candidates with new prompt: ${newPrompt}`);
@@ -169,10 +223,14 @@ export class PickController {
     }));
     logger.info(`Initialized ${this.candidates.length} new candidate regexes.`);
 
-    // Re-apply existing classifications to new candidates
+    // Set thresholds based on distinguishability BEFORE replaying votes
+    await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
+
+    // Re-apply existing classifications to new candidates with correct thresholds
     this.recalculateVotes();
 
-    await this.autoAdjustThreshold(normalizedCandidates.map(c => c.pattern), progressCallback);
+    this.suggestedWordsQueue = [];
+    this.prepareSuggestedWordsQueue(suggestedWords);
 
     this.state = PickState.VOTING;
     logger.info('Transitioned to VOTING state after refinement.');
@@ -199,9 +257,44 @@ export class PickController {
    */
   async generateNextPair(): Promise<WordPair> {
     const activeCandidates = this.getActiveCandidates();
-    
+
     if (activeCandidates.length === 0) {
       throw new Error('No active candidates to generate pairs');
+    }
+
+    while (this.suggestedWordsQueue.length >= 2) {
+      const word1 = this.suggestedWordsQueue.shift()!;
+      const word2 = this.suggestedWordsQueue.shift()!;
+
+      const matches1 = activeCandidates.map(candidate => this.analyzer.verifyMatch(word1, candidate));
+      const matches2 = activeCandidates.map(candidate => this.analyzer.verifyMatch(word2, candidate));
+      const matchCount1 = matches1.filter(Boolean).length;
+      const matchCount2 = matches2.filter(Boolean).length;
+
+      const unmatchedCount = (matchCount1 === 0 ? 1 : 0) + (matchCount2 === 0 ? 1 : 0);
+      const unmatchedAllowed = Math.min(2, this.maxSuggestedEdgeCases);
+      const isDistinguishing = this.isDistinguishingPair(word1, word2, activeCandidates);
+
+      if (!isDistinguishing) {
+        if (unmatchedCount === 0 || this.unmatchedSuggestionsUsed + unmatchedCount > unmatchedAllowed) {
+          logger.info(
+            `Skipping LLM-suggested pair "${word1}" vs "${word2}" because it doesn't distinguish between candidates.`
+          );
+          continue;
+        }
+
+        this.unmatchedSuggestionsUsed += unmatchedCount;
+      }
+
+      this.currentPair = { word1, word2 };
+      this.usedWords.add(word1);
+      this.usedWords.add(word2);
+
+      logger.info(
+        `Using LLM-suggested edge cases: "${word1}" vs "${word2}". Remaining suggestions: ${this.suggestedWordsQueue.length}.`
+      );
+
+      return this.currentPair;
     }
 
     // If we're making no progress, increase search parameters to find harder distinguishing words
@@ -257,17 +350,57 @@ export class PickController {
       throw new Error('Word is not in the current pair');
     }
 
+    this.applyClassification(word, classification, true);
+  }
+
+  /**
+   * Apply classifications provided directly by the user (outside the generated pair flow).
+   * Returns the number of successfully applied words so callers can surface feedback.
+   */
+  classifyDirectWords(
+    entries: Array<{ word: string; classification: WordClassification }>
+  ): number {
+    let applied = 0;
+
+    for (const entry of entries) {
+      if (!entry || typeof entry.word !== 'string') {
+        continue;
+      }
+
+      const word = entry.word;
+      if (word.length === 0) {
+        continue;
+      }
+
+      this.applyClassification(word, entry.classification);
+      applied++;
+    }
+
+    return applied;
+  }
+
+  /**
+   * Core classification logic shared across pair-based and direct submissions.
+   * @param word The word being classified
+   * @param classification The classification for the word
+   * @param fromPair Whether this classification is part of the current pair flow
+   */
+  private applyClassification(word: string, classification: WordClassification, fromPair: boolean = false): void {
     // Get matching regexes for this word
     const matchingRegexes = this.candidates
       .filter(c => !c.eliminated && this.analyzer.verifyMatch(word, c.pattern))
       .map(c => c.pattern);
+
+    // Track the word as used so it is not resurfaced in later generated pairs
+    this.usedWords.add(word);
 
     // Record classification
     this.wordHistory.push({
       word,
       classification,
       timestamp: Date.now(),
-      matchingRegexes
+      matchingRegexes,
+      source: fromPair ? 'pair' : 'direct'
     });
 
     // Process classification
@@ -331,7 +464,9 @@ export class PickController {
     // If UNSURE, don't update any votes
 
     // Check if we need to transition to final result
-    this.checkFinalState();
+    // Only update stale counter if this completes a pair (both words classified)
+    const shouldUpdateStaleCounter = fromPair && this.areBothWordsClassified();
+    this.checkFinalState(shouldUpdateStaleCounter);
   }
 
   /**
@@ -362,24 +497,50 @@ export class PickController {
   }
 
   /**
-   * Check if we should transition to final result state
+   * Update a word in the current pair (when user edits it)
+   * @param originalWord The original word to replace
+   * @param newWord The new word to use
    */
-  private checkFinalState(): void {
+  updateWordInPair(originalWord: string, newWord: string): void {
+    if (!this.currentPair) {
+      throw new Error('No current pair to update');
+    }
+
+    const { word1, word2 } = this.currentPair;
+    
+    if (word1 === originalWord) {
+      this.currentPair.word1 = newWord;
+      logger.info(`Updated word1 in current pair from "${originalWord}" to "${newWord}"`);
+    } else if (word2 === originalWord) {
+      this.currentPair.word2 = newWord;
+      logger.info(`Updated word2 in current pair from "${originalWord}" to "${newWord}"`);
+    } else {
+      logger.warn(`Original word "${originalWord}" not found in current pair (${word1}, ${word2})`);
+    }
+  }
+
+  /**
+   * Check if we should transition to final result state
+   * @param updateStaleCounter If true, update the stale progress counter (only when completing a pair)
+   */
+  checkFinalState(updateStaleCounter: boolean = false): void {
     const activeCandidates = this.getActiveCandidates();
     const activeCount = activeCandidates.length;
 
-    // Check if we made progress (eliminated at least one candidate)
-    if (activeCount < this.lastActiveCandidateCount) {
-      this.pairsWithoutProgress = 0;
-    } else if (this.lastActiveCandidateCount > 0) {
-      this.pairsWithoutProgress++;
+    // Only update stale progress tracking when explicitly requested (completing a pair)
+    if (updateStaleCounter) {
+      // Check if we made progress (eliminated at least one candidate)
+      if (activeCount < this.lastActiveCandidateCount) {
+        this.pairsWithoutProgress = 0;
+      } else if (this.lastActiveCandidateCount > 0) {
+        this.pairsWithoutProgress++;
+      }
+      this.lastActiveCandidateCount = activeCount;
     }
-    this.lastActiveCandidateCount = activeCount;
 
     // Check termination conditions
     const totalClassifications = this.wordHistory.length;
     const reachedMaxClassifications = totalClassifications >= this.maxClassifications;
-    const staleProgress = this.pairsWithoutProgress >= this.maxPairsWithoutProgress;
 
     if (activeCount === 1) {
       // Check if user has accepted a word that matches this regex
@@ -406,48 +567,43 @@ export class PickController {
       this.state = PickState.FINAL_RESULT;
       const best = this.selectBestCandidate();
       this.finalRegex = best;
-      logger.info(`Reached maximum classifications (${totalClassifications}/${this.maxClassifications}). Forcing termination with best candidate: "${best}"`);
-    } else if (staleProgress && activeCount > 1) {
-      // No progress for too many pairs - candidates are indistinguishable
-      this.state = PickState.FINAL_RESULT;
-      const best = this.selectBestCandidate(); 
-      this.finalRegex = best;
-      logger.info(`No progress after ${this.pairsWithoutProgress} consecutive pairs. Forcing termination with best candidate: "${best}"`);
+      if (best) {
+        logger.info(`Reached maximum classifications (${totalClassifications}/${this.maxClassifications}). Forcing termination with best candidate: "${best}"`);
+      } else {
+        logger.info(
+          `Reached maximum classifications (${totalClassifications}/${this.maxClassifications}). ` +
+            'No candidate has received a positive vote; treating as no valid regex.'
+        );
+      }
     }
     // When there's 1 candidate but no accepted word yet, continue showing pairs
+    // Stale progress counter is used only to increase search effort, not to terminate
   }
 
   /**
    * Select the best candidate from active or all candidates
    */
-  private selectBestCandidate(): string {
-    const activeCandidates = this.candidates.filter(c => !c.eliminated);
-    
-    if (activeCandidates.length === 0) {
-      // Pick best from all candidates
-      const best = this.candidates.reduce((prev, curr) => {
-        if (curr.positiveVotes > prev.positiveVotes) {
-          return curr;
-        }
-        if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
-          return curr;
-        }
-        return prev;
-      });
-      return best.pattern;
-    } else {
-      // Pick best from active candidates
-      const best = activeCandidates.reduce((prev, curr) => {
-        if (curr.positiveVotes > prev.positiveVotes) {
-          return curr;
-        }
-        if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
-          return curr;
-        }
-        return prev;
-      });
-      return best.pattern;
+  private selectBestCandidate(): string | null {
+    const positiveActive = this.candidates.filter(c => !c.eliminated && c.positiveVotes > 0);
+    const positiveAny = this.candidates.filter(c => c.positiveVotes > 0);
+
+    if (positiveActive.length === 0 && positiveAny.length === 0) {
+      return null;
     }
+
+    const bestFrom = positiveActive.length > 0 ? positiveActive : positiveAny;
+
+    const best = bestFrom.reduce((prev, curr) => {
+      if (curr.positiveVotes > prev.positiveVotes) {
+        return curr;
+      }
+      if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
+        return curr;
+      }
+      return prev;
+    });
+
+    return best.pattern;
   }
 
   /**
@@ -471,47 +627,77 @@ export class PickController {
       `Updated classification for word "${record.word}" from ${oldClassification} to ${newClassification}.`
     );
 
-    // Recalculate all votes from scratch
+    // Recalculate all votes - this also resets progress tracking like a refinement
     this.recalculateVotes();
   }
 
   /**
    * Recalculate all votes from word history
+   * Completely resets state and replays all classifications from scratch
    */
   private recalculateVotes(): void {
-    // Reset all votes
+    // Reset ALL state - votes, eliminations, and progress tracking
     for (const candidate of this.candidates) {
       candidate.negativeVotes = 0;
       candidate.positiveVotes = 0;
       candidate.eliminated = false;
     }
 
-    logger.info('Recalculating votes from word history.');
+    // Reset progress tracking - treat as fresh start
+    this.pairsWithoutProgress = 0;
+    this.lastActiveCandidateCount = 0;
+    
+    // Reset search parameters to defaults
+    this.searchTimeoutMs = 2000;
+    this.searchPoolSize = 30;
+
+    logger.info('Recalculating votes from word history (full state reset).');
 
     // Replay all classifications
     for (const record of this.wordHistory) {
       if (record.classification === WordClassification.ACCEPT) {
         for (const candidate of this.candidates) {
+          if (candidate.eliminated) {
+            continue;
+          }
           if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
             candidate.positiveVotes++;
+          } else {
+            // Candidate fails to match an accepted word - negative vote
+            candidate.negativeVotes++;
+            if (candidate.negativeVotes >= candidate.eliminationThreshold) {
+              candidate.eliminated = true;
+              logger.info(
+                `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) - failed to match accepted word "${record.word}".`
+              );
+            }
           }
         }
       } else if (record.classification === WordClassification.REJECT) {
         for (const candidate of this.candidates) {
+          if (candidate.eliminated) {
+            continue;
+          }
           if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
             candidate.negativeVotes++;
             if (candidate.negativeVotes >= candidate.eliminationThreshold) {
               candidate.eliminated = true;
+              logger.info(
+                `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) - incorrectly matched rejected word "${record.word}".`
+              );
             }
           }
         }
       }
     }
 
+    // Set lastActiveCandidateCount to current count after replay
+    this.lastActiveCandidateCount = this.getActiveCandidateCount();
+
     logger.info('Finished recalculating votes. Checking final state.');
 
-    // Check if state needs to change
-    this.checkFinalState();
+    // Check if state needs to change (don't update stale counter - we just reset)
+    this.checkFinalState(false);
   }
 
   /**
@@ -604,6 +790,8 @@ export class PickController {
     this.lastActiveCandidateCount = 0;
     this.searchTimeoutMs = 2000;
     this.searchPoolSize = 30;
+    this.suggestedWordsQueue = [];
+    this.unmatchedSuggestionsUsed = 0;
     
     if (!preserveClassifications) {
       this.usedWords.clear();
@@ -776,6 +964,27 @@ export class PickController {
       examplesBNotA,
       examplesBoth
     });
+  }
+
+  /**
+   * Set the maximum number of LLM-suggested edge cases to surface
+   */
+  setMaxSuggestedEdgeCases(limit: number): void {
+    this.maxSuggestedEdgeCases = this.clampSuggestedEdgeCaseLimit(limit);
+  }
+
+  /**
+   * Set the maximum number of classifications before forcing termination
+   */
+  setMaxClassifications(limit: number): void {
+    this.maxClassifications = Math.max(1, Math.trunc(limit));
+  }
+
+  /**
+   * Set the maximum number of pairs without progress before forcing termination
+   */
+  setMaxPairsWithoutProgress(limit: number): void {
+    this.maxPairsWithoutProgress = Math.max(1, Math.trunc(limit));
   }
 
   /**

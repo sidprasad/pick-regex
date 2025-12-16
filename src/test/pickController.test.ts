@@ -47,6 +47,55 @@ suite('PickController Test Suite', () => {
     assert.strictEqual(history[1].classification, WordClassification.REJECT);
   });
 
+  test('Should surface LLM-suggested edge cases before analyzer pairs', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    const suggestedWords = ['Alpha', '123', 'edge-case', 'another edge'];
+
+    controller.setMaxSuggestedEdgeCases(4);
+
+    await controller.generateCandidates('test prompt', patterns, new Map(), undefined, suggestedWords);
+
+    const firstPair = await controller.generateNextPair();
+    assert.deepStrictEqual([firstPair.word1, firstPair.word2], ['Alpha', '123']);
+
+    const secondPair = await controller.generateNextPair();
+    assert.deepStrictEqual([secondPair.word1, secondPair.word2], ['edge-case', 'another edge']);
+  });
+
+  test('Should limit LLM-suggested edge cases to configured even count', async () => {
+    const patterns = ['[a-z]+', '[0-9]+'];
+    const suggestedWords = ['one', 'two', 'three', 'four', 'five'];
+
+    controller.setMaxSuggestedEdgeCases(3);
+
+    await controller.generateCandidates('test prompt', patterns, new Map(), undefined, suggestedWords);
+
+    const queueLength = (controller as any).suggestedWordsQueue.length;
+    assert.strictEqual(queueLength, 2);
+
+    const pair = await controller.generateNextPair();
+    assert.deepStrictEqual([pair.word1, pair.word2], ['one', 'two']);
+  });
+
+  test('Should skip non-distinguishing LLM edge cases', async () => {
+    const patterns = ['\\d+', '\\d{2,}'];
+    const suggestedWords = ['123', '456'];
+
+    await controller.generateCandidates('test prompt', patterns, new Map(), undefined, suggestedWords);
+
+    const pair = await controller.generateNextPair();
+
+    const matches1 = patterns.map(pattern => new RegExp(`^${pattern}$`).test(pair.word1));
+    const matches2 = patterns.map(pattern => new RegExp(`^${pattern}$`).test(pair.word2));
+
+    const distinguishes = (matches: boolean[]) => matches.some(match => match !== matches[0]);
+
+    assert.ok(
+      distinguishes(matches1) || distinguishes(matches2),
+      'Returned pair should distinguish between candidates even when LLM suggestions do not'
+    );
+  });
+
   test('Should handle UNSURE classification without affecting votes', async () => {
     const patterns = ['[a-z]+', '[0-9]+'];
     await controller.generateCandidates('test', patterns);
@@ -647,6 +696,63 @@ suite('PickController Test Suite', () => {
       const eliminatedCount = status.candidateDetails.filter(c => c.eliminated).length;
       assert.ok(eliminatedCount > 0, 'Some candidates should be eliminated');
     });
+
+    test('Should preserve word history when all candidates are eliminated', async () => {
+      // This test ensures the fix for the bug where words in/out weren't shown
+      // when no regex was found after all candidates were eliminated
+      const patterns = ['January \\d{1,2}', 'Jan(?:uary)? \\d{1,2}'];
+      controller.setThreshold(1);
+      await controller.generateCandidates('January birthdays', patterns);
+      
+      const classifiedWords: string[] = [];
+      
+      // Classify words to eliminate all candidates
+      for (let i = 0; i < 5; i++) {
+        try {
+          const pair = await controller.generateNextPair();
+          
+          // Reject both words to eliminate candidates
+          controller.classifyWord(pair.word1, WordClassification.REJECT);
+          classifiedWords.push(pair.word1);
+          
+          controller.classifyWord(pair.word2, WordClassification.REJECT);
+          classifiedWords.push(pair.word2);
+          
+          controller.clearCurrentPair();
+          
+          // Check if all candidates are eliminated
+          const status = controller.getStatus();
+          if (status.activeCandidates === 0) {
+            break;
+          }
+        } catch (error) {
+          // Expected to fail when all candidates eliminated or no more pairs
+          break;
+        }
+      }
+      
+      // Verify that even though all candidates are eliminated,
+      // the word history is still available
+      const wordHistory = controller.getWordHistory();
+      assert.ok(wordHistory.length > 0, 'Word history should be preserved');
+      
+      // All words should be marked as REJECT
+      const rejectWords = wordHistory.filter(record => record.classification === WordClassification.REJECT);
+      assert.strictEqual(rejectWords.length, wordHistory.length, 'All words should be classified as REJECT');
+      
+      // Verify getFinalRegex returns null (no regex found)
+      const finalRegex = controller.getFinalRegex();
+      assert.strictEqual(finalRegex, null, 'Final regex should be null when all candidates eliminated');
+      
+      // Verify state is FINAL_RESULT
+      assert.strictEqual(controller.getState(), PickState.FINAL_RESULT, 'State should be FINAL_RESULT');
+      
+      // Verify all classified words are in the history
+      for (const word of classifiedWords) {
+        const found = wordHistory.some(record => record.word === word);
+        assert.ok(found, `Classified word "${word}" should be in history`);
+      }
+    });
   });
 
   suite('Word history and tracking', () => {
@@ -1098,6 +1204,212 @@ suite('PickController Test Suite', () => {
         
         assert.strictEqual(controller.areBothWordsClassified(), true,
           `Both words should be classified for: ${JSON.stringify(word)}`);
+      }
+    });
+  });
+
+  suite('Regression tests', () => {
+    test('Word history should include matchingRegexes when all candidates are eliminated', async () => {
+      // Regression test for bug where matchingRegexes was empty when no regex found
+      const patterns = ['[a-z]+', '[0-9]+', '[A-Z]+'];
+      controller.setThreshold(1);
+      await controller.generateCandidates('test', patterns);
+      
+      // Classify enough words to eliminate all candidates
+      for (let i = 0; i < 5; i++) {
+        try {
+          const pair = await controller.generateNextPair();
+          
+          // Reject both words
+          controller.classifyWord(pair.word1, WordClassification.REJECT);
+          controller.classifyWord(pair.word2, WordClassification.REJECT);
+          controller.clearCurrentPair();
+          
+          // Check if all eliminated
+          if (controller.getActiveCandidateCount() === 0) {
+            break;
+          }
+        } catch (error) {
+          break;
+        }
+      }
+      
+      // Verify word history has matchingRegexes even though all candidates eliminated
+      const wordHistory = controller.getWordHistory();
+      assert.ok(wordHistory.length > 0, 'Word history should not be empty');
+      
+      // Each record should have matchingRegexes array (might be empty if word didn't match any)
+      wordHistory.forEach((record, index) => {
+        assert.ok(Array.isArray(record.matchingRegexes), 
+          `Record ${index} should have matchingRegexes array`);
+        assert.ok('word' in record && typeof record.word === 'string',
+          `Record ${index} should have word field`);
+        assert.ok('classification' in record,
+          `Record ${index} should have classification field`);
+        assert.ok('timestamp' in record && typeof record.timestamp === 'number',
+          `Record ${index} should have timestamp field`);
+      });
+      
+      // Verify getFinalRegex returns null
+      assert.strictEqual(controller.getFinalRegex(), null,
+        'Final regex should be null when all candidates eliminated');
+      assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,
+        'State should be FINAL_RESULT');
+    });
+
+    test('Final regex must have at least one upvote (positive vote)', async () => {
+      // Regression test to ensure we never select a regex that has no positive votes
+      const patterns = ['[a-z]+', '[0-9]+', '[A-Z]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      controller.setMaxClassifications(5);
+      
+      // Classify only with UNSURE and REJECT - no ACCEPT votes
+      for (let i = 0; i < 5; i++) {
+        try {
+          const pair = await controller.generateNextPair();
+          
+          // Use only UNSURE and REJECT, never ACCEPT
+          controller.classifyWord(pair.word1, i % 2 === 0 ? WordClassification.UNSURE : WordClassification.REJECT);
+          controller.classifyWord(pair.word2, WordClassification.REJECT);
+          controller.clearCurrentPair();
+        } catch (error) {
+          break;
+        }
+      }
+      
+      // Force check final state (happens after max classifications)
+      controller.checkFinalState();
+      
+      // Verify final regex is null because no candidate has positive votes
+      const finalRegex = controller.getFinalRegex();
+      assert.strictEqual(finalRegex, null,
+        'Final regex should be null when no candidate has positive votes');
+      
+      // Verify all candidates have zero positive votes
+      const status = controller.getStatus();
+      const candidatesWithPositiveVotes = status.candidateDetails.filter(c => c.positiveVotes > 0);
+      assert.strictEqual(candidatesWithPositiveVotes.length, 0,
+        'No candidates should have positive votes');
+    });
+
+    test('Final regex is selected only when it has at least one upvote', async () => {
+      // Positive test: verify final regex IS selected when candidate has upvotes
+      const patterns = ['[a-z]+', '[0-9]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      const pair = await controller.generateNextPair();
+      
+      // Accept one word to give positive vote
+      controller.classifyWord(pair.word1, WordClassification.ACCEPT);
+      controller.classifyWord(pair.word2, WordClassification.REJECT);
+      
+      // Check that at least one candidate has positive votes
+      const status = controller.getStatus();
+      const candidatesWithPositiveVotes = status.candidateDetails.filter(c => c.positiveVotes > 0);
+      assert.ok(candidatesWithPositiveVotes.length > 0,
+        'At least one candidate should have positive votes after ACCEPT classification');
+      
+      // Force termination by maxing out classifications
+      controller.setMaxClassifications(2);
+      controller.checkFinalState();
+      
+      // Verify a final regex was selected
+      const finalRegex = controller.getFinalRegex();
+      assert.ok(finalRegex !== null,
+        'Final regex should be selected when candidates have positive votes');
+      assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,
+        'State should be FINAL_RESULT');
+    });
+
+    test('Reclassifying same word repeatedly should not advance to next pair', async () => {
+      // Regression test: updating classification shouldn't skip to next pair
+      // if both words haven't been classified yet
+      const patterns = ['[a-z]+', '[0-9]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      const pair = await controller.generateNextPair();
+      const { word1, word2 } = pair;
+      
+      // Classify first word as REJECT
+      controller.classifyWord(word1, WordClassification.REJECT);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Only one word should be classified');
+      
+      // Update classification to ACCEPT
+      controller.updateClassification(0, WordClassification.ACCEPT);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Still only one word should be classified after update');
+      
+      // Update again to UNSURE
+      controller.updateClassification(0, WordClassification.UNSURE);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Still only one word should be classified after another update');
+      
+      // Update back to REJECT
+      controller.updateClassification(0, WordClassification.REJECT);
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Still only one word should be classified');
+      
+      // Verify the word history only has one entry (same word, updated multiple times)
+      const history = controller.getWordHistory();
+      assert.strictEqual(history.length, 1,
+        'Should only have one entry in history for the same word');
+      assert.strictEqual(history[0].word, word1,
+        'History entry should be for word1');
+      assert.strictEqual(history[0].classification, WordClassification.REJECT,
+        'Classification should be the latest value (REJECT)');
+      
+      // Current pair should still be the same
+      assert.strictEqual(controller.areBothWordsClassified(), false,
+        'Current pair should still be waiting for second word');
+    });
+
+    test('Refinement correctly replays classification history', async () => {
+      // This test ensures that refinement preserves and replays classification history
+      
+      const patterns = [
+        'India|Pakistan|Bangladesh',
+        '(?:India|Pakistan|Bangladesh)s?'
+      ];
+      
+      const controller = new PickController();
+      controller.setMaxClassifications(100);
+      await controller.generateCandidates('test', patterns);
+      
+      // Apply some classifications
+      controller.classifyDirectWords([
+        { word: 'India', classification: WordClassification.ACCEPT },
+        { word: 'Indias', classification: WordClassification.REJECT }
+      ]);
+      
+      const beforeRefinement = controller.getStatus();
+      const wordHistoryBefore = controller.getWordHistory();
+      
+      // Refine with same candidates
+      await controller.refineCandidates('test refined', patterns);
+      
+      const afterRefinement = controller.getStatus();
+      const wordHistoryAfter = controller.getWordHistory();
+      
+      // Verify word history is preserved
+      assert.strictEqual(wordHistoryAfter.length, wordHistoryBefore.length,
+        'Word history length should be preserved');
+      
+      for (let i = 0; i < wordHistoryBefore.length; i++) {
+        assert.strictEqual(wordHistoryAfter[i].word, wordHistoryBefore[i].word,
+          `Word history entry ${i} word should match`);
+        assert.strictEqual(wordHistoryAfter[i].classification, wordHistoryBefore[i].classification,
+          `Word history entry ${i} classification should match`);
+      }
+      
+      // Verify candidates have same patterns in same order
+      assert.strictEqual(afterRefinement.candidateDetails.length, beforeRefinement.candidateDetails.length,
+        'Should have same number of candidates');
+      
+      for (let i = 0; i < beforeRefinement.candidateDetails.length; i++) {
+        assert.strictEqual(afterRefinement.candidateDetails[i].pattern, beforeRefinement.candidateDetails[i].pattern,
+          `Candidate ${i} pattern should match`);
       }
     });
   });

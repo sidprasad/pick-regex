@@ -5,10 +5,19 @@ export interface RegexCandidate {
   regex: string;
   explanation: string;
   confidence?: number;
+  edgeCases?: string[];
 }
 
 export interface RegexGenerationResult {
   candidates: RegexCandidate[];
+}
+
+export interface RegexGenerationOptions {
+  /**
+   * Positive examples that should match the intended regex.
+   * Used to provide lightweight grounding context to the LLM.
+   */
+  positiveExamples?: string[];
 }
 
 /**
@@ -180,10 +189,25 @@ function tryRewriteToJavaScript(pattern: string): { rewritten: string; wasRewrit
   return { rewritten, wasRewritten };
 }
 
+function sanitizeEdgeCases(rawEdgeCases: unknown): string[] {
+  if (!Array.isArray(rawEdgeCases)) {
+    return [];
+  }
+
+  const normalized = rawEdgeCases
+    .filter(candidate => typeof candidate === 'string')
+    .map(candidate => candidate.trim())
+    .filter(candidate => candidate.length > 0);
+
+  const unique = Array.from(new Set(normalized));
+  return unique.slice(0, 4);
+}
+
 export async function generateRegexFromDescription(
   description: string,
   token: vscode.CancellationToken,
-  modelId?: string
+  modelId?: string,
+  options: RegexGenerationOptions = {}
 ): Promise<RegexGenerationResult> {
   logger.info(`User prompt: ${description}`);
 
@@ -206,6 +230,17 @@ export async function generateRegexFromDescription(
   }
   logger.info(`Using model: ${model.name} (vendor: ${model.vendor}, family: ${model.family})`);
 
+  const positiveExamples = (options.positiveExamples ?? [])
+    .map(example => example.trim())
+    .filter(example => example.length > 0);
+  const exampleLines = positiveExamples.length > 0
+    ? [
+        '',
+        'Positive examples that SHOULD match:',
+        ...positiveExamples.map(example => `- ${example}`)
+      ]
+    : [];
+
   // Build prompt: ask for multiple candidate regexes with explanations and confidence scores
   const messages: vscode.LanguageModelChatMessage[] = [
     vscode.LanguageModelChatMessage.User(
@@ -216,6 +251,8 @@ export async function generateRegexFromDescription(
       "{",
       "  \"candidates\": [",
       "    {\"regex\": \"<REGEX>\", \"explanation\": \"<WHY THIS PATTERN>\", \"confidence\": 0.0}",
+      "    // Include optional edge cases per candidate when helpful",
+      "    // edgeCases: [\"<tricky example 1>\", \"<tricky example 2>\"]",
       "  ]",
       "}",
       "",
@@ -223,6 +260,7 @@ export async function generateRegexFromDescription(
       "- Output must be valid JSON. No backticks, comments, or extra text.",
       "- \"candidates\" must contain 3–5 items.",
       "- Each item must have: regex (pattern body only, no /.../ or flags), explanation, confidence in [0,1].",
+      "- When possible, add 2–4 short edge cases (field: edgeCases) per candidate. Edge cases should be borderline, surprising, or common failure points rather than obvious matches.",
       "- Make candidates diverse: different interpretations or specificity levels.",
       "",
       "Regex rules (JavaScript, ECMA-262):",
@@ -231,6 +269,7 @@ export async function generateRegexFromDescription(
       "- If a disallowed feature would be ideal, approximate it using only allowed syntax and mention the limitation in the explanation.",
       "",
       `Description: ${description}`,
+      ...exampleLines,
     ].join('\n')
     )
   ];
@@ -348,7 +387,11 @@ export async function generateRegexFromDescription(
     .map((c: any) => ({
       regex: c.regex,
       explanation: typeof c.explanation === 'string' ? c.explanation : '',
-      confidence: typeof c.confidence === 'number' ? c.confidence : undefined
+      confidence: typeof c.confidence === 'number' ? c.confidence : undefined,
+      edgeCases: (() => {
+        const edgeCases = sanitizeEdgeCases(c.edgeCases);
+        return edgeCases.length > 0 ? edgeCases : undefined;
+      })()
     }))
     .map((candidate: RegexCandidate) => {
       // Try to rewrite invalid patterns to JavaScript syntax

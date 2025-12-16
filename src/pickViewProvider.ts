@@ -1,12 +1,77 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PickController, PickState, WordClassification } from './pickController';
+import { PickController, PickState, WordClassification, WordClassificationRecord } from './pickController';
 import { generateRegexFromDescription, PermissionRequiredError, NoModelsAvailableError, ModelNotSupportedError, ModelNotEnabledError, getAvailableChatModels, RegexCandidate } from './regexService';
 import { logger } from './logger';
 import { createRegexAnalyzer } from './regexAnalyzer';
 import { openIssueReport } from './issueReporter';
 import { SurveyPrompt } from './surveyPrompt';
+
+interface RegexMatchVerifier {
+  verifyMatch(word: string, pattern: string): boolean;
+}
+
+export function selectEdgeCaseSuggestions(
+  candidates: RegexCandidate[],
+  analyzer: RegexMatchVerifier,
+  maxSuggestions: number
+): string[] {
+  const maxAllowed = Math.min(6, Math.max(0, Math.trunc(maxSuggestions)));
+
+  if (maxAllowed === 0) {
+    logger.info('Skipping LLM-suggested edge cases because user limit is 0.');
+    return [];
+  }
+
+  const allSuggestedWords = candidates
+    .flatMap(candidate => candidate.edgeCases ?? [])
+    .map(word => word.trim())
+    .filter(word => word.length > 0);
+
+  const uniqueWords = Array.from(new Set(allSuggestedWords));
+
+  const candidateRegexes = Array.from(new Set(candidates.map(candidate => candidate.regex)));
+  const stats = uniqueWords.map((word, index) => {
+    const matches = candidateRegexes.map(regex => analyzer.verifyMatch(word, regex));
+    const matchCount = matches.filter(Boolean).length;
+    const nonMatchCount = matches.length - matchCount;
+
+    return { word, index, matchCount, nonMatchCount };
+  });
+
+  const distinguishing = stats
+    .filter(entry => entry.matchCount > 0 && entry.nonMatchCount > 0)
+    .map(entry => ({
+      word: entry.word,
+      score: Math.min(entry.matchCount, entry.nonMatchCount),
+      index: entry.index
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+
+  const unmatched = stats.filter(entry => entry.matchCount === 0).sort((a, b) => a.index - b.index);
+
+  const selected: string[] = distinguishing.slice(0, maxAllowed).map(entry => entry.word);
+
+  const remainingSlots = Math.max(0, maxAllowed - selected.length);
+  const unmatchedToInclude = Math.min(2, remainingSlots);
+  selected.push(...unmatched.slice(0, unmatchedToInclude).map(entry => entry.word));
+
+  if (selected.length % 2 === 1) {
+    selected.pop();
+  }
+
+  if (selected.length > 0) {
+    const unmatchedCount = unmatched.slice(0, unmatchedToInclude).length;
+    const distinguishingCount = selected.length - unmatchedCount;
+    logger.info(
+      `Collected ${selected.length} LLM-suggested edge case word(s) to classify first ` +
+      `(distinguishing: ${distinguishingCount}, unmatched: ${unmatchedCount}).`
+    );
+  }
+
+  return selected;
+}
 
 export class PickViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'pick.pickView';
@@ -84,6 +149,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         case 'updateClassification':
           this.handleUpdateClassification(data.index, data.classification);
           break;
+        case 'wordEdited':
+          this.handleWordEdited(data.originalWord, data.newWord);
+          break;
         case 'vote':
           this.handleVote(data.acceptedWord);
           break;
@@ -101,6 +169,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
             logger.error(error, 'Failed to copy to clipboard');
             this.sendMessage({ type: 'error', message: 'Failed to copy to clipboard' });
           }
+          break;
+        case 'submitExamples':
+          await this.handleSubmitExamples(data.acceptWords, data.rejectWords);
           break;
         case 'cancel':
           this.handleCancel();
@@ -176,6 +247,70 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       logger.warn(`Unable to describe model for status message: ${error}`);
       return null;
     }
+  }
+
+  private collectEdgeCaseSuggestions(candidates: RegexCandidate[]): string[] {
+    const config = vscode.workspace.getConfiguration('pick');
+    const maxSuggestions = config.get<number>('maxSuggestedEdgeCases', 2);
+
+    return selectEdgeCaseSuggestions(candidates, this.analyzer, maxSuggestions);
+  }
+
+  private collectPositiveExamplesForRefinement(wordHistory: WordClassificationRecord[]): string[] {
+    const MAX_EXAMPLES = 6;
+    const MAX_TOTAL_CHARS = 240;
+    const MAX_EXAMPLE_LENGTH = 80;
+
+    const normalize = (records: WordClassificationRecord[]) =>
+      records
+        .filter(record => record.classification === WordClassification.ACCEPT)
+        .map(record => ({ ...record, word: record.word.trim() }))
+        .filter(record => record.word.length > 0)
+        .sort((a, b) => b.timestamp - a.timestamp);
+
+    const directAccepts = normalize(wordHistory.filter(record => record.source === 'direct'));
+    const pairAccepts = normalize(wordHistory.filter(record => record.source !== 'direct'));
+
+    const examples: string[] = [];
+    const seen = new Set<string>();
+    let totalChars = 0;
+
+    const tryAddExamples = (records: WordClassificationRecord[]) => {
+      for (const record of records) {
+        if (examples.length >= MAX_EXAMPLES || totalChars >= MAX_TOTAL_CHARS) {
+          return;
+        }
+
+        const word = record.word;
+        if (seen.has(word)) {
+          continue;
+        }
+
+        if (word.length > MAX_EXAMPLE_LENGTH) {
+          logger.info(
+            `Skipping positive example longer than ${MAX_EXAMPLE_LENGTH} characters to avoid bloating the prompt: "${word}".`
+          );
+          continue;
+        }
+
+        if (totalChars + word.length > MAX_TOTAL_CHARS) {
+          logger.info(
+            `Skipping positive example to stay within prompt size limit (${MAX_TOTAL_CHARS} chars total): "${word}".`
+          );
+          return;
+        }
+
+        seen.add(word);
+        examples.push(word);
+        totalChars += word.length;
+      }
+    };
+
+    // Prefer user-provided direct examples, then fall back to pair-based accepts.
+    tryAddExamples(directAccepts);
+    tryAddExamples(pairAccepts);
+
+    return examples;
   }
 
   private async handleGenerateCandidates(prompt: string, modelId?: string) {
@@ -416,6 +551,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         }
       });
 
+      const suggestedWords = this.collectEdgeCaseSuggestions(validCandidates);
+
       const seeds = uniqueCandidates.map(regex => {
         const meta = candidateMeta.get(regex);
         return {
@@ -428,7 +565,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       await this.controller.generateCandidates(prompt, seeds, equivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
         this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
-      });
+      }, suggestedWords);
       
       // Check cancellation before sending results
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
@@ -500,7 +637,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
             message: `All ${this.controller.getStatus().totalCandidates} candidate regexes were eliminated after re-applying your ${wordHistory.length} previous classification${wordHistory.length === 1 ? '' : 's'}. Try revising your prompt or starting fresh.`,
             candidateDetails: this.controller.getStatus().candidateDetails,
             wordsIn: wordHistory.filter(r => r.classification === 'accept').map(r => r.word),
-            wordsOut: wordHistory.filter(r => r.classification === 'reject').map(r => r.word)
+            wordsOut: wordHistory.filter(r => r.classification === 'reject').map(r => r.word),
+            wordHistory
           });
         } else {
           // This is an unexpected error with no classifications
@@ -636,23 +774,142 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private handleUpdateClassification(index: number, classification: string) {
+  private async handleUpdateClassification(index: number, classification: string) {
     try {
       const classificationEnum = classification as WordClassification;
       this.controller.updateClassification(index, classificationEnum);
-      
+
+      const state = this.controller.getState();
       const status = this.controller.getStatus();
-      
+
+      if (state === PickState.FINAL_RESULT) {
+        await this.handleFinalResult();
+        return;
+      }
+
       this.sendMessage({
         type: 'classificationUpdated',
         status
       });
+
+      // Only generate next pair if both words in current pair are classified
+      if (state === PickState.VOTING && status.activeCandidates > 0) {
+        const bothClassified = this.controller.areBothWordsClassified();
+        if (bothClassified) {
+          this.handleRequestNextPair();
+        } else {
+          logger.info('Only one word classified after update, waiting for second word');
+        }
+      }
     } catch (error) {
       logger.error(error, 'Error updating classification');
       this.sendMessage({
         type: 'error',
         message: `Error updating classification: ${error}`
       });
+    }
+  }
+
+  /**
+   * Apply user-provided examples outside the current word pair flow.
+   */
+  private async handleSubmitExamples(acceptWords: string[] = [], rejectWords: string[] = []) {
+    try {
+      const normalizedAccept = this.normalizeExampleWords(acceptWords);
+      const normalizedReject = this.normalizeExampleWords(rejectWords);
+
+      const conflicts = normalizedAccept.filter(word => normalizedReject.includes(word));
+      if (conflicts.length > 0) {
+        this.sendMessage({
+          type: 'examplesRejected',
+          message: `The same word appears in both lists: ${conflicts.join(', ')}. Remove duplicates and try again.`
+        });
+        return;
+      }
+
+      const combined = [
+        ...normalizedAccept.map(word => ({ word, classification: WordClassification.ACCEPT })),
+        ...normalizedReject.map(word => ({ word, classification: WordClassification.REJECT }))
+      ];
+
+      if (combined.length === 0) {
+        this.sendMessage({
+          type: 'examplesRejected',
+          message: 'Add at least one example that should match or should not match.'
+        });
+        return;
+      }
+
+      const maxExamples = 12;
+      const limited = combined.slice(0, maxExamples);
+      const truncated = combined.length - limited.length;
+
+      const applied = this.controller.classifyDirectWords(limited);
+      logger.info(`Applied ${applied} direct classification(s) from user-provided examples.`);
+
+      const state = this.controller.getState();
+      const status = this.controller.getStatus();
+
+      this.sendMessage({
+        type: 'examplesApplied',
+        status,
+        acceptCount: limited.filter(entry => entry.classification === WordClassification.ACCEPT).length,
+        rejectCount: limited.filter(entry => entry.classification === WordClassification.REJECT).length,
+        truncated
+      });
+
+      if (state === PickState.FINAL_RESULT) {
+        await this.handleFinalResult();
+      }
+    } catch (error) {
+      logger.error(error, 'Error applying custom examples');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.sendMessage({
+        type: 'error',
+        message: `Error applying your examples: ${errorMessage}`
+      });
+    }
+  }
+
+  /**
+   * Normalize user-provided examples by trimming whitespace and removing duplicates.
+   */
+  private normalizeExampleWords(words: unknown): string[] {
+    if (!Array.isArray(words)) {
+      return [];
+    }
+
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+
+    for (const entry of words) {
+      if (typeof entry !== 'string') {
+        continue;
+      }
+      const word = entry.trim();
+      if (word.length === 0 || seen.has(word)) {
+        continue;
+      }
+      seen.add(word);
+      normalized.push(word);
+    }
+
+    return normalized;
+  }
+
+  /**
+   * Handle word edit in the current voting pair
+   */
+  private handleWordEdited(originalWord: string, newWord: string) {
+    try {
+      logger.info(`Word edited: "${originalWord}" -> "${newWord}"`);
+      this.controller.updateWordInPair(originalWord, newWord);
+    } catch (error) {
+      logger.error(error, 'Error updating word in pair');
+      // Don't send an error message to the UI since the edit already happened in the frontend.
+      // If the original word isn't found in the current pair, the update is silently ignored
+      // and the backend will use whichever word is actually in the pair when classification happens.
+      // This handles edge cases where the pair might have changed between edit and vote.
     }
   }
 
@@ -704,7 +961,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
           message: 'No candidate regexes match your requirements.',
           candidateDetails: this.controller.getStatus().candidateDetails,
           wordsIn,
-          wordsOut
+          wordsOut,
+          wordHistory
         });
         
         // Track usage completion and potentially show survey prompt
@@ -715,6 +973,21 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       
       // Get status to send along with the final result
       const status = this.controller.getStatus();
+      
+      // Safety check: should never send finalResult with null regex
+      if (finalRegex === null) {
+        logger.error(new Error('Attempted to send finalResult with null regex'), 'Invalid state');
+        this.sendMessage({
+          type: 'noRegexFound',
+          message: 'No candidate regexes match your requirements.',
+          candidateDetails: status.candidateDetails,
+          wordsIn,
+          wordsOut,
+          wordHistory
+        });
+        await this.surveyPrompt.incrementUsageAndCheckPrompt();
+        return;
+      }
       
       this.sendMessage({
         type: 'finalResult',
@@ -767,10 +1040,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         this.cancellationTokenSource.dispose();
       }
       this.cancellationTokenSource = new vscode.CancellationTokenSource();
-      
+
+      const positiveExamples = this.collectPositiveExamplesForRefinement(sessionData.wordHistory);
+      if (positiveExamples.length > 0) {
+        logger.info(`Including ${positiveExamples.length} positive example(s) in refinement prompt.`);
+      }
+
       let candidates: RegexCandidate[] = [];
       try {
-        const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId);
+        const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId, {
+          positiveExamples
+        });
         candidates = result.candidates;
         logger.info(`Generated ${candidates.length} candidates from LLM for refinement`);
 
@@ -986,6 +1266,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         }
       });
 
+      const suggestedWords = this.collectEdgeCaseSuggestions(validCandidates);
+
       const seeds = uniqueCandidates.map(regex => {
         const meta = candidateMeta.get(regex);
         return {
@@ -998,7 +1280,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       await this.controller.refineCandidates(prompt, seeds, equivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
         this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
-      });
+      }, suggestedWords);
       
       // Check cancellation before sending results
       if (this.cancellationTokenSource?.token.isCancellationRequested) {

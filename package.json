@@ -5,7 +5,7 @@
   "publisher": "SiddharthaPrasad",
   "icon": "images/icon.png",
   "license": "MIT",
-  "version": "0.3.0",
+  "version": "0.4.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/sidprasad/pick-regex"
@@ -91,6 +91,13 @@
           "default": 2,
           "minimum": 2,
           "description": "Maximum number of consecutive word pairs without eliminating a candidate before forcing termination"
+        },
+        "pick.maxSuggestedEdgeCases": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 6,
+          "description": "Maximum number of LLM-suggested edge case words to surface before analyzer-generated pairs"
         },
         "pick.surveyPromptEnabled": {
           "type": "boolean",

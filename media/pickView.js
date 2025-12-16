@@ -137,7 +137,7 @@
         if (refreshModelsBtn) {
             refreshModelsBtn.addEventListener('click', refreshModels);
         }
-        
+
         const wordPair = document.getElementById('wordPair');
         const candidatesList = document.getElementById('candidatesList');
         const wordHistory = document.getElementById('wordHistory');
@@ -145,6 +145,68 @@
         const finalRegex = document.getElementById('finalRegex');
         const wordsIn = document.getElementById('wordsIn');
         const wordsOut = document.getElementById('wordsOut');
+        const wordEditHint = document.getElementById('wordEditHint');
+        const customExamples = document.getElementById('customExamples');
+        const customExamplesToggle = document.getElementById('customExamplesToggle');
+        const customExamplesPanel = document.getElementById('customExamplesPanel');
+        const customExamplesInput = document.getElementById('customExamplesInput');
+        const customExamplesVoteUp = document.getElementById('customExamplesVoteUp');
+        const customExamplesVoteDown = document.getElementById('customExamplesVoteDown');
+        const customExamplesCancel = document.getElementById('customExamplesCancel');
+        const customExamplesStatus = document.getElementById('customExamplesStatus');
+
+        if (customExamplesToggle) {
+            customExamplesToggle.addEventListener('click', function() {
+                if (customExamplesPanel && customExamplesPanel.classList.contains('hidden')) {
+                    setExamplesStatus('');
+                }
+                toggleExamplesPanel();
+            });
+        }
+
+        if (customExamplesCancel) {
+            customExamplesCancel.addEventListener('click', function() {
+                toggleExamplesPanel(false);
+            });
+        }
+
+        function submitSingleExample(classification) {
+            if (!customExamplesInput) {
+                return;
+            }
+            const word = (customExamplesInput.value || '').trim();
+            if (!word) {
+                setExamplesStatus('Enter an example first.', 'error');
+                toggleExamplesPanel(true);
+                customExamplesInput.focus();
+                return;
+            }
+
+            setExamplesStatus('Applying your example...', 'muted');
+            setExampleButtonsDisabled(true);
+
+            vscode.postMessage({
+                type: 'submitExamples',
+                acceptWords: classification === 'accept' ? [word] : [],
+                rejectWords: classification === 'reject' ? [word] : []
+            });
+        }
+
+        if (customExamplesVoteUp) {
+            customExamplesVoteUp.addEventListener('click', function() {
+                submitSingleExample('accept');
+            });
+        }
+
+        if (customExamplesVoteDown) {
+            customExamplesVoteDown.addEventListener('click', function() {
+                submitSingleExample('reject');
+            });
+        }
+
+        if (wordEditHint) {
+            wordEditHint.setAttribute('role', 'note');
+        }
 
         // Track literal mode state (persisted; default off)
         const savedLiteralMode = typeof viewState.literalMode === 'boolean'
@@ -235,6 +297,47 @@
         updateLiteralModeUI();
         updateDiffModeUI();
         updateCandidatesUI();
+
+        function toggleExamplesPanel(forceOpen) {
+            if (!customExamplesPanel || !customExamplesToggle) {
+                return;
+            }
+            const shouldOpen = typeof forceOpen === 'boolean'
+                ? forceOpen
+                : customExamplesPanel.classList.contains('hidden');
+            customExamplesPanel.classList.toggle('hidden', !shouldOpen);
+            customExamplesToggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            if (shouldOpen && customExamplesInput) {
+                customExamplesInput.focus();
+            }
+        }
+
+        function setExamplesStatus(message, tone) {
+            if (!customExamplesStatus) {
+                return;
+            }
+            customExamplesStatus.textContent = message || '';
+            customExamplesStatus.setAttribute('data-tone', tone || 'muted');
+        }
+
+        function clearExamplesForm(preserveStatus) {
+            if (customExamplesInput) {
+                customExamplesInput.value = '';
+            }
+            if (!preserveStatus) {
+                setExamplesStatus('');
+            }
+            setExampleButtonsDisabled(false);
+        }
+
+        function setExampleButtonsDisabled(disabled) {
+            if (customExamplesVoteUp) {
+                customExamplesVoteUp.disabled = disabled;
+            }
+            if (customExamplesVoteDown) {
+                customExamplesVoteDown.disabled = disabled;
+            }
+        }
 
         function persistViewState() {
             viewState = { ...viewState, promptHistory: promptHistory.slice(0, 5) };
@@ -576,8 +679,12 @@
                     }
                 };
                 
-                if (cloneSubmitBtn) cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
-                if (cloneCancelBtn) cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                if (cloneSubmitBtn) {
+                    cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
+                }
+                if (cloneCancelBtn) {
+                    cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                }
                 if (cloneInput) {
                     cloneInput.addEventListener('keypress', function(e) {
                         if (e.key === 'Enter') {
@@ -619,8 +726,12 @@
                     }
                 };
                 
-                if (cloneSubmitBtn) cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
-                if (cloneCancelBtn) cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                if (cloneSubmitBtn){
+                     cloneSubmitBtn.addEventListener('click', cloneHandleSubmit);
+                }
+                if (cloneCancelBtn) {
+                    cloneCancelBtn.addEventListener('click', cancelEditPrompt);
+                }
                 if (cloneInput) {
                     cloneInput.addEventListener('keypress', function(e) {
                         if (e.key === 'Enter') {
@@ -1180,6 +1291,13 @@
                 case 'classificationUpdated':
                     updateStatus(message.status);
                     break;
+                case 'examplesApplied':
+                    updateStatus(message.status);
+                    handleExamplesApplied(message);
+                    break;
+                case 'examplesRejected':
+                    handleExamplesRejected(message.message);
+                    break;
                 case 'voteProcessed':
                     updateStatus(message.status);
                     break;
@@ -1193,7 +1311,7 @@
                     }, 2000);
                     break;
                 case 'noRegexFound':
-                    showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut);
+                    showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut, message.wordHistory);
                     break;
                 case 'insufficientWords':
                     showInsufficientWords(message.candidates, message.status);
@@ -1248,6 +1366,14 @@
                 }
             }
 
+            if (customExamplesPanel) {
+                customExamplesPanel.classList.add('hidden');
+            }
+            if (customExamplesToggle) {
+                customExamplesToggle.setAttribute('aria-expanded', 'false');
+            }
+            clearExamplesForm();
+            
             // Show the splash again
             if (splashScreen) {
                 splashScreen.classList.remove('hidden');
@@ -1279,6 +1405,7 @@
             if (statusMessage) {
                 statusMessage.innerHTML = '';
             }
+            setExampleButtonsDisabled(false);
             // Reset to prompt section
             showSection('prompt');
             // statusCancelBtn needs explicit hiding since showSection doesn't manage it
@@ -1778,7 +1905,12 @@
 
 
         function updateStatus(status) {
+            lastStatus = status;
+            if (status.activeCandidates > 0) {
+                clearHistoryNotice();
+            }
             updateCandidates(status.candidateDetails, status.threshold, status.candidateRelationships);
+
             updateWordHistory(status.wordHistory);
             const fallbackMatches = lastPairMatches && lastPair
                 ? new Map([
@@ -1788,6 +1920,31 @@
                 : undefined;
             decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
             showStatusWithoutCancel('Active: ' + status.activeCandidates + '/' + status.totalCandidates + ' | Words classified: ' + status.wordHistory.length);
+        }
+
+        function handleExamplesApplied(message) {
+            setExampleButtonsDisabled(false);
+
+            const parts = [];
+            if (message && message.acceptCount) {
+                parts.push(`${message.acceptCount} should match`);
+            }
+            if (message && message.rejectCount) {
+                parts.push(`${message.rejectCount} should not match`);
+            }
+            if (message && typeof message.truncated === 'number' && message.truncated > 0) {
+                parts.push(`Ignored ${message.truncated} extra entr${message.truncated === 1 ? 'y' : 'ies'}`);
+            }
+
+            const summary = parts.length > 0 ? `Added ${parts.join(', ')}.` : 'Examples applied.';
+            clearExamplesForm(true);
+            setExamplesStatus(summary, 'success');
+        }
+
+        function handleExamplesRejected(errorMessage) {
+            setExampleButtonsDisabled(false);
+            toggleExamplesPanel(true);
+            setExamplesStatus(errorMessage || 'Unable to use those examples.', 'error');
         }
 
         function classifyWord(word, classification) {
@@ -1817,6 +1974,7 @@
             lastPair = pair;
             lastStatus = status;
             lastPairMatches = pairMatches || null;
+            clearHistoryNotice();
             closeMatchPopovers();
 
             showSection('voting');
@@ -1844,18 +2002,86 @@
                 const card = document.createElement('div');
                 card.className = 'word-card';
                 card.setAttribute('data-word', word);
+                card.setAttribute('data-original-word', word);
 
                 // Create display section
                 const display = document.createElement('div');
-                display.className = 'word-display';
+                display.className = 'word-display editable-word-display';
                 
                 const readableSpan = document.createElement('span');
                 readableSpan.className = 'word-readable';
-                readableSpan.innerHTML = readable;
+                readableSpan.contentEditable = 'true';
+                readableSpan.spellcheck = false;
+                if (diffOps) {
+                    readableSpan.innerHTML = readable;
+                } else {
+                    readableSpan.textContent = word;
+                }
+                readableSpan.title = 'Click to edit this word';
                 
                 const literalSpan = document.createElement('span');
                 literalSpan.className = 'word-literal';
-                literalSpan.innerHTML = literal;
+                literalSpan.textContent = literal;
+                
+                // Handle editing events
+                let currentWord = word;
+                readableSpan.addEventListener('blur', function() {
+                    const newWord = this.textContent.trim();
+                    
+                    // Validate the edited word
+                    if (newWord.length === 0) {
+                        // Restore original if empty
+                        const originalWord = card.getAttribute('data-original-word');
+                        this.textContent = originalWord;
+                        currentWord = originalWord;
+                        literalSpan.textContent = toLiteralString(originalWord);
+                        return;
+                    }
+                    
+                    // Check for reasonable length (max 1000 chars to prevent abuse)
+                    if (newWord.length > 1000) {
+                        log('warn', 'Edited word too long, reverting to original');
+                        const originalWord = card.getAttribute('data-original-word');
+                        this.textContent = originalWord;
+                        currentWord = originalWord;
+                        literalSpan.textContent = toLiteralString(originalWord);
+                        return;
+                    }
+                    
+                    if (newWord !== currentWord) {
+                        const previousWord = currentWord;
+                        currentWord = newWord;
+                        card.setAttribute('data-word', newWord);
+                        literalSpan.textContent = toLiteralString(newWord);
+                        log('info', 'Word edited from "' + card.getAttribute('data-original-word') + '" to "' + newWord + '"');
+                        
+                        // Notify backend about the word edit
+                        vscode.postMessage({
+                            type: 'wordEdited',
+                            originalWord: previousWord,
+                            newWord: newWord
+                        });
+                    }
+                });
+                
+                readableSpan.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.blur();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        const originalWord = card.getAttribute('data-original-word');
+                        this.textContent = originalWord;
+                        currentWord = originalWord;
+                        literalSpan.textContent = toLiteralString(originalWord);
+                        this.blur();
+                    }
+                });
+                
+                // Update literal display as user types
+                readableSpan.addEventListener('input', function() {
+                    literalSpan.textContent = toLiteralString(this.textContent);
+                });
                 
                 display.appendChild(readableSpan);
                 display.appendChild(literalSpan);
@@ -1864,16 +2090,16 @@
                 const actions = document.createElement('div');
                 actions.className = 'word-actions';
 
-                // Create accept button
-                const acceptBtn = createButton('accept', 'Upvote', word);
+                // Create accept button - use current word from card attribute
+                const acceptBtn = createButton('accept', 'Upvote', card);
                 acceptBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▲</span>';
 
-                // Create reject button
-                const rejectBtn = createButton('reject', 'Downvote', word);
+                // Create reject button - use current word from card attribute
+                const rejectBtn = createButton('reject', 'Downvote', card);
                 rejectBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▼</span>';
 
-                // Create unsure button
-                const unsureBtn = createButton('unsure', 'Skip', word);
+                // Create unsure button - use current word from card attribute
+                const unsureBtn = createButton('unsure', 'Skip', card);
                 unsureBtn.innerHTML = '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
                     '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
                     '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
@@ -1891,14 +2117,18 @@
 
             /**
              * Helper function to create a classification button with proper event listener
+             * @param {string} classification - The classification type
+             * @param {string} title - The button title
+             * @param {HTMLElement} card - The word card element
              */
-            function createButton(classification, title, word) {
+            function createButton(classification, title, card) {
                 const button = document.createElement('button');
                 button.className = 'btn ' + classification;
                 button.title = title;
-                // Attach event listener directly - no escaping needed!
+                // Attach event listener directly - get word from card data attribute at click time
                 button.addEventListener('click', function() {
-                    classifyWord(word, classification);
+                    const currentWord = card.getAttribute('data-word');
+                    classifyWord(currentWord, classification);
                 });
                 return button;
             }
@@ -2028,41 +2258,62 @@
                 // Create classification selector
                 const classificationDiv = document.createElement('div');
                 classificationDiv.className = 'history-classification';
-                
-                const select = document.createElement('select');
-                
-                const acceptOption = document.createElement('option');
-                acceptOption.value = 'accept';
-                acceptOption.textContent = 'Accept';
-                if (item.classification === 'accept') {
-                    acceptOption.selected = true;
-                }
-                
-                const rejectOption = document.createElement('option');
-                rejectOption.value = 'reject';
-                rejectOption.textContent = 'Reject';
-                if (item.classification === 'reject') {
-                    rejectOption.selected = true;
-                }
-                
-                const unsureOption = document.createElement('option');
-                unsureOption.value = 'unsure';
-                unsureOption.textContent = 'Unsure';
-                if (item.classification === 'unsure') {
-                    unsureOption.selected = true;
-                }
-                
-                select.appendChild(acceptOption);
-                select.appendChild(rejectOption);
-                select.appendChild(unsureOption);
-                
-                // Attach event listener for classification change
-                select.addEventListener('change', function() {
-                    applyHistoryTone(historyItem, this.value);
-                    updateClassification(index, this.value);
-                });
-                
-                classificationDiv.appendChild(select);
+
+                let currentClassification = item.classification;
+
+                const setActiveButton = function(selectedClassification) {
+                    const buttons = classificationDiv.querySelectorAll('button');
+                    buttons.forEach(btn => {
+                        const isActive = btn.getAttribute('data-classification') === selectedClassification;
+                        btn.classList.toggle('active', isActive);
+                        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                    });
+                };
+
+                const createHistoryButton = function(classification, label, iconHtml) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'btn ' + classification + ' history-classification__btn';
+                    button.setAttribute('data-classification', classification);
+                    button.title = label;
+                    button.setAttribute('aria-label', label);
+                    button.innerHTML = iconHtml;
+                    button.addEventListener('click', function() {
+                        if (currentClassification === classification) {
+                            return;
+                        }
+                        currentClassification = classification;
+                        applyHistoryTone(historyItem, classification);
+                        setActiveButton(classification);
+                        updateClassification(index, classification);
+                    });
+                    return button;
+                };
+
+                const acceptBtn = createHistoryButton(
+                    'accept',
+                    'Upvote (this should match)',
+                    '<span aria-hidden="true" style="font-size: 18px; line-height: 1;">▲</span>'
+                );
+                const rejectBtn = createHistoryButton(
+                    'reject',
+                    'Downvote (this should NOT match)',
+                    '<span aria-hidden="true" style="font-size: 18px; line-height: 1;">▼</span>'
+                );
+                const unsureBtn = createHistoryButton(
+                    'unsure',
+                    'Unsure / skip',
+                    '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+                        '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
+                        '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '</svg>'
+                );
+
+                classificationDiv.appendChild(acceptBtn);
+                classificationDiv.appendChild(rejectBtn);
+                classificationDiv.appendChild(unsureBtn);
+
+                setActiveButton(currentClassification);
 
                 // Assemble the history item
                 historyItem.appendChild(contentDiv);
@@ -2128,11 +2379,50 @@
             vscode.postMessage({ type: 'vote', acceptedWord: word });
         }
 
+        function clearHistoryNotice() {
+            if (!wordHistory) {
+                return;
+            }
+            const existingNotice = wordHistory.querySelector('.history-note');
+            if (existingNotice) {
+                existingNotice.remove();
+            }
+        }
+
+        function addHistoryNotice(message) {
+            if (!wordHistory || !historyItems) {
+                return;
+            }
+            clearHistoryNotice();
+
+            const notice = document.createElement('div');
+            notice.className = 'history-note';
+            notice.style.cssText = 'margin: 8px 0 12px 0; padding: 10px; border-radius: 6px; background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-errorForeground);';
+            notice.textContent = message;
+
+            wordHistory.insertBefore(notice, historyItems);
+        }
+
         function showFinalResultWithContext(regex, inWords, outWords, status) {
+            // Defensive check: if regex is null/undefined, treat as noRegexFound
+            if (!regex) {
+                console.warn('showFinalResultWithContext called with null/undefined regex, redirecting to showNoRegexFound');
+                showNoRegexFound(
+                    'No candidate regexes match your requirements.',
+                    status ? status.candidateDetails : [],
+                    inWords,
+                    outWords,
+                    status ? status.wordHistory : null
+                );
+                return;
+            }
+
             showSection('voting');
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
+
+            clearHistoryNotice();
 
             wordPair.innerHTML = '<div style="text-align: center; padding: 20px; background: var(--vscode-editor-background); border: 2px solid var(--pick-accept-color); border-radius: 8px;">' +
                 '<h2 style="margin: 0 0 10px 0; color: var(--pick-accept-color);">Final Regex Selected</h2>' +
@@ -2149,20 +2439,15 @@
             showStatusWithoutCancel('Classification complete! Selected regex highlighted below.');
         }
 
-        function showNoRegexFound(message, candidateDetails, inWords, outWords) {
-            showSection('final');
+        function showNoRegexFound(message, candidateDetails, inWords, outWords, wordHistory) {
+            // Keep the classification history visible so users can re-classify and iterate
+            showSection('voting');
             if (statusMessage) {
                 statusMessage.innerHTML = '';
             }
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
-
-            // Display the current prompt with revise button
-            const currentPrompt = promptInput.value;
-            if (currentPrompt) {
-                updatePromptDisplay(currentPrompt);
-            }
 
             const container = document.createElement('div');
             container.style.cssText = 'padding:10px; background:var(--vscode-inputValidation-errorBackground); color:var(--vscode-errorForeground); border-radius:4px; margin-bottom:10px; max-width:100%; box-sizing:border-box;';
@@ -2172,105 +2457,38 @@
             p.textContent = message; // use textContent to avoid injecting HTML
 
             container.appendChild(p);
-            finalRegex.innerHTML = '';
-            finalRegex.appendChild(container);
+            wordPair.innerHTML = '';
+            wordPair.appendChild(container);
 
-            const detailsContainer = document.createElement('div');
-            
-            candidateDetails.forEach(function(c) {
-                const item = document.createElement('div');
-                item.className = 'candidate-item eliminated';
-                item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 6px 0; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 6px;';
-                
-                const patternSpan = document.createElement('span');
-                patternSpan.className = 'candidate-pattern';
-                patternSpan.style.cssText = 'flex: 1; overflow-x: auto; white-space: nowrap; margin-right: 10px; font-family: monospace;';
-                patternSpan.innerHTML = highlightRegex(c.pattern);
-                
-                const votesDiv = document.createElement('div');
-                votesDiv.className = 'candidate-votes';
-                votesDiv.style.cssText = 'display:flex; gap:8px; align-items:center;';
-                
-                // Create copy button with event listener
-                const copyBtn = document.createElement('button');
-                copyBtn.className = 'btn copy';
-                copyBtn.title = 'Copy regex';
-                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-                    '<path d="M16 1H4a2 2 0 0 0-2 2v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
-                    '<rect x="8" y="5" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/>' +
-                    '</svg>';
-                copyBtn.addEventListener('click', function() {
-                    copyRegex(c.pattern);
-                });
-                
-                const positiveBadge = document.createElement('span');
-                positiveBadge.className = 'badge positive';
-                positiveBadge.textContent = '✓ ' + c.positiveVotes;
-                
-                const negativeBadge = document.createElement('span');
-                negativeBadge.className = 'badge negative';
-                negativeBadge.textContent = '✗ ' + c.negativeVotes;
-                
-                votesDiv.appendChild(copyBtn);
-                if (info) {
-                    votesDiv.appendChild(info.button);
-                }
-                votesDiv.appendChild(positiveBadge);
-                votesDiv.appendChild(negativeBadge);
+            // Refresh candidates and word history so users can keep iterating
+            updateCandidates(candidateDetails || [], lastStatus ? lastStatus.threshold : undefined);
 
-                item.appendChild(patternSpan);
-                item.appendChild(votesDiv);
+            // Use the provided wordHistory if available, otherwise fall back to constructing from inWords/outWords
+            const history = (wordHistory && Array.isArray(wordHistory))
+                ? wordHistory
+                : (lastStatus && Array.isArray(lastStatus.wordHistory))
+                ? lastStatus.wordHistory
+                : [
+                    ...(Array.isArray(inWords) ? inWords.map(word => ({
+                        word,
+                        classification: 'accept',
+                        matchingRegexes: []
+                    })) : []),
+                    ...(Array.isArray(outWords) ? outWords.map(word => ({
+                        word,
+                        classification: 'reject',
+                        matchingRegexes: []
+                    })) : [])
+                ];
 
-                if (info) {
-                    item.appendChild(info.panel);
-                }
+            updateWordHistory(history);
+            addHistoryNotice('No regex survived. Review or re-classify your previously categorized examples below.');
 
-                detailsContainer.appendChild(item);
-            });
-
-            wordsIn.innerHTML = (inWords && inWords.length > 0) 
-                ? inWords.map(function(w) {
-                    return '<div class="word-display">' +
-                        '<span class="word-readable example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + w + '</span>' +
-                        '<span class="word-literal example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + toLiteralString(w) + '</span>' +
-                        '</div>';
-                }).join('')
-                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as IN</div>';
-
-            wordsOut.innerHTML = (outWords && outWords.length > 0)
-                ? outWords.map(function(w) {
-                    return '<div class="word-display">' +
-                        '<span class="word-readable example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + w + '</span>' +
-                        '<span class="word-literal example-item" data-word="' + w.replace(/"/g, '&quot;') + '">' + toLiteralString(w) + '</span>' +
-                        '</div>';
-                }).join('')
-                : '<div class="example-item" style="opacity: 0.6; font-style: italic;">No words classified as OUT</div>';
-
-            if (candidateDetails && candidateDetails.length > 0) {
-                // Remove any previously inserted candidates note to avoid duplicates
-                const existingCandidatesNote = document.querySelector('.candidates-eliminated-note');
-                if (existingCandidatesNote) {
-                    existingCandidatesNote.remove();
-                }
-                
-                const candidatesNote = document.createElement('div');
-                candidatesNote.className = 'candidates-eliminated-note';
-                candidatesNote.style.cssText = 'margin-top: 20px; padding: 10px; background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px;';
-                
-                const header = document.createElement('div');
-                header.style.cssText = 'font-size: 12px; opacity: 0.8; margin-bottom: 8px;';
-                const strong = document.createElement('strong');
-                strong.textContent = 'All candidates were eliminated:';
-                header.appendChild(strong);
-                
-                candidatesNote.appendChild(header);
-                candidatesNote.appendChild(detailsContainer);
-                
-                const examplesGrid = document.querySelector('.examples');
-                if (examplesGrid && examplesGrid.parentNode) {
-                    examplesGrid.parentNode.insertBefore(candidatesNote, examplesGrid.nextSibling);
-                }
+            if (wordHistory && typeof wordHistory.scrollIntoView === 'function') {
+                wordHistory.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
+
+            showStatusWithoutCancel('All candidates were eliminated. Review your classifications below or start fresh.');
         }
 
         function resetUI(preserveClassifications) {
@@ -2290,7 +2508,9 @@
             if (existingCandidatesNote) {
                 existingCandidatesNote.remove();
             }
-            
+
+            clearHistoryNotice();
+
             showSection('prompt');
             if (statusMessage) {
                 statusMessage.innerHTML = '';
