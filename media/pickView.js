@@ -1866,7 +1866,12 @@
                 
                 const literalSpan = document.createElement('span');
                 literalSpan.className = 'word-literal';
-                literalSpan.textContent = literal;
+                // Render HTML when diff mode is active (literal contains span markup), otherwise use textContent
+                if (diffOps) {
+                    literalSpan.innerHTML = literal;
+                } else {
+                    literalSpan.textContent = literal;
+                }
                 
                 // Handle editing events
                 let currentWord = word;
