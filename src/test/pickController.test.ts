@@ -1492,14 +1492,6 @@ suite('PickController Test Suite', () => {
       const stateBeforeChange = controller.getState();
       const activeBeforeChange = controller.getActiveCandidateCount();
       
-      console.log(`Before change: state=${stateBeforeChange}, active=${activeBeforeChange}`);
-      console.log(`Candidate details:`, controller.getStatus().candidateDetails.map(c => ({
-        pattern: c.pattern.substring(0, 30) + '...',
-        eliminated: c.eliminated,
-        negVotes: c.negativeVotes,
-        posVotes: c.positiveVotes
-      })));
-      
       // Now change "wicket leg" from REJECT to ACCEPT
       const wordHistory = controller.getWordHistory();
       const wicketLegIndex = wordHistory.findIndex(r => r.word === 'wicket leg');
@@ -1510,14 +1502,6 @@ suite('PickController Test Suite', () => {
       // After the change, check the state
       const stateAfterChange = controller.getState();
       const activeAfterChange = controller.getActiveCandidateCount();
-      
-      console.log(`After change: state=${stateAfterChange}, active=${activeAfterChange}`);
-      console.log(`Candidate details:`, controller.getStatus().candidateDetails.map(c => ({
-        pattern: c.pattern.substring(0, 30) + '...',
-        eliminated: c.eliminated,
-        negVotes: c.negativeVotes,
-        posVotes: c.positiveVotes
-      })));
       
       // The fix ensures that if we have active candidates after recalculation, state is VOTING
       // If we have 0 active, state should be FINAL_RESULT
