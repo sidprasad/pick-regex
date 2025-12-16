@@ -542,6 +542,11 @@ export class PickController {
         this.state = PickState.FINAL_RESULT;
         this.finalRegex = remainingRegex;
         logger.info(`Converged to single candidate: "${remainingRegex}"`);
+      } else if (this.state === PickState.FINAL_RESULT) {
+        // Was in final state but now we need more votes - reopen voting
+        this.state = PickState.VOTING;
+        this.finalRegex = null;
+        logger.info('Re-opening voting: single candidate remains but no accepted word matches it yet');
       }
     } else if (activeCount === 0) {
       // All eliminated - NO REGEX IS CORRECT
@@ -561,6 +566,11 @@ export class PickController {
             'No candidate has received a positive vote; treating as no valid regex.'
         );
       }
+    } else if (activeCount > 1 && this.state === PickState.FINAL_RESULT) {
+      // Was in final state but now we have multiple candidates again - reopen voting
+      this.state = PickState.VOTING;
+      this.finalRegex = null;
+      logger.info(`Re-opening voting: ${activeCount} active candidates remain after classification change`);
     }
     // When there's 1 candidate but no accepted word yet, continue showing pairs
     // Stale progress counter is used only to increase search effort, not to terminate
