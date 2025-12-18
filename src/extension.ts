@@ -15,9 +15,13 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Register the PICK webview provider
         const provider = new PickViewProvider(context.extensionUri, surveyPrompt, context.globalState);
-	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(PickViewProvider.viewType, provider)
-	);
+        context.subscriptions.push(
+                vscode.window.registerWebviewViewProvider(PickViewProvider.viewType, provider, {
+                        webviewOptions: {
+                                retainContextWhenHidden: true
+                        }
+                })
+        );
 
 	const reportIssueCommand = vscode.commands.registerCommand('pick.reportIssue', async () => {
 		await openIssueReport();

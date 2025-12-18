@@ -108,8 +108,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [this.extensionUri],
-      retainContextWhenHidden: true
+      localResourceRoots: [this.extensionUri]
     };
 
     webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
