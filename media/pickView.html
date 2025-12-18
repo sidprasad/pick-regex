@@ -204,7 +204,16 @@
 
             <div class="candidates-list" id="candidatesList"></div>
             <div class="word-history" id="wordHistory">
-                <h3>Word Classification History</h3>
+                <div class="word-history__header">
+                    <h3>Word Classification History</h3>
+                    <div class="history-actions">
+                        <button id="copyHistoryBtn" class="icon-btn subtle" title="Copy history as JSON" aria-label="Copy classification history as JSON">
+                            <span class="codicon codicon-clippy" aria-hidden="true"></span>
+                            <span class="btn-label">Export</span>
+                        </button>
+                        <span id="historyCopyStatus" class="history-copy-status" role="status" aria-live="polite"></span>
+                    </div>
+                </div>
                 <div id="historyItems"></div>
             </div>
         </div>
