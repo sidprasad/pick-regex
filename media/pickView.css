@@ -1082,10 +1082,30 @@
             overflow-y: auto;
         }
 
+        .word-history__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
         .word-history h3 {
             margin-top: 0;
             font-size: 1em;
             color: var(--vscode-titleBar-activeForeground);
+        }
+
+        .history-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .history-copy-status {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+            white-space: nowrap;
         }
 
         .history-item {

@@ -142,6 +142,8 @@
         const candidatesList = document.getElementById('candidatesList');
         const wordHistory = document.getElementById('wordHistory');
         const historyItems = document.getElementById('historyItems');
+        const copyHistoryBtn = document.getElementById('copyHistoryBtn');
+        const historyCopyStatus = document.getElementById('historyCopyStatus');
         const finalRegex = document.getElementById('finalRegex');
         const wordsIn = document.getElementById('wordsIn');
         const wordsOut = document.getElementById('wordsOut');
@@ -162,6 +164,10 @@
                 }
                 toggleExamplesPanel();
             });
+        }
+
+        if (copyHistoryBtn) {
+            copyHistoryBtn.addEventListener('click', copyHistoryToClipboard);
         }
 
         if (customExamplesCancel) {
@@ -215,6 +221,8 @@
         let literalMode = savedLiteralMode;
         // Track diff view state (off by default)
         let diffMode = diffToggle ? diffToggle.checked : false;
+        let latestWordHistory = Array.isArray(viewState.wordHistory) ? viewState.wordHistory : [];
+        let historyStatusTimeout = null;
 
         // Keep last shown pair/status for re-rendering when toggles change
         let lastPair = null;
@@ -1996,8 +2004,88 @@
             decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
         }
 
+        function setHistoryCopyStatus(message) {
+            if (!historyCopyStatus) {
+                return;
+            }
+
+            if (historyStatusTimeout) {
+                clearTimeout(historyStatusTimeout);
+            }
+
+            historyCopyStatus.textContent = message || '';
+
+            if (message) {
+                historyStatusTimeout = setTimeout(function() {
+                    historyCopyStatus.textContent = '';
+                    historyStatusTimeout = null;
+                }, 3000);
+            }
+        }
+
+        function normalizeClassificationForExport(classification) {
+            const normalized = (classification || '').toLowerCase();
+            if (normalized === 'accept') {
+                return 'in';
+            }
+            if (normalized === 'reject') {
+                return 'out';
+            }
+            return 'unsure';
+        }
+
+        function copyHistoryToClipboard() {
+            if (!Array.isArray(latestWordHistory) || latestWordHistory.length === 0) {
+                setHistoryCopyStatus('No classifications to export yet.');
+                return;
+            }
+
+            const exportData = latestWordHistory.map(function(item) {
+                return {
+                    word: item.word,
+                    classification: normalizeClassificationForExport(item.classification)
+                };
+            });
+            const payload = JSON.stringify(exportData, null, 2);
+
+            const fallbackCopy = function() {
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = payload;
+                    textarea.setAttribute('aria-hidden', 'true');
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+
+                    if (successful) {
+                        setHistoryCopyStatus('Copied history to clipboard.');
+                    } else {
+                        setHistoryCopyStatus('Unable to copy history.');
+                    }
+                } catch (error) {
+                    console.error('Failed to copy history', error);
+                    setHistoryCopyStatus('Unable to copy history.');
+                }
+            };
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(payload)
+                    .then(function() { setHistoryCopyStatus('Copied history to clipboard.'); })
+                    .catch(function() { fallbackCopy(); });
+            } else {
+                fallbackCopy();
+            }
+        }
+
         function updateWordHistory(history) {
             closeMatchPopovers();
+
+            latestWordHistory = Array.isArray(history) ? history.slice() : [];
+            setHistoryCopyStatus('');
 
             if (!history || history.length === 0) {
                 historyItems.innerHTML = '<p style="color: var(--vscode-descriptionForeground); font-style: italic;">No words classified yet.</p>';
