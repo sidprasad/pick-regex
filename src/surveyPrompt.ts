@@ -10,8 +10,10 @@ export class SurveyPrompt {
   private static readonly SURVEY_RATED_KEY = 'pick.surveyRated';
   private static readonly REMIND_AT_KEY = 'pick.remindAt';
   private static readonly LAST_SHOWN_KEY = 'pick.surveyLastShown';
+  private static readonly SHOWN_COUNT_KEY = 'pick.surveyShownCount';
   private static readonly USAGE_THRESHOLD = 3;
   private static readonly SHOW_COOLDOWN = 3;
+  private static readonly SHOW_COOLDOWN_GROWTH_FACTOR = 2;
   private static readonly SURVEY_URL = 'https://brown.co1.qualtrics.com/jfe/form/SV_a90QURkTTwI9eHY';
   private static readonly MARKETPLACE_URL = 'https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.pick-regex&ssr=false#review-details';
   
@@ -47,6 +49,7 @@ export class SurveyPrompt {
     // Get current usage count
     const usageCount = this.context.globalState.get<number>(SurveyPrompt.USAGE_COUNT_KEY, 0);
     const newCount = usageCount + 1;
+    const shownCount = this.context.globalState.get<number>(SurveyPrompt.SHOWN_COUNT_KEY, 0);
 
     // Update usage count
     await this.context.globalState.update(SurveyPrompt.USAGE_COUNT_KEY, newCount);
@@ -61,8 +64,9 @@ export class SurveyPrompt {
 
     // Enforce cooldown between prompts so we do not show the rate dialog on every run
     const lastShown = this.context.globalState.get<number | undefined>(SurveyPrompt.LAST_SHOWN_KEY);
-    if (lastShown !== undefined && newCount < lastShown + SurveyPrompt.SHOW_COOLDOWN) {
-      logger.info(`Survey prompt last shown at ${lastShown}; waiting until ${lastShown + SurveyPrompt.SHOW_COOLDOWN} before showing again`);
+    const cooldown = SurveyPrompt.getCooldownForPromptCount(shownCount);
+    if (lastShown !== undefined && newCount < lastShown + cooldown) {
+      logger.info(`Survey prompt last shown at ${lastShown}; waiting until ${lastShown + cooldown} before showing again (cooldown ${cooldown})`);
       return;
     }
 
@@ -79,6 +83,9 @@ export class SurveyPrompt {
   private async showSurveyPrompt(currentUsage?: number): Promise<void> {
     const usage = typeof currentUsage === 'number' ? currentUsage : this.context.globalState.get<number>(SurveyPrompt.USAGE_COUNT_KEY, 0);
     await this.context.globalState.update(SurveyPrompt.LAST_SHOWN_KEY, usage);
+    const shownCount = this.context.globalState.get<number>(SurveyPrompt.SHOWN_COUNT_KEY, 0);
+    const nextCooldown = SurveyPrompt.getCooldownForPromptCount(shownCount + 1);
+    await this.context.globalState.update(SurveyPrompt.SHOWN_COUNT_KEY, shownCount + 1);
 
     const message = 'PICK is a research tool. It helps us justify it to our funders if we can show some user feedback. Would you help us by completing a very short, quick survey and/or by rating us?';
 
@@ -125,8 +132,12 @@ export class SurveyPrompt {
       await this.context.globalState.update(SurveyPrompt.REMIND_AT_KEY, remindAt);
     } else {
       // User dismissed or clicked Dismiss - we can ask again later
-      logger.info('User dismissed survey prompt');
+      logger.info(`User dismissed survey prompt; next ask after ${nextCooldown} uses`);
     }
+  }
+
+  private static getCooldownForPromptCount(promptCount: number): number {
+    return SurveyPrompt.SHOW_COOLDOWN * Math.pow(SurveyPrompt.SHOW_COOLDOWN_GROWTH_FACTOR, promptCount);
   }
 
   /**
@@ -138,6 +149,7 @@ export class SurveyPrompt {
     await this.context.globalState.update(SurveyPrompt.SURVEY_RATED_KEY, false);
     await this.context.globalState.update(SurveyPrompt.REMIND_AT_KEY, undefined);
     await this.context.globalState.update(SurveyPrompt.LAST_SHOWN_KEY, undefined);
+    await this.context.globalState.update(SurveyPrompt.SHOWN_COUNT_KEY, 0);
     logger.info('Reset usage tracking');
   }
 }
