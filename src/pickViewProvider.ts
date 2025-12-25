@@ -1530,10 +1530,17 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const prefix = formatted.length === 1 ? 'LLM caution: ' : 'LLM cautions: ';
     const joined = formatted.join(' • ');
+    const cautionIntro = 'This task may not be best suited for regular expressions. ';
+    const cautionPreface = formatted.length === 1
+      ? 'The LLM cautions that '
+      : 'The LLM cautions that: ';
+    const disclaimer = ' (However, this is an LLM, so take it with a grain of salt.)';
 
-    this.sendMessage({ type: 'warning', message: `${prefix}${joined}` });
+    this.sendMessage({
+      type: 'warning',
+      message: `${cautionIntro}${cautionPreface}${joined}${disclaimer}`
+    });
   }
 
   /**
