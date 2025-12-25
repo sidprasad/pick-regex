@@ -711,6 +711,12 @@
             flex: 1 1 auto;
         }
 
+        .status-warning-dismiss {
+            margin-left: auto;
+            padding: 2px 6px;
+            line-height: 1.2;
+        }
+
         .status-actions {
             display: flex;
             align-items: center;

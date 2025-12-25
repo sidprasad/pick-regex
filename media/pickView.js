@@ -126,6 +126,14 @@
                 vscode.postMessage({ type: 'reportIssue' });
             });
         }
+
+        if (statusWarnings) {
+            statusWarnings.addEventListener('click', function(ev) {
+                if (ev.target && ev.target.closest('.status-warning-dismiss')) {
+                    clearWarnings();
+                }
+            });
+        }
         
         // Handle model selection change
         if (modelSelect) {
@@ -230,6 +238,7 @@
         let lastStatus = null;
         let lastPairMatches = null;
         let lastWarning = '';
+        let statusActive = false;
 
         // Track classified words
         const classifiedWords = new Set();
@@ -1281,14 +1290,14 @@
                     inlineCancelBtn.classList.add('hidden');
                     statusCancelBtn.classList.add('hidden');
                     generateBtn.classList.remove('hidden');
-                    statusBar.classList.add('hidden');
+                    clearStatusMessage();
                     updateCandidates(message.candidates, 2);
                     break;
                 case 'candidatesRefined':
                     inlineCancelBtn.classList.add('hidden');
                     statusCancelBtn.classList.add('hidden');
                     generateBtn.classList.remove('hidden');
-                    statusBar.classList.add('hidden');
+                    clearStatusMessage();
                     updateCandidates(message.candidates, 2);
                     break;
                 case 'newPair':
@@ -1320,7 +1329,7 @@
                 case 'copied':
                     showStatusWithoutCancel('Copied to clipboard');
                     setTimeout(function() {
-                        statusBar.classList.add('hidden');
+                        clearStatusMessage();
                     }, 2000);
                     break;
                 case 'noRegexFound':
@@ -1348,7 +1357,12 @@
             errorSection.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             generateBtn.classList.remove('hidden');
-            statusBar.classList.add('hidden');
+            statusActive = false;
+            if (statusMessage) {
+                statusMessage.innerHTML = '';
+            }
+            statusCancelBtn.classList.add('hidden');
+            updateStatusBarVisibility();
 
             if (section === 'prompt') {
                 promptSection.classList.remove('hidden');
@@ -1357,10 +1371,12 @@
             } else if (section === 'final') {
                 finalSection.classList.remove('hidden');
             } else if (section === 'loading') {
+                statusActive = true;
                 statusBar.classList.remove('hidden');
                 inlineCancelBtn.classList.remove('hidden');
                 statusCancelBtn.classList.remove('hidden');
                 generateBtn.classList.add('hidden');
+                updateStatusBarVisibility();
             }
         }
 
@@ -1398,19 +1414,23 @@
             if (statusMessage) {
                 statusMessage.innerHTML = '<span class="loading-spinner"></span><span>' + message + '</span>';
             }
+            statusActive = true;
             statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.remove('hidden');
             statusCancelBtn.classList.remove('hidden');
             generateBtn.classList.add('hidden');
+            updateStatusBarVisibility();
         }
 
         function showStatusWithoutCancel(message) {
             if (statusMessage) {
                 statusMessage.innerHTML = '<span>' + message + '</span>';
             }
+            statusActive = true;
             statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
+            updateStatusBarVisibility();
         }
 
         function showError(message) {
@@ -1439,11 +1459,8 @@
 
         function showPermissionRequired(message) {
             showSection('prompt');
-            statusBar.classList.add('hidden');
-            inlineCancelBtn.classList.add('hidden');
-            statusCancelBtn.classList.add('hidden');
-            generateBtn.classList.remove('hidden');
-            
+            clearStatusMessage();
+
             // Show a prominent permission required message (escape message to prevent XSS)
             errorSection.innerHTML = '<div style="display: flex; flex-direction: column; gap: 12px;">' +
                 '<div style="display: flex; align-items: center; gap: 8px;">' +
@@ -1461,10 +1478,7 @@
 
         function showNoModelsAvailable(message) {
             showSection('prompt');
-            statusBar.classList.add('hidden');
-            inlineCancelBtn.classList.add('hidden');
-            statusCancelBtn.classList.add('hidden');
-            generateBtn.classList.remove('hidden');
+            clearStatusMessage();
 
             // Show a prominent no models message (escape message to prevent XSS)
             errorSection.innerHTML = '<div style="display: flex; flex-direction: column; gap: 12px;">' +
@@ -1481,6 +1495,25 @@
             errorSection.classList.remove('hidden');
         }
 
+        function updateStatusBarVisibility() {
+            if (!statusBar) {
+                return;
+            }
+            const shouldShow = statusActive || Boolean(lastWarning);
+            statusBar.classList.toggle('hidden', !shouldShow);
+        }
+
+        function clearStatusMessage() {
+            if (statusMessage) {
+                statusMessage.innerHTML = '';
+            }
+            statusActive = false;
+            inlineCancelBtn.classList.add('hidden');
+            statusCancelBtn.classList.add('hidden');
+            generateBtn.classList.remove('hidden');
+            updateStatusBarVisibility();
+        }
+
         function renderWarnings() {
             if (!statusWarnings) {
                 return;
@@ -1490,13 +1523,18 @@
                 statusWarnings.classList.add('hidden');
                 statusWarnings.setAttribute('aria-hidden', 'true');
                 statusWarnings.innerHTML = '';
+                updateStatusBarVisibility();
                 return;
             }
 
             statusWarnings.innerHTML = '<span class="status-warning-icon" aria-hidden="true">⚠️</span>' +
-                '<span class="status-warning-text">' + escapeHtml(lastWarning) + '</span>';
+                '<span class="status-warning-text">' + escapeHtml(lastWarning) + '</span>' +
+                '<button class="icon-btn subtle status-warning-dismiss" type="button" title="Dismiss warning" aria-label="Dismiss warning">' +
+                '&#10005;' +
+                '</button>';
             statusWarnings.classList.remove('hidden');
             statusWarnings.setAttribute('aria-hidden', 'false');
+            updateStatusBarVisibility();
         }
 
         function clearWarnings() {
@@ -1507,7 +1545,6 @@
         function showWarning(message) {
             lastWarning = message || '';
             renderWarnings();
-            statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
         }
@@ -1515,7 +1552,7 @@
         function showInsufficientWords(candidates, status) {
             // Clear any existing error messages first
             errorSection.classList.add('hidden');
-            statusBar.classList.add('hidden');
+            clearStatusMessage();
             
             showSection('voting');
             updateCandidates(candidates, status.threshold);
@@ -2383,9 +2420,7 @@
             }
 
             showSection('voting');
-            statusBar.classList.add('hidden');
-            inlineCancelBtn.classList.add('hidden');
-            statusCancelBtn.classList.add('hidden');
+            clearStatusMessage();
 
             clearHistoryNotice();
 
@@ -2410,9 +2445,7 @@
             if (statusMessage) {
                 statusMessage.innerHTML = '';
             }
-            statusBar.classList.add('hidden');
-            inlineCancelBtn.classList.add('hidden');
-            statusCancelBtn.classList.add('hidden');
+            clearStatusMessage();
 
             const container = document.createElement('div');
             container.style.cssText = 'padding:10px; background:var(--vscode-inputValidation-errorBackground); color:var(--vscode-errorForeground); border-radius:4px; margin-bottom:10px; max-width:100%; box-sizing:border-box;';
@@ -2477,22 +2510,19 @@
             clearHistoryNotice();
 
             showSection('prompt');
-            if (statusMessage) {
-                statusMessage.innerHTML = '';
-            }
             clearWarnings();
-            statusBar.classList.add('hidden');
-            inlineCancelBtn.classList.add('hidden');
-            statusCancelBtn.classList.add('hidden');
+            clearStatusMessage();
         }
 
         function handleCancelled(message) {
             if (statusMessage) {
                 statusMessage.innerHTML = '<span>' + (message || 'Operation cancelled') + '</span>';
             }
+            statusActive = true;
             statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
+            updateStatusBarVisibility();
             setTimeout(function() {
                 resetUI(true);
             }, 2000);
