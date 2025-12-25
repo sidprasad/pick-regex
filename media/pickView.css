@@ -698,18 +698,24 @@
             padding: 10px 12px;
             background: color-mix(
                 in srgb,
-                var(--vscode-statusBarItem-warningBackground, var(--vscode-inputValidation-warningBackground)) 92%,
-                var(--vscode-panel-background, transparent)
+                var(--vscode-statusBarItem-warningBackground, var(--vscode-inputValidation-warningBackground)) 70%,
+                var(--vscode-panel-background, var(--vscode-editor-background))
             );
-            border: 1px solid var(--vscode-statusBarItem-warningBackground, var(--vscode-inputValidation-warningBorder));
-            border-left-width: 4px;
-            border-radius: 6px;
-            box-shadow: inset 0 0 0 1px color-mix(
+            border: 1px solid color-mix(
                 in srgb,
-                var(--vscode-statusBarItem-warningForeground, var(--vscode-editorWarning-foreground, #c19c00)) 10%,
+                var(--vscode-statusBarItem-warningForeground, var(--vscode-inputValidation-warningBorder, #c19c00)) 60%,
                 transparent
             );
-            color: var(--vscode-statusBarItem-warningForeground, var(--vscode-foreground));
+            border-left: 4px solid color-mix(
+                in srgb,
+                var(--vscode-statusBarItem-warningForeground, var(--vscode-editorWarning-foreground, #c19c00)) 82%,
+                transparent
+            );
+            border-radius: 6px;
+            box-shadow:
+                inset 0 1px 0 color-mix(in srgb, var(--vscode-foreground) 10%, transparent),
+                0 1px 0 color-mix(in srgb, var(--vscode-statusBarItem-warningBackground, transparent) 25%, transparent);
+            color: var(--vscode-foreground);
         }
 
         .status-warning-icon {
