@@ -80,6 +80,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private analyzer = createRegexAnalyzer();
   private cancellationTokenSource?: vscode.CancellationTokenSource;
   private activeHeartbeat?: { stop: () => void };
+  private lastModelDescription?: string;
+  private lastModelId?: string;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -321,6 +323,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.sendMessage({ type: 'clearWarnings' });
 
       const modelDescription = await this.getModelDescription(modelId);
+      this.lastModelDescription = modelDescription ?? undefined;
+      this.lastModelId = modelId;
       const statusMessage = modelDescription
         ? `Asking ${modelDescription} to propose candidate regexes...`
         : 'Asking your language model to propose candidate regexes...';
@@ -1036,6 +1040,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       const modelDescription = await this.getModelDescription(modelId);
+      this.lastModelDescription = modelDescription ?? undefined;
+      this.lastModelId = modelId;
       const statusMessage = modelDescription
         ? `Asking ${modelDescription} to refine your regex candidates...`
         : 'Asking your language model to refine your regex candidates...';
@@ -1532,10 +1538,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
     const joined = formatted.join(' • ');
     const cautionIntro = 'This task may not be best suited for regular expressions. ';
+    const modelLabel = this.lastModelDescription || this.lastModelId || 'the selected language model';
     const cautionPreface = formatted.length === 1
-      ? 'The LLM cautions that '
-      : 'The LLM cautions that: ';
-    const disclaimer = ' (However, this is an LLM, so take it with a grain of salt.)';
+      ? `${modelLabel} notes that `
+      : `${modelLabel} notes: `;
+    const disclaimer = ` These notes come from ${modelLabel} and may be incomplete or incorrect.`;
 
     this.sendMessage({
       type: 'warning',
