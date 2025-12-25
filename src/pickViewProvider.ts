@@ -340,9 +340,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.cancellationTokenSource = new vscode.CancellationTokenSource();
       
       let candidates: RegexCandidate[] = [];
+      let warnings: string[] = [];
       try {
         const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId);
         candidates = result.candidates;
+        warnings = result.warnings ?? [];
         logger.info(`Generated ${candidates.length} candidates from LLM`);
 
         // Log each candidate with explanation
@@ -585,10 +587,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         candidates: this.controller.getStatus().candidateDetails
       });
 
+      this.surfaceModelWarnings(warnings);
+
       // Check cancellation before generating first pair
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
         logger.info('Operation cancelled before generating first word pair');
-        this.sendMessage({ 
+        this.sendMessage({
           type: 'cancelled', 
           message: 'Operation cancelled by user.' 
         });
@@ -1506,6 +1510,22 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     if (this.view) {
       this.view.webview.postMessage(message);
     }
+  }
+
+  private surfaceModelWarnings(warnings: string[]) {
+    const formatted = warnings
+      .map(warning => warning.trim())
+      .filter(warning => warning.length > 0)
+      .map(warning => warning.slice(0, 240));
+
+    if (formatted.length === 0) {
+      return;
+    }
+
+    const prefix = formatted.length === 1 ? 'LLM caution: ' : 'LLM cautions: ';
+    const joined = formatted.join(' • ');
+
+    this.sendMessage({ type: 'warning', message: `${prefix}${joined}` });
   }
 
   /**

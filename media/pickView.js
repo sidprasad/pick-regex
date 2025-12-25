@@ -1478,7 +1478,7 @@
 
         function showWarning(message) {
             if (statusMessage) {
-                statusMessage.innerHTML = '<strong>Warning:</strong> ' + message;
+                statusMessage.innerHTML = '<strong>Warning:</strong> ' + escapeHtml(message || '');
             }
             statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.add('hidden');
