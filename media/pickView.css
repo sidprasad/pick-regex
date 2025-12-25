@@ -690,6 +690,27 @@
             word-break: break-word;
         }
 
+        .status-warnings {
+            flex-basis: 100%;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 8px 10px;
+            background: var(--vscode-inputValidation-warningBackground);
+            border: 1px solid var(--vscode-inputValidation-warningBorder);
+            border-radius: 4px;
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vscode-inputValidation-warningBorder) 8%, transparent);
+            color: var(--vscode-foreground);
+        }
+
+        .status-warning-icon {
+            line-height: 1.2;
+        }
+
+        .status-warning-text {
+            flex: 1 1 auto;
+        }
+
         .status-actions {
             display: flex;
             align-items: center;

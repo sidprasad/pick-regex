@@ -318,6 +318,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleGenerateCandidates(prompt: string, modelId?: string) {
     try {
+      this.sendMessage({ type: 'clearWarnings' });
+
       const modelDescription = await this.getModelDescription(modelId);
       const statusMessage = modelDescription
         ? `Asking ${modelDescription} to propose candidate regexes...`
@@ -338,7 +340,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         this.cancellationTokenSource.dispose();
       }
       this.cancellationTokenSource = new vscode.CancellationTokenSource();
-      
+
       let candidates: RegexCandidate[] = [];
       let warnings: string[] = [];
       try {
@@ -1022,6 +1024,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleRefineCandidates(prompt: string, modelId?: string, modelChanged?: boolean, previousModelId?: string) {
     try {
+      this.sendMessage({ type: 'clearWarnings' });
+
       // Log revision type
       if (modelChanged && previousModelId) {
         const prevModelDesc = await this.getModelDescription(previousModelId);
@@ -1059,11 +1063,13 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       let candidates: RegexCandidate[] = [];
+      let warnings: string[] = [];
       try {
         const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId, {
           positiveExamples
         });
         candidates = result.candidates;
+        warnings = result.warnings ?? [];
         logger.info(`Generated ${candidates.length} candidates from LLM for refinement`);
 
         // Log each candidate with explanation
@@ -1309,6 +1315,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         candidates: this.controller.getStatus().candidateDetails,
         preservedClassifications: sessionData.wordHistory.length
       });
+
+      this.surfaceModelWarnings(warnings);
 
       // Check cancellation before generating first pair
       if (this.cancellationTokenSource?.token.isCancellationRequested) {

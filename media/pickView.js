@@ -21,6 +21,7 @@
         const finalSection = document.getElementById('finalSection');
         const statusBar = document.getElementById('statusBar');
         const statusMessage = document.getElementById('statusMessage');
+        const statusWarnings = document.getElementById('statusWarnings');
         const statusCancelBtn = document.getElementById('statusCancelBtn');
         const inlineCancelBtn = document.getElementById('inlineCancelBtn');
         const errorSection = document.getElementById('errorSection');
@@ -228,6 +229,7 @@
         let lastPair = null;
         let lastStatus = null;
         let lastPairMatches = null;
+        let lastWarning = '';
 
         // Track classified words
         const classifiedWords = new Set();
@@ -1257,6 +1259,9 @@
                 case 'error':
                     showError(message.message);
                     break;
+                case 'clearWarnings':
+                    clearWarnings();
+                    break;
                 case 'warning':
                     showWarning(message.message);
                     break;
@@ -1460,7 +1465,7 @@
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
             generateBtn.classList.remove('hidden');
-            
+
             // Show a prominent no models message (escape message to prevent XSS)
             errorSection.innerHTML = '<div style="display: flex; flex-direction: column; gap: 12px;">' +
                 '<div style="display: flex; align-items: center; gap: 8px;">' +
@@ -1476,10 +1481,32 @@
             errorSection.classList.remove('hidden');
         }
 
-        function showWarning(message) {
-            if (statusMessage) {
-                statusMessage.innerHTML = '<strong>Warning:</strong> ' + escapeHtml(message || '');
+        function renderWarnings() {
+            if (!statusWarnings) {
+                return;
             }
+
+            if (!lastWarning) {
+                statusWarnings.classList.add('hidden');
+                statusWarnings.setAttribute('aria-hidden', 'true');
+                statusWarnings.innerHTML = '';
+                return;
+            }
+
+            statusWarnings.innerHTML = '<span class="status-warning-icon" aria-hidden="true">⚠️</span>' +
+                '<span class="status-warning-text">' + escapeHtml(lastWarning) + '</span>';
+            statusWarnings.classList.remove('hidden');
+            statusWarnings.setAttribute('aria-hidden', 'false');
+        }
+
+        function clearWarnings() {
+            lastWarning = '';
+            renderWarnings();
+        }
+
+        function showWarning(message) {
+            lastWarning = message || '';
+            renderWarnings();
             statusBar.classList.remove('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
@@ -2453,6 +2480,7 @@
             if (statusMessage) {
                 statusMessage.innerHTML = '';
             }
+            clearWarnings();
             statusBar.classList.add('hidden');
             inlineCancelBtn.classList.add('hidden');
             statusCancelBtn.classList.add('hidden');
