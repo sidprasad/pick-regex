@@ -703,12 +703,12 @@
             );
             border: 1px solid color-mix(
                 in srgb,
-                var(--vscode-statusBarItem-warningForeground, var(--vscode-inputValidation-warningBorder, #c19c00)) 60%,
+                var(--vscode-statusBarItem-warningForeground, var(--vscode-inputValidation-warningBorder, #f49a08)) 60%,
                 transparent
             );
             border-left: 4px solid color-mix(
                 in srgb,
-                var(--vscode-statusBarItem-warningForeground, var(--vscode-editorWarning-foreground, #c19c00)) 82%,
+                var(--vscode-statusBarItem-warningForeground, var(--vscode-editorWarning-foreground, #f49a08)) 82%,
                 transparent
             );
             border-radius: 6px;

@@ -1542,7 +1542,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     const cautionPreface = formatted.length === 1
       ? `${modelLabel} notes that `
       : `${modelLabel} notes: `;
-    const disclaimer = ` These notes come from ${modelLabel} and may be incomplete or incorrect.`;
+    const disclaimer = `This determination was made by the selected language model, and so may be incorrect.`;
 
     this.sendMessage({
       type: 'warning',
