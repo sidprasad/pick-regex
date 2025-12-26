@@ -10,6 +10,7 @@ export interface RegexCandidate {
 
 export interface RegexGenerationResult {
   candidates: RegexCandidate[];
+  warnings?: string[];
 }
 
 export interface RegexGenerationOptions {
@@ -203,6 +204,21 @@ function sanitizeEdgeCases(rawEdgeCases: unknown): string[] {
   return unique.slice(0, 4);
 }
 
+export function sanitizeWarnings(rawWarnings: unknown): string[] {
+  if (!Array.isArray(rawWarnings)) {
+    return [];
+  }
+
+  const normalized = rawWarnings
+    .filter(candidate => typeof candidate === 'string')
+    .map(candidate => candidate.trim())
+    .filter(candidate => candidate.length > 0)
+    .map(candidate => candidate.slice(0, 240));
+
+  const unique = Array.from(new Set(normalized));
+  return unique.slice(0, 3);
+}
+
 export async function generateRegexFromDescription(
   description: string,
   token: vscode.CancellationToken,
@@ -253,7 +269,9 @@ export async function generateRegexFromDescription(
       "    {\"regex\": \"<REGEX>\", \"explanation\": \"<WHY THIS PATTERN>\", \"confidence\": 0.0}",
       "    // Include optional edge cases per candidate when helpful",
       "    // edgeCases: [\"<tricky example 1>\", \"<tricky example 2>\"]",
-      "  ]",
+      "  ],",
+      "  // If the described task seems non-regular or poorly suited to regexes, add short cautions here",
+      "  // warnings: [\"<limitation 1>\", \"<limitation 2>\"]",
       "}",
       "",
       "Output rules:",
@@ -262,6 +280,8 @@ export async function generateRegexFromDescription(
       "- Each item must have: regex (pattern body only, no /.../ or flags), explanation, confidence in [0,1].",
       "- When possible, add 2–4 short edge cases (field: edgeCases) per candidate. Edge cases should be borderline, surprising, or common failure points rather than obvious matches.",
       "- Make candidates diverse: different interpretations or specificity levels.",
+      "- Provide warnings when the request seems to involve non-regular structure (e.g., nested HTML, balanced parentheses, context-sensitive checks) or non-regex concerns (like semantic validation). Leave warnings empty when regexes are appropriate.",
+      "- Keep warnings short (1–2 sentences each, max 2–3 items).",
       "",
       "Regex rules (JavaScript, ECMA-262):",
       "- Allowed: literals, concatenation, ., \\\\w, \\\\d, \\\\s, character classes [...], [^...], groups (...), (?:...), quantifiers *, +, ?, {m}, {m,}, {m,n}, alternation |, anchors ^ and $, lookahead (?=...) and (?!...).",
@@ -375,7 +395,8 @@ export async function generateRegexFromDescription(
   }
 
   const parsed = JSON.parse(jsonMatch[0]);
-  
+  const warnings = sanitizeWarnings(parsed.warnings);
+
   // Validate the response structure
   if (!Array.isArray(parsed.candidates)) {
     throw new Error('Model JSON missing `candidates` array.');
@@ -421,5 +442,9 @@ export async function generateRegexFromDescription(
     throw new Error('No valid regex candidates returned by model.');
   }
 
-  return { candidates };
+  if (warnings.length > 0) {
+    logger.warn(`Model flagged potential regex limitations: ${warnings.join(' | ')}`);
+  }
+
+  return { candidates, warnings: warnings.length > 0 ? warnings : undefined };
 }

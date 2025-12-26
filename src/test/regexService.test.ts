@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { sanitizeWarnings } from '../regexService';
 
 // We need to import the function - but it's currently not exported
 // For testing, we'll test the end-to-end behavior through generateRegexFromDescription
@@ -219,6 +220,23 @@ suite('Regex Service Test Suite', () => {
       complexPatterns.forEach(pattern => {
         assert.throws(() => new RegExp(`^${pattern}$`));
       });
+    });
+  });
+
+  suite('Warning sanitization', () => {
+    test('should normalize and deduplicate warnings', () => {
+      const warnings = sanitizeWarnings(['  nested HTML ', 123, 'nested HTML', 'balanced parentheses']);
+
+      assert.deepStrictEqual(warnings, ['nested HTML', 'balanced parentheses']);
+    });
+
+    test('should cap warnings and truncate long entries', () => {
+      const longWarning = 'a'.repeat(300);
+      const warnings = sanitizeWarnings(['first', longWarning, 'second', 'third', 'fourth']);
+
+      assert.strictEqual(warnings.length, 3);
+      assert.strictEqual(warnings[1].length, 240);
+      assert.deepStrictEqual(warnings.slice(0, 3), ['first', longWarning.slice(0, 240), 'second']);
     });
   });
 

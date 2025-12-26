@@ -80,6 +80,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
   private analyzer = createRegexAnalyzer();
   private cancellationTokenSource?: vscode.CancellationTokenSource;
   private activeHeartbeat?: { stop: () => void };
+  private lastModelDescription?: string;
+  private lastModelId?: string;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -318,7 +320,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleGenerateCandidates(prompt: string, modelId?: string) {
     try {
+      this.sendMessage({ type: 'clearWarnings' });
+
       const modelDescription = await this.getModelDescription(modelId);
+      this.lastModelDescription = modelDescription ?? undefined;
+      this.lastModelId = modelId;
       const statusMessage = modelDescription
         ? `Asking ${modelDescription} to propose candidate regexes...`
         : 'Asking your language model to propose candidate regexes...';
@@ -338,11 +344,13 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         this.cancellationTokenSource.dispose();
       }
       this.cancellationTokenSource = new vscode.CancellationTokenSource();
-      
+
       let candidates: RegexCandidate[] = [];
+      let warnings: string[] = [];
       try {
         const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId);
         candidates = result.candidates;
+        warnings = result.warnings ?? [];
         logger.info(`Generated ${candidates.length} candidates from LLM`);
 
         // Log each candidate with explanation
@@ -585,10 +593,12 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         candidates: this.controller.getStatus().candidateDetails
       });
 
+      this.surfaceModelWarnings(warnings);
+
       // Check cancellation before generating first pair
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
         logger.info('Operation cancelled before generating first word pair');
-        this.sendMessage({ 
+        this.sendMessage({
           type: 'cancelled', 
           message: 'Operation cancelled by user.' 
         });
@@ -1018,6 +1028,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
   private async handleRefineCandidates(prompt: string, modelId?: string, modelChanged?: boolean, previousModelId?: string) {
     try {
+      this.sendMessage({ type: 'clearWarnings' });
+
       // Log revision type
       if (modelChanged && previousModelId) {
         const prevModelDesc = await this.getModelDescription(previousModelId);
@@ -1028,6 +1040,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       const modelDescription = await this.getModelDescription(modelId);
+      this.lastModelDescription = modelDescription ?? undefined;
+      this.lastModelId = modelId;
       const statusMessage = modelDescription
         ? `Asking ${modelDescription} to refine your regex candidates...`
         : 'Asking your language model to refine your regex candidates...';
@@ -1055,11 +1069,13 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       }
 
       let candidates: RegexCandidate[] = [];
+      let warnings: string[] = [];
       try {
         const result = await generateRegexFromDescription(prompt, this.cancellationTokenSource.token, modelId, {
           positiveExamples
         });
         candidates = result.candidates;
+        warnings = result.warnings ?? [];
         logger.info(`Generated ${candidates.length} candidates from LLM for refinement`);
 
         // Log each candidate with explanation
@@ -1306,6 +1322,8 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         preservedClassifications: sessionData.wordHistory.length
       });
 
+      this.surfaceModelWarnings(warnings);
+
       // Check cancellation before generating first pair
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
         logger.info('Operation cancelled before generating first word pair (refinement)');
@@ -1506,6 +1524,30 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     if (this.view) {
       this.view.webview.postMessage(message);
     }
+  }
+
+  private surfaceModelWarnings(warnings: string[]) {
+    const formatted = warnings
+      .map(warning => warning.trim())
+      .filter(warning => warning.length > 0)
+      .map(warning => warning.slice(0, 240));
+
+    if (formatted.length === 0) {
+      return;
+    }
+
+    const joined = formatted.join(' • ');
+    const cautionIntro = 'This task may not be best suited for regular expressions. ';
+    const modelLabel = this.lastModelDescription || this.lastModelId || 'the selected language model';
+    const cautionPreface = formatted.length === 1
+      ? `${modelLabel} notes that `
+      : `${modelLabel} notes: `;
+    const disclaimer = `This determination was made by the selected language model, and so may be incorrect.`;
+
+    this.sendMessage({
+      type: 'warning',
+      message: `${cautionIntro}${cautionPreface}${joined}${disclaimer}`
+    });
   }
 
   /**
