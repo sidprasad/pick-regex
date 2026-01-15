@@ -2454,7 +2454,26 @@
             p.style.cssText = 'margin:8px 0 0 0; font-size:0.9em; white-space:normal; word-break:break-word; overflow-wrap:anywhere; hyphens:auto;';
             p.textContent = message; // use textContent to avoid injecting HTML
 
+            const guidance = document.createElement('p');
+            guidance.style.cssText = 'margin:8px 0 0 0; font-size:0.9em; color: var(--vscode-descriptionForeground);';
+            guidance.textContent = 'Revise your description to generate new candidates. Revising keeps all of your current classifications and examples.';
+
+            const actionRow = document.createElement('div');
+            actionRow.style.cssText = 'margin-top:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;';
+
+            const reviseBtn = document.createElement('button');
+            reviseBtn.className = 'icon-btn subtle';
+            reviseBtn.title = 'Revise your description (keeps classifications)';
+            reviseBtn.type = 'button';
+            reviseBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 21v-3l12-12 3 3L6 21H3zM19.5 7.5l-3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+                '<span class="btn-label">Revise description</span>';
+            reviseBtn.addEventListener('click', editPrompt);
+
+            actionRow.appendChild(reviseBtn);
+
             container.appendChild(p);
+            container.appendChild(guidance);
+            container.appendChild(actionRow);
             wordPair.innerHTML = '';
             wordPair.appendChild(container);
 
@@ -2480,13 +2499,13 @@
                 ];
 
             updateWordHistory(history);
-            addHistoryNotice('No regex survived. Review or re-classify your previously categorized examples below.');
+            addHistoryNotice('No regex survived. Revise your description to generate new candidates — your existing classifications are preserved below.');
 
             if (wordHistory && typeof wordHistory.scrollIntoView === 'function') {
                 wordHistory.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
 
-            showStatusWithoutCancel('All candidates were eliminated. Review your classifications below or start fresh.');
+            showStatusWithoutCancel('All candidates were eliminated. Revise your description to generate new candidates (your classifications stay).');
         }
 
         function resetUI(preserveClassifications) {
