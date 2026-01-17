@@ -1536,17 +1536,22 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const joined = formatted.join(' • ');
-    const cautionIntro = 'This task may not be best suited for regular expressions. ';
     const modelLabel = this.lastModelDescription || this.lastModelId || 'the selected language model';
-    const cautionPreface = formatted.length === 1
-      ? `${modelLabel} notes that `
-      : `${modelLabel} notes: `;
-    const disclaimer = `This determination was made by the selected language model, and so may be incorrect.`;
+    const cautionIntro = 'This task may not be best suited for regular expressions.';
+    
+    let warningBody: string;
+    if (formatted.length === 1) {
+      warningBody = `${modelLabel} notes:\n${formatted[0]}`;
+    } else {
+      const bulletPoints = formatted.map(w => `• ${w}`).join('\n');
+      warningBody = `${modelLabel} notes:\n${bulletPoints}`;
+    }
+    
+    const disclaimer = `\n\nThis determination was made by ${modelLabel} and may be incorrect.`;
 
     this.sendMessage({
       type: 'warning',
-      message: `${cautionIntro}${cautionPreface}${joined}${disclaimer}`
+      message: `${cautionIntro}\n\n${warningBody}${disclaimer}`
     });
   }
 

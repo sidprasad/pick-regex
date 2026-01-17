@@ -696,11 +696,6 @@
             align-items: flex-start;
             gap: 8px;
             padding: 10px 12px;
-            background: color-mix(
-                in srgb,
-                var(--vscode-statusBarItem-warningBackground, var(--vscode-inputValidation-warningBackground)) 70%,
-                var(--vscode-panel-background, var(--vscode-editor-background))
-            );
             border: 1px solid color-mix(
                 in srgb,
                 var(--vscode-statusBarItem-warningForeground, var(--vscode-inputValidation-warningBorder, #f49a08)) 60%,
@@ -712,9 +707,6 @@
                 transparent
             );
             border-radius: 6px;
-            box-shadow:
-                inset 0 1px 0 color-mix(in srgb, var(--vscode-foreground) 10%, transparent),
-                0 1px 0 color-mix(in srgb, var(--vscode-statusBarItem-warningBackground, transparent) 25%, transparent);
             color: var(--vscode-foreground);
         }
 
@@ -726,6 +718,8 @@
         .status-warning-text {
             flex: 1 1 auto;
             color: var(--vscode-foreground);
+            line-height: 1.5;
+            white-space: pre-wrap;
         }
 
         .status-warning-dismiss {

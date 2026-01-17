@@ -1527,8 +1527,11 @@
                 return;
             }
 
+            // Convert newlines to <br> tags for proper formatting
+            const formattedWarning = escapeHtml(lastWarning).replace(/\\n/g, '<br>');
+            
             statusWarnings.innerHTML = '<span class="status-warning-icon" aria-hidden="true">⚠️</span>' +
-                '<span class="status-warning-text">' + escapeHtml(lastWarning) + '</span>' +
+                '<span class="status-warning-text">' + formattedWarning + '</span>' +
                 '<button class="icon-btn subtle status-warning-dismiss" type="button" title="Dismiss warning" aria-label="Dismiss warning">' +
                 '&#10005;' +
                 '</button>';
