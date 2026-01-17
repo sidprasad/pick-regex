@@ -65,6 +65,7 @@ export class PickController {
   private maxClassifications = 50;
   private maxPairsWithoutProgress = 2;
   private maxSuggestedEdgeCases = 2;
+  private useLLMGeneratedWords = true;
   private searchTimeoutMs = 2000;
   private searchPoolSize = 30;
 
@@ -78,7 +79,8 @@ export class PickController {
     this.maxSuggestedEdgeCases = this.clampSuggestedEdgeCaseLimit(
       config.get<number>('maxSuggestedEdgeCases', 2)
     );
-    logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}`);
+    this.useLLMGeneratedWords = config.get<boolean>('useLLMGeneratedWords', true);
+    logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}, use LLM words: ${this.useLLMGeneratedWords}`);
   }
 
   private clampSuggestedEdgeCaseLimit(value: number | undefined): number {
@@ -90,6 +92,13 @@ export class PickController {
   }
 
   private prepareSuggestedWordsQueue(suggestedWords: string[]): void {
+    if (!this.useLLMGeneratedWords) {
+      this.suggestedWordsQueue = [];
+      this.unmatchedSuggestionsUsed = 0;
+      logger.info('Skipping LLM-suggested edge cases because setting is disabled.');
+      return;
+    }
+
     const unique = Array.from(new Set(
       suggestedWords
         .map(word => word.trim())

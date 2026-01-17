@@ -36,11 +36,31 @@ export function selectEdgeCaseSuggestions(
     const matches = candidateRegexes.map(regex => analyzer.verifyMatch(word, regex));
     const matchCount = matches.filter(Boolean).length;
     const nonMatchCount = matches.length - matchCount;
+    // Create a signature for the match pattern (e.g., "true,false,true" for 3 regexes)
+    const matchSignature = matches.join(',');
 
-    return { word, index, matchCount, nonMatchCount };
+    return { word, index, matchCount, nonMatchCount, matchSignature };
   });
 
-  const distinguishing = stats
+  // Filter out distinguishing words that have the exact same match signature as a previous word
+  // Keep only the first occurrence of each unique match pattern for distinguishing words
+  // But don't filter unmatched or all-matching words
+  const seenDistinguishingSignatures = new Set<string>();
+  const uniqueMatchStats = stats.filter(entry => {
+    // Don't filter unmatched words or words that match all regexes
+    if (entry.matchCount === 0 || entry.nonMatchCount === 0) {
+      return true;
+    }
+    
+    // For distinguishing words, filter duplicates
+    if (seenDistinguishingSignatures.has(entry.matchSignature)) {
+      return false;
+    }
+    seenDistinguishingSignatures.add(entry.matchSignature);
+    return true;
+  });
+
+  const distinguishing = uniqueMatchStats
     .filter(entry => entry.matchCount > 0 && entry.nonMatchCount > 0)
     .map(entry => ({
       word: entry.word,
@@ -49,7 +69,7 @@ export function selectEdgeCaseSuggestions(
     }))
     .sort((a, b) => b.score - a.score || a.index - b.index);
 
-  const unmatched = stats.filter(entry => entry.matchCount === 0).sort((a, b) => a.index - b.index);
+  const unmatched = uniqueMatchStats.filter(entry => entry.matchCount === 0).sort((a, b) => a.index - b.index);
 
   const selected: string[] = distinguishing.slice(0, maxAllowed).map(entry => entry.word);
 
