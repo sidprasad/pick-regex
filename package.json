@@ -99,6 +99,13 @@
           "maximum": 6,
           "description": "Maximum number of LLM-suggested edge case words to surface before analyzer-generated pairs"
         },
+        "pick.maxCandidates": {
+          "type": "number",
+          "default": 4,
+          "minimum": 2,
+          "maximum": 10,
+          "description": "Maximum number of regex candidates to consider (highest confidence scores are selected)"
+        },
         "pick.useLLMGeneratedWords": {
           "type": "boolean",
           "default": true,

@@ -93,6 +93,37 @@ export function selectEdgeCaseSuggestions(
   return selected;
 }
 
+/**
+ * Select the top N candidates by confidence score.
+ * Candidates without confidence scores are treated as having confidence 0 (lowest priority).
+ */
+export function selectTopCandidatesByConfidence(
+  candidates: RegexCandidate[],
+  maxCandidates: number
+): RegexCandidate[] {
+  if (candidates.length <= maxCandidates) {
+    return candidates;
+  }
+
+  // Sort by confidence (descending), treating undefined as 0
+  const sorted = [...candidates].sort((a, b) => {
+    const confA = a.confidence ?? 0;
+    const confB = b.confidence ?? 0;
+    return confB - confA;
+  });
+
+  const selected = sorted.slice(0, maxCandidates);
+  
+  if (selected.length < candidates.length) {
+    logger.info(
+      `Selected top ${selected.length} candidates by confidence from ${candidates.length} valid candidates. ` +
+      `Confidence range: ${selected.map(c => c.confidence ?? 0).join(', ')}`
+    );
+  }
+
+  return selected;
+}
+
 export class PickViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'pick.pickView';
   private view?: vscode.WebviewView;
@@ -563,6 +594,22 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Build metadata map for unique candidates (use highest confidence for duplicates)
+      const candidateMeta = new Map<string, RegexCandidate>();
+      validCandidates.forEach(candidate => {
+        const existing = candidateMeta.get(candidate.regex);
+        if (!existing || (candidate.confidence ?? 0) > (existing.confidence ?? 0)) {
+          candidateMeta.set(candidate.regex, candidate);
+        }
+      });
+
+      // Select top N candidates by confidence
+      const config = vscode.workspace.getConfiguration('pick');
+      const maxCandidates = config.get<number>('maxCandidates', 4);
+      const uniqueWithMeta = uniqueCandidates.map(regex => candidateMeta.get(regex)!);
+      const topCandidates = selectTopCandidatesByConfidence(uniqueWithMeta, maxCandidates);
+      const finalCandidateRegexes = topCandidates.map(c => c.regex);
+
       // Check cancellation before initializing candidates
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
         logger.info('Operation cancelled before initializing candidates');
@@ -575,16 +622,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
       // Initialize controller with unique candidates
       this.sendMessage({ type: 'status', message: 'Determining elimination thresholds...' });
-      const candidateMeta = new Map<string, RegexCandidate>();
-      validCandidates.forEach(candidate => {
-        if (!candidateMeta.has(candidate.regex)) {
-          candidateMeta.set(candidate.regex, candidate);
-        }
-      });
 
-      const suggestedWords = this.collectEdgeCaseSuggestions(validCandidates);
+      const suggestedWords = this.collectEdgeCaseSuggestions(topCandidates);
 
-      const seeds = uniqueCandidates.map(regex => {
+      const seeds = finalCandidateRegexes.map(regex => {
         const meta = candidateMeta.get(regex);
         return {
           pattern: regex,
@@ -593,7 +634,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         };
       });
 
-      await this.controller.generateCandidates(prompt, seeds, equivalenceMap, (current, total) => {
+      // Filter equivalence map to only include selected candidates
+      const filteredEquivalenceMap = new Map<string, string[]>();
+      for (const regex of finalCandidateRegexes) {
+        const equivalents = equivalenceMap.get(regex);
+        if (equivalents) {
+          filteredEquivalenceMap.set(regex, equivalents);
+        }
+      }
+
+      await this.controller.generateCandidates(prompt, seeds, filteredEquivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
         this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
       }, suggestedWords);
@@ -1285,6 +1335,22 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Build metadata map for unique candidates (use highest confidence for duplicates)
+      const candidateMeta = new Map<string, RegexCandidate>();
+      validCandidates.forEach(candidate => {
+        const existing = candidateMeta.get(candidate.regex);
+        if (!existing || (candidate.confidence ?? 0) > (existing.confidence ?? 0)) {
+          candidateMeta.set(candidate.regex, candidate);
+        }
+      });
+
+      // Select top N candidates by confidence
+      const config = vscode.workspace.getConfiguration('pick');
+      const maxCandidates = config.get<number>('maxCandidates', 4);
+      const uniqueWithMeta = uniqueCandidates.map(regex => candidateMeta.get(regex)!);
+      const topCandidates = selectTopCandidatesByConfidence(uniqueWithMeta, maxCandidates);
+      const finalCandidateRegexes = topCandidates.map(c => c.regex);
+
       // Check cancellation before refining candidates
       if (this.cancellationTokenSource?.token.isCancellationRequested) {
         logger.info('Operation cancelled before refining candidates');
@@ -1303,16 +1369,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         });
       }
       this.sendMessage({ type: 'status', message: 'Determining elimination thresholds...' });
-      const candidateMeta = new Map<string, RegexCandidate>();
-      validCandidates.forEach(candidate => {
-        if (!candidateMeta.has(candidate.regex)) {
-          candidateMeta.set(candidate.regex, candidate);
-        }
-      });
 
-      const suggestedWords = this.collectEdgeCaseSuggestions(validCandidates);
+      const suggestedWords = this.collectEdgeCaseSuggestions(topCandidates);
 
-      const seeds = uniqueCandidates.map(regex => {
+      const seeds = finalCandidateRegexes.map(regex => {
         const meta = candidateMeta.get(regex);
         return {
           pattern: regex,
@@ -1321,7 +1381,16 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         };
       });
 
-      await this.controller.refineCandidates(prompt, seeds, equivalenceMap, (current, total) => {
+      // Filter equivalence map to only include selected candidates
+      const filteredEquivalenceMap = new Map<string, string[]>();
+      for (const regex of finalCandidateRegexes) {
+        const equivalents = equivalenceMap.get(regex);
+        if (equivalents) {
+          filteredEquivalenceMap.set(regex, equivalents);
+        }
+      }
+
+      await this.controller.refineCandidates(prompt, seeds, filteredEquivalenceMap, (current, total) => {
         const percent = Math.round((current / total) * 100);
         this.sendMessage({ type: 'status', message: `Determining elimination thresholds... ${percent}%` });
       }, suggestedWords);
