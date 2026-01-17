@@ -211,7 +211,7 @@
 
         .prompt-row {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 8px;
             margin-top: 4px;
             position: relative;
@@ -241,6 +241,21 @@
             /* align with generate button */
             height: 36px;
             /* match generate button height */
+        }
+
+        .prompt-input {
+            width: 100%;
+            padding: 6px 8px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 2px;
+            box-sizing: border-box;
+            margin-bottom: 0;
+            min-height: 36px;
+            line-height: 1.4;
+            resize: vertical;
+            font-family: var(--vscode-font-family);
         }
 
         button {
@@ -1375,6 +1390,12 @@
             margin-bottom: 4px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+        }
+
+        .prompt-value {
+            white-space: pre-wrap;
+            word-break: break-word;
+            flex: 1;
         }
 
         .word-display {

@@ -519,10 +519,11 @@
             label.textContent = 'Your Description';
             
             const textDiv = document.createElement('div');
-            textDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+            textDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;';
             textDiv.className = 'prompt-text';
             
             const span = document.createElement('span');
+            span.className = 'prompt-value';
             span.textContent = prompt;
             
             const button = document.createElement('button');
@@ -574,13 +575,13 @@
             
             // Input row
             const inputRow = document.createElement('div');
-            inputRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+            inputRow.style.cssText = 'display: flex; gap: 8px; align-items: flex-start;';
             
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'editPromptInput'; // Use class instead of ID to avoid duplicates
+            const input = document.createElement('textarea');
+            input.className = 'prompt-input editPromptInput'; // Use class instead of ID to avoid duplicates
+            input.rows = 2;
             input.value = currentPrompt;
-            input.style.cssText = 'flex: 1; padding: 8px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px;';
+            input.style.cssText = 'flex: 1;';
             input.placeholder = 'Enter a refined description...';
             
             inputRow.appendChild(input);
@@ -658,8 +659,8 @@
                 targetDisplay.appendChild(container);
                 setTimeout(function() {
                     input.focus();
-                    input.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') {
+                    input.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                             e.preventDefault();
                             handleSubmit();
                         }
@@ -705,8 +706,8 @@
                     cloneCancelBtn.addEventListener('click', cancelEditPrompt);
                 }
                 if (cloneInput) {
-                    cloneInput.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') {
+                    cloneInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                             e.preventDefault();
                             cloneHandleSubmit();
                         }
@@ -752,8 +753,8 @@
                     cloneCancelBtn.addEventListener('click', cancelEditPrompt);
                 }
                 if (cloneInput) {
-                    cloneInput.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') {
+                    cloneInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                             e.preventDefault();
                             cloneHandleSubmit();
                         }
@@ -1107,8 +1108,8 @@
             }
         });
 
-        promptInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
+        promptInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
                 generateBtn.click();
             }
