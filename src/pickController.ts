@@ -65,6 +65,7 @@ export class PickController {
   private maxClassifications = 50;
   private maxPairsWithoutProgress = 2;
   private maxSuggestedEdgeCases = 2;
+  private useLLMGeneratedWords = true;
   private searchTimeoutMs = 2000;
   private searchPoolSize = 30;
 
@@ -78,7 +79,8 @@ export class PickController {
     this.maxSuggestedEdgeCases = this.clampSuggestedEdgeCaseLimit(
       config.get<number>('maxSuggestedEdgeCases', 2)
     );
-    logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}`);
+    this.useLLMGeneratedWords = config.get<boolean>('useLLMGeneratedWords', true);
+    logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}, use LLM words: ${this.useLLMGeneratedWords}`);
   }
 
   private clampSuggestedEdgeCaseLimit(value: number | undefined): number {
@@ -90,6 +92,13 @@ export class PickController {
   }
 
   private prepareSuggestedWordsQueue(suggestedWords: string[]): void {
+    if (!this.useLLMGeneratedWords) {
+      this.suggestedWordsQueue = [];
+      this.unmatchedSuggestionsUsed = 0;
+      logger.info('Skipping LLM-suggested edge cases because setting is disabled.');
+      return;
+    }
+
     const unique = Array.from(new Set(
       suggestedWords
         .map(word => word.trim())
@@ -1009,22 +1018,22 @@ export class PickController {
               candidatePatterns[i]
             );
 
-            // Convert bigint to number, capping at default threshold
-            const countA = countANotB !== undefined 
-              ? Math.min(Number(countANotB), defaultThreshold)
-              : defaultThreshold;
-            const countB = countBNotA !== undefined 
-              ? Math.min(Number(countBNotA), defaultThreshold)
-              : defaultThreshold;
+            // Total distinguishing words = words in A but not B + words in B but not A
+            const countA = countANotB !== undefined ? Number(countANotB) : Infinity;
+            const countB = countBNotA !== undefined ? Number(countBNotA) : Infinity;
+            const totalDistinguishing = countA + countB;
+            
+            // Cap at default threshold
+            const pairThreshold = Math.min(totalDistinguishing, defaultThreshold);
 
-            // Update minimum for each candidate
+            // Update minimum for each candidate based on this pair's distinguishing word count
             const currentMinA = minDistinguishing.get(candidatePatterns[i])!;
             const currentMinB = minDistinguishing.get(candidatePatterns[j])!;
-            minDistinguishing.set(candidatePatterns[i], Math.min(currentMinA, countA));
-            minDistinguishing.set(candidatePatterns[j], Math.min(currentMinB, countB));
+            minDistinguishing.set(candidatePatterns[i], Math.min(currentMinA, pairThreshold));
+            minDistinguishing.set(candidatePatterns[j], Math.min(currentMinB, pairThreshold));
             
             // Check if we've reached minimum threshold - can stop early
-            if (Math.min(currentMinA, countA) === 1 || Math.min(currentMinB, countB) === 1) {
+            if (pairThreshold === 1) {
               foundMinThreshold = true;
               logger.info('Found minimum threshold of 1 - stopping early');
             }
