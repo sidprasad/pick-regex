@@ -231,6 +231,7 @@
         // Track diff view state (off by default)
         let diffMode = diffToggle ? diffToggle.checked : false;
         let latestWordHistory = Array.isArray(viewState.wordHistory) ? viewState.wordHistory : [];
+        let latestCandidates = [];
         let historyStatusTimeout = null;
 
         // Keep last shown pair/status for re-rendering when toggles change
@@ -1292,6 +1293,7 @@
                     statusCancelBtn.classList.add('hidden');
                     generateBtn.classList.remove('hidden');
                     clearStatusMessage();
+                    latestCandidates = Array.isArray(message.candidates) ? message.candidates.slice() : [];
                     updateCandidates(message.candidates, 2);
                     break;
                 case 'candidatesRefined':
@@ -1299,6 +1301,7 @@
                     statusCancelBtn.classList.add('hidden');
                     generateBtn.classList.remove('hidden');
                     clearStatusMessage();
+                    latestCandidates = Array.isArray(message.candidates) ? message.candidates.slice() : [];
                     updateCandidates(message.candidates, 2);
                     break;
                 case 'newPair':
@@ -1325,6 +1328,9 @@
                     updateStatus(message.status);
                     break;
                 case 'finalResult':
+                    if (message.status && Array.isArray(message.status.candidateDetails)) {
+                        latestCandidates = message.status.candidateDetails.slice();
+                    }
                     showFinalResultWithContext(message.regex, message.wordsIn, message.wordsOut, message.status);
                     break;
                 case 'copied':
@@ -1334,6 +1340,9 @@
                     }, 2000);
                     break;
                 case 'noRegexFound':
+                    if (Array.isArray(message.candidateDetails)) {
+                        latestCandidates = message.candidateDetails.slice();
+                    }
                     showNoRegexFound(message.message, message.candidateDetails, message.wordsIn, message.wordsOut, message.wordHistory);
                     break;
                 case 'insufficientWords':
@@ -2108,12 +2117,28 @@
                 return;
             }
 
-            const exportData = latestWordHistory.map(function(item) {
-                return {
-                    word: item.word,
-                    classification: normalizeClassificationForExport(item.classification)
-                };
-            });
+            // Build the full export structure
+            const exportData = {
+                candidates: latestCandidates.map(function(candidate) {
+                    const candidateInfo = {
+                        regex: candidate.pattern,
+                        explanation: candidate.explanation || null,
+                        confidence: candidate.confidence !== undefined ? candidate.confidence : null
+                    };
+                    // Only include equivalents if they exist and are non-empty
+                    if (Array.isArray(candidate.equivalents) && candidate.equivalents.length > 0) {
+                        candidateInfo.equivalents = candidate.equivalents;
+                    }
+                    return candidateInfo;
+                }),
+                classifications: latestWordHistory.map(function(item) {
+                    return {
+                        word: item.word,
+                        classification: normalizeClassificationForExport(item.classification),
+                        matchingRegexes: Array.isArray(item.matchingRegexes) ? item.matchingRegexes : []
+                    };
+                })
+            };
             const payload = JSON.stringify(exportData, null, 2);
 
             const fallbackCopy = function() {
