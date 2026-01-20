@@ -2123,10 +2123,7 @@
                     const candidateInfo = {
                         regex: candidate.pattern,
                         explanation: candidate.explanation || null,
-                        confidence: candidate.confidence !== undefined ? candidate.confidence : null,
-                        positiveVotes: candidate.positiveVotes,
-                        negativeVotes: candidate.negativeVotes,
-                        eliminated: candidate.eliminated
+                        confidence: candidate.confidence !== undefined ? candidate.confidence : null
                     };
                     // Only include equivalents if they exist and are non-empty
                     if (Array.isArray(candidate.equivalents) && candidate.equivalents.length > 0) {

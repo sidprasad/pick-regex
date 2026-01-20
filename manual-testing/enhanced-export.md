@@ -20,9 +20,6 @@ Modified `media/pickView.js`:
     - `regex`: The regex pattern
     - `explanation`: LLM-provided explanation (if available)
     - `confidence`: LLM confidence score (if available)
-    - `positiveVotes`: Number of positive votes
-    - `negativeVotes`: Number of negative votes
-    - `eliminated`: Whether the candidate was eliminated
     - `equivalents`: Array of equivalent regex patterns (if any)
   - `classifications`: Array of word classifications with:
     - `word`: The classified word
@@ -37,9 +34,6 @@ Modified `media/pickView.js`:
       "regex": "^(Jan|Feb|Mar)$",
       "explanation": "Matches first three months abbreviated",
       "confidence": 0.85,
-      "positiveVotes": 3,
-      "negativeVotes": 0,
-      "eliminated": false,
       "equivalents": ["^Jan$|^Feb$|^Mar$"]
     }
   ],
