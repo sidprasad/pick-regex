@@ -1086,7 +1086,7 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
 
       logger.info(`Generated ${candidatePatterns.length} candidates from loaded session`);
 
-      // Apply all classifications
+      // Apply all classifications (this also marks words as used via applyClassification)
       if (classifications.length > 0) {
         this.sendMessage({ type: 'status', message: `Applying ${classifications.length} classification(s)...` });
         const applied = this.controller.classifyDirectWords(classifications);

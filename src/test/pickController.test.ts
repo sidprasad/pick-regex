@@ -1468,7 +1468,7 @@ suite('PickController Test Suite', () => {
       await controller.generateCandidates('test', patterns);
       
       // Set low threshold to trigger elimination quickly
-      controller.setEliminationThreshold(1);
+      controller.setThreshold(1);
       
       // Classify a word that eliminates [0-9]+ (it doesn't match 'abc')
       controller.classifyDirectWords([{ word: 'abc', classification: WordClassification.ACCEPT }]);
@@ -1494,7 +1494,7 @@ suite('PickController Test Suite', () => {
       await controller.generateCandidates('test', patterns);
       
       // Set low threshold to trigger elimination quickly
-      controller.setEliminationThreshold(1);
+      controller.setThreshold(1);
       
       // Classify 'abc' as ACCEPT - this should eliminate [0-9]+
       controller.classifyDirectWords([{ word: 'abc', classification: WordClassification.ACCEPT }]);
@@ -1524,7 +1524,7 @@ suite('PickController Test Suite', () => {
       await controller.generateCandidates('test', patterns);
       
       // Set low threshold to trigger elimination quickly
-      controller.setEliminationThreshold(1);
+      controller.setThreshold(1);
       
       // Eliminate [0-9]+ by accepting 'abc' (which it doesn't match)
       controller.classifyDirectWords([{ word: 'abc', classification: WordClassification.ACCEPT }]);
@@ -1548,7 +1548,7 @@ suite('PickController Test Suite', () => {
       await controller.generateCandidates('test', patterns);
       
       // Set low threshold
-      controller.setEliminationThreshold(1);
+      controller.setThreshold(1);
       
       // Eliminate [a-z]+ by rejecting 'abc' (which it matches)
       controller.classifyDirectWords([{ word: 'abc', classification: WordClassification.REJECT }]);

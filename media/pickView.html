@@ -99,6 +99,15 @@
         <div id="recentPromptList" class="history-menu__items"></div>
       </div>
     </div>
+    <div class="load-session-row" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 12px; color: var(--vscode-descriptionForeground);">Or load a previous session:</span>
+      <button id="loadSessionBtnPrompt" class="icon-btn subtle" title="Load session from JSON" aria-label="Load session from exported JSON file">
+        <span class="codicon codicon-folder-opened" aria-hidden="true"></span>
+        <span class="btn-label">Load Session</span>
+      </button>
+      <input type="file" id="loadSessionFilePrompt" accept=".json,application/json" style="display:none;" aria-hidden="true" />
+      <span id="loadSessionStatus" class="history-copy-status" role="status" aria-live="polite"></span>
+    </div>
   </div>
 
 

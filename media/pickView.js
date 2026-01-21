@@ -154,6 +154,9 @@
         const copyHistoryBtn = document.getElementById('copyHistoryBtn');
         const loadSessionBtn = document.getElementById('loadSessionBtn');
         const loadSessionFile = document.getElementById('loadSessionFile');
+        const loadSessionBtnPrompt = document.getElementById('loadSessionBtnPrompt');
+        const loadSessionFilePrompt = document.getElementById('loadSessionFilePrompt');
+        const loadSessionStatus = document.getElementById('loadSessionStatus');
         const historyCopyStatus = document.getElementById('historyCopyStatus');
         const finalRegex = document.getElementById('finalRegex');
         const wordsIn = document.getElementById('wordsIn');
@@ -187,56 +190,94 @@
             });
             
             loadSessionFile.addEventListener('change', function(event) {
-                const file = event.target.files[0];
-                if (!file) {
-                    return;
-                }
-                
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const content = e.target.result;
-                        const data = JSON.parse(content);
-                        
-                        // Validate the format
-                        if (!data.candidates || !Array.isArray(data.candidates)) {
-                            setHistoryCopyStatus('Invalid format: missing candidates array', 'error');
-                            return;
-                        }
-                        
-                        if (!data.classifications || !Array.isArray(data.classifications)) {
-                            setHistoryCopyStatus('Invalid format: missing classifications array', 'error');
-                            return;
-                        }
-                        
-                        // Send to backend
-                        vscode.postMessage({
-                            type: 'loadSession',
-                            data: data
-                        });
-                        
-                        setHistoryCopyStatus('Loading session...');
-                    } catch (error) {
-                        console.error('Failed to parse session file', error);
-                        setHistoryCopyStatus('Failed to parse JSON file', 'error');
-                    } finally {
-                        // Reset file input so the same file can be loaded again
-                        loadSessionFile.value = '';
-                    }
-                };
-                
-                reader.onerror = function() {
-                    setHistoryCopyStatus('Failed to read file', 'error');
-                    loadSessionFile.value = '';
-                };
-                
-                reader.readAsText(file);
+                handleSessionFileLoad(event.target.files[0], setHistoryCopyStatus, loadSessionFile);
             });
         }
 
         if (customExamplesCancel) {
             customExamplesCancel.addEventListener('click', function() {
                 toggleExamplesPanel(false);
+            });
+        }
+
+        // Helper function to handle session file loading
+        function handleSessionFileLoad(file, statusCallback, fileInputElement) {
+            if (!file) {
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const content = e.target.result;
+                    const data = JSON.parse(content);
+                    
+                    // Validate the format
+                    if (!data.candidates || !Array.isArray(data.candidates)) {
+                        statusCallback('Invalid format: missing candidates array', 'error');
+                        return;
+                    }
+                    
+                    if (!data.classifications || !Array.isArray(data.classifications)) {
+                        statusCallback('Invalid format: missing classifications array', 'error');
+                        return;
+                    }
+                    
+                    // Send to backend
+                    vscode.postMessage({
+                        type: 'loadSession',
+                        data: data
+                    });
+                    
+                    statusCallback('Loading session...');
+                } catch (error) {
+                    console.error('Failed to parse session file', error);
+                    statusCallback('Failed to parse JSON file', 'error');
+                } finally {
+                    // Reset file input so the same file can be loaded again
+                    if (fileInputElement) {
+                        fileInputElement.value = '';
+                    }
+                }
+            };
+            
+            reader.onerror = function() {
+                statusCallback('Failed to read file', 'error');
+                if (fileInputElement) {
+                    fileInputElement.value = '';
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+
+        // Status callback for prompt screen load button
+        function setLoadSessionStatus(message, type) {
+            if (!loadSessionStatus) {
+                return;
+            }
+            
+            loadSessionStatus.textContent = message || '';
+            loadSessionStatus.style.color = type === 'error' 
+                ? 'var(--vscode-errorForeground)' 
+                : '';
+            
+            if (message) {
+                setTimeout(function() {
+                    loadSessionStatus.textContent = '';
+                    loadSessionStatus.style.color = '';
+                }, 3000);
+            }
+        }
+
+        // Wire up prompt screen load button
+        if (loadSessionBtnPrompt && loadSessionFilePrompt) {
+            loadSessionBtnPrompt.addEventListener('click', function() {
+                loadSessionFilePrompt.click();
+            });
+            
+            loadSessionFilePrompt.addEventListener('change', function(event) {
+                handleSessionFileLoad(event.target.files[0], setLoadSessionStatus, loadSessionFilePrompt);
             });
         }
 
@@ -1414,6 +1455,9 @@
                     break;
                 case 'sessionLoaded':
                     handleSessionLoaded(message);
+                    break;
+                case 'showVoting':
+                    showSection('voting');
                     break;
             }
         });

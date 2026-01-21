@@ -2,36 +2,36 @@
 
 ## Feature
 Added the ability to load a previously exported session from a JSON file. This is gated power-user functionality that allows users to:
+- Start a session without using an LLM
 - Share sessions with others
 - Resume work on complex regex patterns
 - Reproduce and debug specific scenarios
 - Use exported data for testing or documentation
 
+## Key Improvements
+1. **Session load is accessible from the initial prompt screen** - Users can load a session before ever calling an LLM
+2. **Used words are tracked** - Words from loaded sessions are tracked as "used" to prevent them from being resurfaced in pair generation
+
 ## Implementation
 
 ### UI Changes
-- **[media/pickView.html](../media/pickView.html#L219-L221)**: Added "Load" button next to the "Export" button in the Word Classification History section
-  - Button uses folder icon to indicate file loading
-  - Hidden file input element for JSON file selection
-  - Placed unobtrusively alongside existing export functionality
+- **[media/pickView.html](../media/pickView.html#L95-L103)**: Added "Load Session" button on the initial prompt screen
+  - Placed below the prompt input with explanatory text "Or load a previous session"
+  - Allows users to start with candidates + classifications without calling LLM
+- **[media/pickView.html](../media/pickView.html#L219-L221)**: "Load" button in the Word Classification History section (during voting)
+  - Allows reloading a session mid-workflow
 
-### Frontend (pickView.js)
-- **File input handling**: Click on "Load" button triggers file picker for JSON files
-- **JSON parsing and validation**: 
-  - Validates presence of `candidates` and `classifications` arrays
-  - Shows clear error messages for invalid formats
-  - Resets file input after each attempt (allows re-loading same file)
-- **Error handling**: Shows errors using the existing status display system with red error styling
+### Backend (pickController.ts)
+- **[addUsedWords method](../src/pickController.ts#L976-L984)**: New method to add words to the used set
+  - Prevents loaded session words from being resurfaced in pair generation
+  - Used for programmatic addition of used words
 
 ### Backend (pickViewProvider.ts)
-- **[handleLoadSession](../src/pickViewProvider.ts#L1024-L1155)**: New method to process loaded session data
-  - Validates data structure (candidates array, classifications array)
-  - Extracts candidate patterns with explanations, confidence scores, and equivalents
-  - Converts export format classifications ('in'/'out'/'unsure') to internal format (ACCEPT/REJECT/UNSURE)
-  - Resets controller and generates candidates
-  - Applies all classifications from the file
-  - Transitions to appropriate state (voting or final result)
-  - Provides detailed logging for debugging
+- **[handleLoadSession](../src/pickViewProvider.ts#L1024-L1155)**: Session loading handler
+  - Validates data structure
+  - Generates candidates from loaded data
+  - Applies classifications (which automatically marks words as used)
+  - Sends `showVoting` message to transition UI
 
 ### Format Compatibility
 The loader accepts the same format as the export:

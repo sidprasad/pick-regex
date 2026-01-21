@@ -966,6 +966,18 @@ export class PickController {
   }
 
   /**
+   * Add words to the set of used words (prevents them from being resurfaced in pair generation)
+   */
+  addUsedWords(words: string[]): void {
+    for (const word of words) {
+      if (word && typeof word === 'string') {
+        this.usedWords.add(word);
+      }
+    }
+    logger.info(`Added ${words.length} words to used words set. Total: ${this.usedWords.size}`);
+  }
+
+  /**
    * Set elimination threshold for each candidate based on pairwise distinguishing words.
    * 
    * For each candidate, the threshold is the SMALLEST number of distinguishing words

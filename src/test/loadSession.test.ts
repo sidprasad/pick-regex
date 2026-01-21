@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { PickController, WordClassification } from '../pickController';
 
 suite('Load Session Functionality', () => {
   test('should validate session data structure', () => {
@@ -95,5 +96,50 @@ suite('Load Session Functionality', () => {
     assert.strictEqual(normalize('Unsure'), 'unsure');
     assert.strictEqual(normalize(''), 'unsure');
     assert.strictEqual(normalize('invalid'), 'unsure');
+  });
+
+  test('words from loaded session should be tracked as used words', async () => {
+    const controller = new PickController();
+    
+    // Simulate loading a session: generate candidates and apply classifications
+    await controller.generateCandidates('test', ['[a-z]+', '[0-9]+']);
+    
+    // Apply classifications like a loaded session would
+    controller.classifyDirectWords([
+      { word: 'abc', classification: WordClassification.ACCEPT },
+      { word: '123', classification: WordClassification.REJECT }
+    ]);
+    
+    // Verify the words are tracked as used
+    const status = controller.getStatus();
+    assert.strictEqual(status.usedWords, 2, 'Both classified words should be tracked as used');
+    
+    // Also verify word history contains both words
+    const history = controller.getWordHistory();
+    const words = history.map(h => h.word);
+    assert.ok(words.includes('abc'), 'Word history should include "abc"');
+    assert.ok(words.includes('123'), 'Word history should include "123"');
+  });
+
+  test('addUsedWords should add words to the used set', async () => {
+    const controller = new PickController();
+    await controller.generateCandidates('test', ['[a-z]+', '[0-9]+']);
+    
+    // Initially no used words
+    assert.strictEqual(controller.getStatus().usedWords, 0, 'Should start with no used words');
+    
+    // Add some words
+    controller.addUsedWords(['word1', 'word2', 'word3']);
+    
+    // Verify they're tracked
+    assert.strictEqual(controller.getStatus().usedWords, 3, 'Should have 3 used words');
+    
+    // Adding duplicates shouldn't increase the count
+    controller.addUsedWords(['word1', 'word2']);
+    assert.strictEqual(controller.getStatus().usedWords, 3, 'Duplicates should not be added again');
+    
+    // Add more unique words
+    controller.addUsedWords(['word4']);
+    assert.strictEqual(controller.getStatus().usedWords, 4, 'Should have 4 used words now');
   });
 });
