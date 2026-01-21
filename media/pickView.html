@@ -61,6 +61,18 @@
 
       <div class="prompt-actions" aria-live="polite">
         <button
+          id="loadSessionBtnPrompt"
+          class="icon-btn subtle"
+          title="Load session from JSON"
+          aria-label="Load session from exported JSON file"
+        >
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="14" height="14">
+            <path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10z" fill="currentColor" />
+          </svg>
+        </button>
+        <input type="file" id="loadSessionFilePrompt" accept=".json,application/json" style="display:none;" aria-hidden="true" />
+
+        <button
           id="recentPromptsBtn"
           class="icon-btn subtle"
           title="Recent prompts (Ctrl+Shift+H / Cmd+Shift+H)"
@@ -98,14 +110,6 @@
         <div class="history-menu__header">Recent prompts</div>
         <div id="recentPromptList" class="history-menu__items"></div>
       </div>
-    </div>
-    <div class="load-session-row" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border); display: flex; align-items: center; gap: 8px;">
-      <span style="font-size: 12px; color: var(--vscode-descriptionForeground);">Or load a previous session:</span>
-      <button id="loadSessionBtnPrompt" class="icon-btn subtle" title="Load session from JSON" aria-label="Load session from exported JSON file">
-        <span class="codicon codicon-folder-opened" aria-hidden="true"></span>
-        <span class="btn-label">Load Session</span>
-      </button>
-      <input type="file" id="loadSessionFilePrompt" accept=".json,application/json" style="display:none;" aria-hidden="true" />
       <span id="loadSessionStatus" class="history-copy-status" role="status" aria-live="polite"></span>
     </div>
   </div>
@@ -218,13 +222,11 @@
                 <div class="word-history__header">
                     <h3>Word Classification History</h3>
                     <div class="history-actions">
-                        <button id="copyHistoryBtn" class="icon-btn subtle" title="Copy history as JSON" aria-label="Copy classification history as JSON">
+                        <button id="copyHistoryBtn" class="icon-btn subtle" title="Export session as JSON" aria-label="Export session as JSON">
                             <span class="codicon codicon-clippy" aria-hidden="true"></span>
-                            <span class="btn-label">Export</span>
                         </button>
                         <button id="loadSessionBtn" class="icon-btn subtle" title="Load session from JSON" aria-label="Load session from exported JSON file">
                             <span class="codicon codicon-folder-opened" aria-hidden="true"></span>
-                            <span class="btn-label">Load</span>
                         </button>
                         <input type="file" id="loadSessionFile" accept=".json,application/json" style="display:none;" aria-hidden="true" />
                         <span id="historyCopyStatus" class="history-copy-status" role="status" aria-live="polite"></span>
