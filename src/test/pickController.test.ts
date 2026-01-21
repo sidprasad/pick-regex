@@ -1461,6 +1461,121 @@ suite('PickController Test Suite', () => {
     });
   });
 
+  // Test that eliminated candidates continue to receive vote updates
+  suite('Eliminated Candidate Tracking', () => {
+    test('Eliminated candidates should continue to have votes updated', async () => {
+      const patterns = ['[a-z]+', '[0-9]+', '[a-zA-Z]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      // Set low threshold to trigger elimination quickly
+      controller.setEliminationThreshold(1);
+      
+      // Classify a word that eliminates [0-9]+ (it doesn't match 'abc')
+      controller.classifyDirectWords([{ word: 'abc', classification: WordClassification.ACCEPT }]);
+      
+      const statusAfterFirst = controller.getStatus();
+      const pattern2 = statusAfterFirst.candidateDetails.find(c => c.pattern === '[0-9]+');
+      assert.ok(pattern2, 'Pattern [0-9]+ should exist');
+      assert.strictEqual(pattern2.eliminated, true, '[0-9]+ should be eliminated');
+      assert.strictEqual(pattern2.negativeVotes, 1, '[0-9]+ should have 1 negative vote');
+      
+      // Classify another word that [0-9]+ doesn't match
+      controller.classifyDirectWords([{ word: 'xyz', classification: WordClassification.ACCEPT }]);
+      
+      const statusAfterSecond = controller.getStatus();
+      const pattern2Updated = statusAfterSecond.candidateDetails.find(c => c.pattern === '[0-9]+');
+      assert.ok(pattern2Updated, 'Pattern [0-9]+ should still exist');
+      assert.strictEqual(pattern2Updated.eliminated, true, '[0-9]+ should still be eliminated');
+      assert.strictEqual(pattern2Updated.negativeVotes, 2, '[0-9]+ should have 2 negative votes (was updated even though eliminated)');
+    });
+    
+    test('Eliminated candidates should appear in matchingRegexes for export', async () => {
+      const patterns = ['[a-z]+', '[0-9]+', '[a-zA-Z0-9]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      // Set low threshold to trigger elimination quickly
+      controller.setEliminationThreshold(1);
+      
+      // Classify 'abc' as ACCEPT - this should eliminate [0-9]+
+      controller.classifyDirectWords([{ word: 'abc', classification: WordClassification.ACCEPT }]);
+      
+      const statusAfterElimination = controller.getStatus();
+      const pattern2 = statusAfterElimination.candidateDetails.find(c => c.pattern === '[0-9]+');
+      assert.strictEqual(pattern2?.eliminated, true, '[0-9]+ should be eliminated');
+      
+      // Now classify '123' as ACCEPT - [0-9]+ matches this even though it's eliminated
+      controller.classifyDirectWords([{ word: '123', classification: WordClassification.ACCEPT }]);
+      
+      const history = controller.getWordHistory();
+      const record123 = history.find(r => r.word === '123');
+      assert.ok(record123, 'Should find classification for "123"');
+      assert.ok(
+        record123.matchingRegexes.includes('[0-9]+'),
+        'matchingRegexes should include [0-9]+ even though it was eliminated'
+      );
+      assert.ok(
+        record123.matchingRegexes.includes('[a-zA-Z0-9]+'),
+        'matchingRegexes should include [a-zA-Z0-9]+'
+      );
+    });
+    
+    test('Eliminated candidates should continue to receive positive votes', async () => {
+      const patterns = ['[a-z]+', '[0-9]+', '[a-zA-Z]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      // Set low threshold to trigger elimination quickly
+      controller.setEliminationThreshold(1);
+      
+      // Eliminate [0-9]+ by accepting 'abc' (which it doesn't match)
+      controller.classifyDirectWords([{ word: 'abc', classification: WordClassification.ACCEPT }]);
+      
+      const statusAfterElimination = controller.getStatus();
+      const pattern2Eliminated = statusAfterElimination.candidateDetails.find(c => c.pattern === '[0-9]+');
+      assert.strictEqual(pattern2Eliminated?.eliminated, true, '[0-9]+ should be eliminated');
+      assert.strictEqual(pattern2Eliminated?.positiveVotes, 0, '[0-9]+ should have 0 positive votes initially');
+      
+      // Now accept '123' which [0-9]+ matches
+      controller.classifyDirectWords([{ word: '123', classification: WordClassification.ACCEPT }]);
+      
+      const statusAfterPositive = controller.getStatus();
+      const pattern2WithPositive = statusAfterPositive.candidateDetails.find(c => c.pattern === '[0-9]+');
+      assert.strictEqual(pattern2WithPositive?.eliminated, true, '[0-9]+ should still be eliminated');
+      assert.strictEqual(pattern2WithPositive?.positiveVotes, 1, '[0-9]+ should have 1 positive vote (updated even though eliminated)');
+    });
+    
+    test('Eliminated candidates should be properly tracked through REJECT classifications', async () => {
+      const patterns = ['[a-z]+', '[0-9]+', '[a-zA-Z0-9]+'];
+      await controller.generateCandidates('test', patterns);
+      
+      // Set low threshold
+      controller.setEliminationThreshold(1);
+      
+      // Eliminate [a-z]+ by rejecting 'abc' (which it matches)
+      controller.classifyDirectWords([{ word: 'abc', classification: WordClassification.REJECT }]);
+      
+      const statusAfterElimination = controller.getStatus();
+      const pattern1 = statusAfterElimination.candidateDetails.find(c => c.pattern === '[a-z]+');
+      assert.strictEqual(pattern1?.eliminated, true, '[a-z]+ should be eliminated');
+      assert.strictEqual(pattern1?.negativeVotes, 1, '[a-z]+ should have 1 negative vote');
+      
+      // Reject 'xyz' which [a-z]+ also matches
+      controller.classifyDirectWords([{ word: 'xyz', classification: WordClassification.REJECT }]);
+      
+      const history = controller.getWordHistory();
+      const recordXyz = history.find(r => r.word === 'xyz');
+      assert.ok(recordXyz, 'Should find classification for "xyz"');
+      assert.ok(
+        recordXyz.matchingRegexes.includes('[a-z]+'),
+        'matchingRegexes should include [a-z]+ even though it was eliminated'
+      );
+      
+      const statusAfterSecondReject = controller.getStatus();
+      const pattern1Updated = statusAfterSecondReject.candidateDetails.find(c => c.pattern === '[a-z]+');
+      assert.strictEqual(pattern1Updated?.eliminated, true, '[a-z]+ should still be eliminated');
+      assert.strictEqual(pattern1Updated?.negativeVotes, 2, '[a-z]+ should have 2 negative votes (updated even though eliminated)');
+    });
+  });
+
   // Test for the bug where changing a vote from REJECT to ACCEPT doesn't update state
   suite('Vote Change State Update', () => {
     test('Should transition from FINAL_RESULT back to VOTING when classification change makes candidates active', async () => {
