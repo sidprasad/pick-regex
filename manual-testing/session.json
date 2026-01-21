@@ -1,0 +1,54 @@
+{
+  "candidates": [
+    {
+      "regex": "(?:\\./|/)?(?:[\\w.-]+/)*[\\w.-]+",
+      "explanation": "Matches relative or absolute Unix filepaths, allowing dot, dash, and underscore in names. Handles paths like './file', '/usr/bin', or 'folder/file'.",
+      "confidence": 0.8
+    },
+    {
+      "regex": "/(?:[^/]+/)*[^/]+",
+      "explanation": "Matches absolute Unix filepaths starting with '/', with segments separated by '/'. Does not match relative paths.",
+      "confidence": 0.7
+    },
+    {
+      "regex": "(?:[\\w.-]+/)*[\\w.-]+",
+      "explanation": "Matches relative filepaths without leading './' or '/', allowing multiple segments. Does not match absolute paths.",
+      "confidence": 0.7,
+      "equivalents": [
+        "(?:\\./)?(?:[\\w.-]+/)*[\\w.-]+(?:\\.[\\w]+)?"
+      ]
+    },
+    {
+      "regex": "(?:/|\\./)?(?:[^/]+/)*[^/]+",
+      "explanation": "Matches both absolute and relative filepaths, allowing any character except '/' in segments. More permissive than others.",
+      "confidence": 0.6
+    }
+  ],
+  "classifications": [
+    {
+      "word": "./a",
+      "classification": "in",
+      "matchingRegexes": [
+        "(?:\\./|/)?(?:[\\w.-]+/)*[\\w.-]+",
+        "(?:[\\w.-]+/)*[\\w.-]+",
+        "(?:/|\\./)?(?:[^/]+/)*[^/]+"
+      ]
+    },
+    {
+      "word": "/a\u0000",
+      "classification": "in",
+      "matchingRegexes": [
+        "/(?:[^/]+/)*[^/]+",
+        "(?:/|\\./)?(?:[^/]+/)*[^/]+"
+      ]
+    },
+    {
+      "word": "/a/a\u0000",
+      "classification": "out",
+      "matchingRegexes": [
+        "/(?:[^/]+/)*[^/]+",
+        "(?:/|\\./)?(?:[^/]+/)*[^/]+"
+      ]
+    }
+  ]
+}

@@ -381,9 +381,9 @@ export class PickController {
    * @param fromPair Whether this classification is part of the current pair flow
    */
   private applyClassification(word: string, classification: WordClassification, fromPair: boolean = false): void {
-    // Get matching regexes for this word
+    // Get matching regexes for this word (including eliminated candidates)
     const matchingRegexes = this.candidates
-      .filter(c => !c.eliminated && this.analyzer.verifyMatch(word, c.pattern))
+      .filter(c => this.analyzer.verifyMatch(word, c.pattern))
       .map(c => c.pattern);
 
     // Track the word as used so it is not resurfaced in later generated pairs
@@ -407,9 +407,6 @@ export class PickController {
         `Classified "${word}" as ACCEPT. Updating ${this.candidates.length} candidates.`
       );
       for (const candidate of this.candidates) {
-        if (candidate.eliminated) {
-          continue;
-        }
         const matches = this.analyzer.verifyMatch(word, candidate.pattern);
         
         if (matches) {
@@ -419,8 +416,8 @@ export class PickController {
           // Candidate fails to match the accepted word - it's missing something it should have
           candidate.negativeVotes++;
           
-          // Eliminate if threshold reached
-          if (candidate.negativeVotes >= candidate.eliminationThreshold) {
+          // Eliminate if threshold reached (only if not already eliminated)
+          if (!candidate.eliminated && candidate.negativeVotes >= candidate.eliminationThreshold) {
             candidate.eliminated = true;
             logger.info(
               `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (failed to match accepted word "${word}" with threshold ${candidate.eliminationThreshold}).`
@@ -436,17 +433,14 @@ export class PickController {
         `Classified "${word}" as REJECT. Applying elimination threshold ${this.thresholdVotes}.`
       );
       for (const candidate of this.candidates) {
-        if (candidate.eliminated) {
-          continue;
-        }
         const matches = this.analyzer.verifyMatch(word, candidate.pattern);
         
         if (matches) {
           // Candidate incorrectly matches the rejected word
           candidate.negativeVotes++;
 
-          // Eliminate if threshold reached
-          if (candidate.negativeVotes >= candidate.eliminationThreshold) {
+          // Eliminate if threshold reached (only if not already eliminated)
+          if (!candidate.eliminated && candidate.negativeVotes >= candidate.eliminationThreshold) {
             candidate.eliminated = true;
             logger.info(
               `Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (incorrectly matched rejected word "${word}" with threshold ${candidate.eliminationThreshold}).`
@@ -969,6 +963,18 @@ export class PickController {
    */
   setMaxPairsWithoutProgress(limit: number): void {
     this.maxPairsWithoutProgress = Math.max(1, Math.trunc(limit));
+  }
+
+  /**
+   * Add words to the set of used words (prevents them from being resurfaced in pair generation)
+   */
+  addUsedWords(words: string[]): void {
+    for (const word of words) {
+      if (word && typeof word === 'string') {
+        this.usedWords.add(word);
+      }
+    }
+    logger.info(`Added ${words.length} words to used words set. Total: ${this.usedWords.size}`);
   }
 
   /**

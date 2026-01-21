@@ -152,6 +152,11 @@
         const wordHistory = document.getElementById('wordHistory');
         const historyItems = document.getElementById('historyItems');
         const copyHistoryBtn = document.getElementById('copyHistoryBtn');
+        const loadSessionBtn = document.getElementById('loadSessionBtn');
+        const loadSessionFile = document.getElementById('loadSessionFile');
+        const loadSessionBtnPrompt = document.getElementById('loadSessionBtnPrompt');
+        const loadSessionFilePrompt = document.getElementById('loadSessionFilePrompt');
+        const loadSessionStatus = document.getElementById('loadSessionStatus');
         const historyCopyStatus = document.getElementById('historyCopyStatus');
         const finalRegex = document.getElementById('finalRegex');
         const wordsIn = document.getElementById('wordsIn');
@@ -179,9 +184,100 @@
             copyHistoryBtn.addEventListener('click', copyHistoryToClipboard);
         }
 
+        if (loadSessionBtn && loadSessionFile) {
+            loadSessionBtn.addEventListener('click', function() {
+                loadSessionFile.click();
+            });
+            
+            loadSessionFile.addEventListener('change', function(event) {
+                handleSessionFileLoad(event.target.files[0], setHistoryCopyStatus, loadSessionFile);
+            });
+        }
+
         if (customExamplesCancel) {
             customExamplesCancel.addEventListener('click', function() {
                 toggleExamplesPanel(false);
+            });
+        }
+
+        // Helper function to handle session file loading
+        function handleSessionFileLoad(file, statusCallback, fileInputElement) {
+            if (!file) {
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const content = e.target.result;
+                    const data = JSON.parse(content);
+                    
+                    // Validate the format
+                    if (!data.candidates || !Array.isArray(data.candidates)) {
+                        statusCallback('Invalid format: missing candidates array', 'error');
+                        return;
+                    }
+                    
+                    if (!data.classifications || !Array.isArray(data.classifications)) {
+                        statusCallback('Invalid format: missing classifications array', 'error');
+                        return;
+                    }
+                    
+                    // Send to backend
+                    vscode.postMessage({
+                        type: 'loadSession',
+                        data: data
+                    });
+                    
+                    statusCallback('Loading session...');
+                } catch (error) {
+                    console.error('Failed to parse session file', error);
+                    statusCallback('Failed to parse JSON file', 'error');
+                } finally {
+                    // Reset file input so the same file can be loaded again
+                    if (fileInputElement) {
+                        fileInputElement.value = '';
+                    }
+                }
+            };
+            
+            reader.onerror = function() {
+                statusCallback('Failed to read file', 'error');
+                if (fileInputElement) {
+                    fileInputElement.value = '';
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+
+        // Status callback for prompt screen load button
+        function setLoadSessionStatus(message, type) {
+            if (!loadSessionStatus) {
+                return;
+            }
+            
+            loadSessionStatus.textContent = message || '';
+            loadSessionStatus.style.color = type === 'error' 
+                ? 'var(--vscode-errorForeground)' 
+                : '';
+            
+            if (message) {
+                setTimeout(function() {
+                    loadSessionStatus.textContent = '';
+                    loadSessionStatus.style.color = '';
+                }, 3000);
+            }
+        }
+
+        // Wire up prompt screen load button
+        if (loadSessionBtnPrompt && loadSessionFilePrompt) {
+            loadSessionBtnPrompt.addEventListener('click', function() {
+                loadSessionFilePrompt.click();
+            });
+            
+            loadSessionFilePrompt.addEventListener('change', function(event) {
+                handleSessionFileLoad(event.target.files[0], setLoadSessionStatus, loadSessionFilePrompt);
             });
         }
 
@@ -1357,6 +1453,12 @@
                 case 'cancelled':
                     handleCancelled(message.message);
                     break;
+                case 'sessionLoaded':
+                    handleSessionLoaded(message);
+                    break;
+                case 'showVoting':
+                    showSection('voting');
+                    break;
             }
         });
 
@@ -2081,7 +2183,7 @@
             decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
         }
 
-        function setHistoryCopyStatus(message) {
+        function setHistoryCopyStatus(message, type) {
             if (!historyCopyStatus) {
                 return;
             }
@@ -2091,10 +2193,21 @@
             }
 
             historyCopyStatus.textContent = message || '';
+            
+            // Apply styling based on type
+            historyCopyStatus.className = 'history-copy-status';
+            if (type === 'error') {
+                historyCopyStatus.style.color = 'var(--vscode-errorForeground)';
+            } else if (type === 'muted') {
+                historyCopyStatus.style.color = 'var(--vscode-descriptionForeground)';
+            } else {
+                historyCopyStatus.style.color = '';
+            }
 
             if (message) {
                 historyStatusTimeout = setTimeout(function() {
                     historyCopyStatus.textContent = '';
+                    historyCopyStatus.style.color = '';
                     historyStatusTimeout = null;
                 }, 3000);
             }
@@ -2574,6 +2687,28 @@
             setTimeout(function() {
                 resetUI(true);
             }, 2000);
+        }
+
+        function handleSessionLoaded(message) {
+            clearStatusMessage();
+            
+            // Update UI with loaded session data
+            if (message.status) {
+                latestCandidates = Array.isArray(message.status.candidateDetails) 
+                    ? message.status.candidateDetails.slice() 
+                    : [];
+                updateStatus(message.status);
+            }
+            
+            // Show success message
+            const candidateText = message.candidateCount === 1 ? 'candidate' : 'candidates';
+            const classificationText = message.classificationCount === 1 ? 'classification' : 'classifications';
+            const successMsg = 'Loaded ' + message.candidateCount + ' ' + candidateText + 
+                              ' and ' + message.classificationCount + ' ' + classificationText + '.';
+            setHistoryCopyStatus(successMsg);
+            
+            log('info', 'Session loaded: ' + message.candidateCount + ' candidates, ' + 
+                message.classificationCount + ' classifications');
         }
 
         // Functions no longer need to be global since we use addEventListener instead of inline handlers
