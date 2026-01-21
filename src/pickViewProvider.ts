@@ -246,6 +246,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
             this.sendMessage({ type: 'error', message: 'Failed to open issue report' });
           }
           break;
+        case 'loadSession':
+          this.handleLoadSession(data.data).catch(error => {
+            logger.error(error, 'Error in handleLoadSession');
+          });
+          break;
       }
     });
   }
@@ -983,6 +988,140 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
     }
 
     return normalized;
+  }
+
+  /**
+   * Load a previously exported session from JSON data
+   */
+  private async handleLoadSession(data: any) {
+    try {
+      logger.info('Loading session from exported JSON');
+      
+      // Validate the data structure
+      if (!data || typeof data !== 'object') {
+        this.sendMessage({
+          type: 'error',
+          message: 'Invalid session data: not an object'
+        });
+        return;
+      }
+
+      if (!Array.isArray(data.candidates) || data.candidates.length === 0) {
+        this.sendMessage({
+          type: 'error',
+          message: 'Invalid session data: candidates must be a non-empty array'
+        });
+        return;
+      }
+
+      if (!Array.isArray(data.classifications)) {
+        this.sendMessage({
+          type: 'error',
+          message: 'Invalid session data: classifications must be an array'
+        });
+        return;
+      }
+
+      // Extract candidates
+      const candidatePatterns: Array<{ pattern: string; explanation?: string; confidence?: number }> = [];
+      const equivalenceMap = new Map<string, string[]>();
+
+      for (const candidate of data.candidates) {
+        if (!candidate.regex || typeof candidate.regex !== 'string') {
+          logger.warn('Skipping candidate with missing or invalid regex');
+          continue;
+        }
+
+        candidatePatterns.push({
+          pattern: candidate.regex,
+          explanation: candidate.explanation || undefined,
+          confidence: typeof candidate.confidence === 'number' ? candidate.confidence : undefined
+        });
+
+        // Store equivalents if present
+        if (Array.isArray(candidate.equivalents) && candidate.equivalents.length > 0) {
+          equivalenceMap.set(candidate.regex, candidate.equivalents);
+        }
+      }
+
+      if (candidatePatterns.length === 0) {
+        this.sendMessage({
+          type: 'error',
+          message: 'No valid candidate regexes found in session data'
+        });
+        return;
+      }
+
+      // Convert classification format from export ('in'/'out'/'unsure') to internal format
+      const normalizeClassification = (classification: string): WordClassification => {
+        const normalized = (classification || '').toLowerCase();
+        if (normalized === 'in') { return WordClassification.ACCEPT; }
+        if (normalized === 'out') { return WordClassification.REJECT; }
+        return WordClassification.UNSURE;
+      };
+
+      const classifications: Array<{ word: string; classification: WordClassification }> = [];
+      
+      for (const item of data.classifications) {
+        if (!item.word || typeof item.word !== 'string') {
+          logger.warn('Skipping classification with missing or invalid word');
+          continue;
+        }
+
+        classifications.push({
+          word: item.word,
+          classification: normalizeClassification(item.classification)
+        });
+      }
+
+      // Reset controller and generate candidates
+      this.controller.reset(false);
+      this.sendMessage({ type: 'status', message: 'Loading session...' });
+
+      await this.controller.generateCandidates(
+        'Loaded session',
+        candidatePatterns,
+        equivalenceMap
+      );
+
+      logger.info(`Generated ${candidatePatterns.length} candidates from loaded session`);
+
+      // Apply all classifications
+      if (classifications.length > 0) {
+        this.sendMessage({ type: 'status', message: `Applying ${classifications.length} classification(s)...` });
+        const applied = this.controller.classifyDirectWords(classifications);
+        logger.info(`Applied ${applied} classification(s) from loaded session`);
+      }
+
+      const state = this.controller.getState();
+      const status = this.controller.getStatus();
+
+      this.sendMessage({
+        type: 'sessionLoaded',
+        status,
+        candidateCount: candidatePatterns.length,
+        classificationCount: classifications.length
+      });
+
+      // If we reached final state, handle it
+      if (state === PickState.FINAL_RESULT) {
+        await this.handleFinalResult();
+      } else {
+        // Show the voting view
+        this.sendMessage({ type: 'showVoting' });
+        
+        // Generate next pair to start voting
+        this.handleRequestNextPair();
+      }
+
+    } catch (error) {
+      logger.error(error, 'Error loading session');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.sendMessage({
+        type: 'error',
+        message: `Error loading session: ${errorMessage}`
+      });
+    }
   }
 
   /**

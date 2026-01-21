@@ -152,6 +152,8 @@
         const wordHistory = document.getElementById('wordHistory');
         const historyItems = document.getElementById('historyItems');
         const copyHistoryBtn = document.getElementById('copyHistoryBtn');
+        const loadSessionBtn = document.getElementById('loadSessionBtn');
+        const loadSessionFile = document.getElementById('loadSessionFile');
         const historyCopyStatus = document.getElementById('historyCopyStatus');
         const finalRegex = document.getElementById('finalRegex');
         const wordsIn = document.getElementById('wordsIn');
@@ -177,6 +179,59 @@
 
         if (copyHistoryBtn) {
             copyHistoryBtn.addEventListener('click', copyHistoryToClipboard);
+        }
+
+        if (loadSessionBtn && loadSessionFile) {
+            loadSessionBtn.addEventListener('click', function() {
+                loadSessionFile.click();
+            });
+            
+            loadSessionFile.addEventListener('change', function(event) {
+                const file = event.target.files[0];
+                if (!file) {
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const content = e.target.result;
+                        const data = JSON.parse(content);
+                        
+                        // Validate the format
+                        if (!data.candidates || !Array.isArray(data.candidates)) {
+                            setHistoryCopyStatus('Invalid format: missing candidates array', 'error');
+                            return;
+                        }
+                        
+                        if (!data.classifications || !Array.isArray(data.classifications)) {
+                            setHistoryCopyStatus('Invalid format: missing classifications array', 'error');
+                            return;
+                        }
+                        
+                        // Send to backend
+                        vscode.postMessage({
+                            type: 'loadSession',
+                            data: data
+                        });
+                        
+                        setHistoryCopyStatus('Loading session...');
+                    } catch (error) {
+                        console.error('Failed to parse session file', error);
+                        setHistoryCopyStatus('Failed to parse JSON file', 'error');
+                    } finally {
+                        // Reset file input so the same file can be loaded again
+                        loadSessionFile.value = '';
+                    }
+                };
+                
+                reader.onerror = function() {
+                    setHistoryCopyStatus('Failed to read file', 'error');
+                    loadSessionFile.value = '';
+                };
+                
+                reader.readAsText(file);
+            });
         }
 
         if (customExamplesCancel) {
@@ -1357,6 +1412,9 @@
                 case 'cancelled':
                     handleCancelled(message.message);
                     break;
+                case 'sessionLoaded':
+                    handleSessionLoaded(message);
+                    break;
             }
         });
 
@@ -2081,7 +2139,7 @@
             decorateWordCardsWithMatches(status.wordHistory, fallbackMatches);
         }
 
-        function setHistoryCopyStatus(message) {
+        function setHistoryCopyStatus(message, type) {
             if (!historyCopyStatus) {
                 return;
             }
@@ -2091,10 +2149,21 @@
             }
 
             historyCopyStatus.textContent = message || '';
+            
+            // Apply styling based on type
+            historyCopyStatus.className = 'history-copy-status';
+            if (type === 'error') {
+                historyCopyStatus.style.color = 'var(--vscode-errorForeground)';
+            } else if (type === 'muted') {
+                historyCopyStatus.style.color = 'var(--vscode-descriptionForeground)';
+            } else {
+                historyCopyStatus.style.color = '';
+            }
 
             if (message) {
                 historyStatusTimeout = setTimeout(function() {
                     historyCopyStatus.textContent = '';
+                    historyCopyStatus.style.color = '';
                     historyStatusTimeout = null;
                 }, 3000);
             }
@@ -2574,6 +2643,28 @@
             setTimeout(function() {
                 resetUI(true);
             }, 2000);
+        }
+
+        function handleSessionLoaded(message) {
+            clearStatusMessage();
+            
+            // Update UI with loaded session data
+            if (message.status) {
+                latestCandidates = Array.isArray(message.status.candidateDetails) 
+                    ? message.status.candidateDetails.slice() 
+                    : [];
+                updateStatus(message.status);
+            }
+            
+            // Show success message
+            const candidateText = message.candidateCount === 1 ? 'candidate' : 'candidates';
+            const classificationText = message.classificationCount === 1 ? 'classification' : 'classifications';
+            const successMsg = 'Loaded ' + message.candidateCount + ' ' + candidateText + 
+                              ' and ' + message.classificationCount + ' ' + classificationText + '.';
+            setHistoryCopyStatus(successMsg);
+            
+            log('info', 'Session loaded: ' + message.candidateCount + ' candidates, ' + 
+                message.classificationCount + ' classifications');
         }
 
         // Functions no longer need to be global since we use addEventListener instead of inline handlers

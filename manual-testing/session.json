@@ -1,0 +1,60 @@
+{
+  "candidates": [
+    {
+      "regex": "(?:\\./|/)?(?:[\\w.-]+/)*[\\w.-]+",
+      "explanation": "Matches relative or absolute Unix filepaths with segments of word characters, dots, or hyphens, separated by slashes. Allows optional leading './' or '/'.",
+      "confidence": 0.8
+    },
+    {
+      "regex": "/(?:[^/]+/)*[^/]+",
+      "explanation": "Matches absolute Unix filepaths starting with '/', with segments containing any characters except '/'.",
+      "confidence": 0.7
+    },
+    {
+      "regex": "(?:[\\w.-]+/)*[\\w.-]+",
+      "explanation": "Matches relative Unix filepaths with segments of word characters, dots, or hyphens, separated by slashes. Does not allow leading '/'.",
+      "confidence": 0.7
+    },
+    {
+      "regex": "(?:/|\\./|\\.\\./)?(?:[^/]+/)*[^/]+",
+      "explanation": "Matches absolute or relative filepaths, allowing leading '/', './', or '../', with segments of any non-slash characters.",
+      "confidence": 0.7
+    }
+  ],
+  "classifications": [
+    {
+      "word": "./a",
+      "classification": "in",
+      "matchingRegexes": [
+        "(?:\\./|/)?(?:[\\w.-]+/)*[\\w.-]+",
+        "(?:[\\w.-]+/)*[\\w.-]+",
+        "(?:/|\\./|\\.\\./)?(?:[^/]+/)*[^/]+"
+      ]
+    },
+    {
+      "word": "/a\u0000",
+      "classification": "in",
+      "matchingRegexes": [
+        "/(?:[^/]+/)*[^/]+",
+        "(?:/|\\./|\\.\\./)?(?:[^/]+/)*[^/]+"
+      ]
+    },
+    {
+      "word": ".",
+      "classification": "in",
+      "matchingRegexes": [
+        "(?:\\./|/)?(?:[\\w.-]+/)*[\\w.-]+",
+        "(?:[\\w.-]+/)*[\\w.-]+",
+        "(?:/|\\./|\\.\\./)?(?:[^/]+/)*[^/]+"
+      ]
+    },
+    {
+      "word": "/a/a\u0000",
+      "classification": "in",
+      "matchingRegexes": [
+        "/(?:[^/]+/)*[^/]+",
+        "(?:/|\\./|\\.\\./)?(?:[^/]+/)*[^/]+"
+      ]
+    }
+  ]
+}
