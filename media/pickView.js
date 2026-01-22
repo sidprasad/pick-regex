@@ -2136,7 +2136,7 @@
                 rejectBtn.innerHTML = '<span style="font-size: 20px; line-height: 1;">▼</span>';
 
                 // Create unsure button - use current word from card attribute
-                const unsureBtn = createButton('unsure', 'Skip', card);
+                const unsureBtn = createButton('unsure', 'Unsure', card);
                 unsureBtn.innerHTML = '<svg viewBox="0 0 24 24" width="var(--pick-icon-size)" height="var(--pick-icon-size)" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
                     '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
                     '<path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>' +

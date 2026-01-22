@@ -657,7 +657,7 @@
         }
 
         .btn.unsure:hover::after {
-            content: "Skip";
+            content: "Unsure";
             position: absolute;
             bottom: -25px;
             left: 50%;
