@@ -705,10 +705,8 @@ export class PickController {
                 `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) - incorrectly matched rejected word "${record.word}".`
               );
             }
-          } else {
-            // Candidate correctly does NOT match a rejected word - positive vote
-            candidate.positiveVotes++;
           }
+          // If doesn't match: no vote (correctly rejecting is neutral/expected)
         }
       }
     }
