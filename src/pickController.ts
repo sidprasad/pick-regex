@@ -682,15 +682,12 @@ export class PickController {
     for (const record of this.wordHistory) {
       if (record.classification === WordClassification.ACCEPT) {
         for (const candidate of this.candidates) {
-          if (candidate.eliminated) {
-            continue;
-          }
           if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
             candidate.positiveVotes++;
           } else {
             // Candidate fails to match an accepted word - negative vote
             candidate.negativeVotes++;
-            if (candidate.negativeVotes >= candidate.eliminationThreshold) {
+            if (!candidate.eliminated && candidate.negativeVotes >= candidate.eliminationThreshold) {
               candidate.eliminated = true;
               logger.info(
                 `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) - failed to match accepted word "${record.word}".`
@@ -700,17 +697,17 @@ export class PickController {
         }
       } else if (record.classification === WordClassification.REJECT) {
         for (const candidate of this.candidates) {
-          if (candidate.eliminated) {
-            continue;
-          }
           if (this.analyzer.verifyMatch(record.word, candidate.pattern)) {
             candidate.negativeVotes++;
-            if (candidate.negativeVotes >= candidate.eliminationThreshold) {
+            if (!candidate.eliminated && candidate.negativeVotes >= candidate.eliminationThreshold) {
               candidate.eliminated = true;
               logger.info(
                 `[Replay] Eliminated candidate "${candidate.pattern}" after ${candidate.negativeVotes} negative votes (threshold ${candidate.eliminationThreshold}) - incorrectly matched rejected word "${record.word}".`
               );
             }
+          } else {
+            // Candidate correctly does NOT match a rejected word - positive vote
+            candidate.positiveVotes++;
           }
         }
       }
