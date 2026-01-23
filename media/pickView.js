@@ -2714,7 +2714,7 @@
                 updateStatus(message.status);
             }
             
-            // Populate the prompt if one was loaded
+            // Populate the prompt if one was loaded, or clear it for legacy sessions
             if (message.prompt) {
                 if (promptInput) {
                     promptInput.value = message.prompt;
@@ -2722,9 +2722,16 @@
                 latestActivePrompt = message.prompt;
                 addPromptToHistory(message.prompt);
                 updatePromptDisplay(message.prompt);
+            } else {
+                // Clear prompt state for legacy sessions without a prompt
+                // to avoid cross-session contamination
+                latestActivePrompt = '';
+                if (promptInput) {
+                    promptInput.value = '';
+                }
             }
             
-            // Set the model if one was loaded and is available
+            // Set the model if one was loaded and is available, or clear it for legacy sessions
             if (message.modelId) {
                 latestActiveModelId = message.modelId;
                 // Check if the model is available and update selection
@@ -2732,6 +2739,14 @@
                 if (modelAvailable && modelSelect) {
                     modelSelect.value = message.modelId;
                     updateSelectedModel(message.modelId);
+                }
+            } else {
+                // Clear model state for legacy sessions without a modelId
+                latestActiveModelId = '';
+                // Reset model select to the first available model (or leave unchanged if none)
+                if (modelSelect && availableModels.length > 0) {
+                    modelSelect.value = availableModels[0].id;
+                    updateSelectedModel(availableModels[0].id);
                 }
             }
             
