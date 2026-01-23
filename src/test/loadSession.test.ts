@@ -164,7 +164,7 @@ suite('Load Session Functionality', () => {
 
   test('should handle session data without prompt and modelId (backwards compatibility)', () => {
     // Test that session data without prompt/modelId is still valid
-    const sessionWithoutPrompt = {
+    const sessionWithoutPrompt: { candidates: { regex: string }[]; classifications: never[]; prompt?: string; modelId?: string } = {
       candidates: [
         { regex: '[a-z]+' }
       ],
