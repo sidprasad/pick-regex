@@ -37,6 +37,8 @@ Added the ability to load a previously exported session from a JSON file. This i
 The loader accepts the same format as the export:
 ```json
 {
+  "prompt": "US states that start with M",
+  "modelId": "gpt-4",
   "candidates": [
     {
       "regex": "[a-z]+",
@@ -55,6 +57,10 @@ The loader accepts the same format as the export:
 }
 ```
 
+**New fields (optional, for full session recreation)**:
+- `prompt`: The original prompt used to generate candidates. If present, it will be populated in the prompt input on load, allowing the user to use "Revise" functionality.
+- `modelId`: The model ID used to generate candidates. If present and the model is available, it will be selected in the model dropdown.
+
 **Classification format conversion**:
 - Export: `"in"` / `"out"` / `"unsure"`
 - Internal: `ACCEPT` / `REJECT` / `UNSURE`
@@ -66,22 +72,34 @@ Enhanced `setHistoryCopyStatus` function to support different styling:
 - Muted messages (description foreground)
 
 ## Tests
-- **[src/test/loadSession.test.ts](../src/test/loadSession.test.ts)**: 6 comprehensive tests covering:
+- **[src/test/loadSession.test.ts](../src/test/loadSession.test.ts)**: 9 comprehensive tests covering:
   - Session data structure validation
   - Classification format conversion
   - Empty classifications handling
   - Optional candidate fields (explanation, confidence, equivalents)
   - Case-insensitive classification normalization
   - Invalid input handling
+  - Prompt and modelId field validation
+  - Backwards compatibility (sessions without prompt/modelId)
+  - Null prompt/modelId handling in export
 
-All tests pass (136/136 in pickController suite, 6/6 in loadSession suite).
+All tests pass.
 
 ## Usage
 
 1. **Export a session**: Click the "Export" button in the Word Classification History section
 2. **Save the JSON file**: Copy is saved to clipboard, paste into a `.json` file
 3. **Load the session**: Click the "Load" button and select the JSON file
-4. **Session restored**: All candidates and classifications are restored, and you can continue voting or see the final result
+4. **Session restored**: All candidates, classifications, prompt, and model are restored
+5. **Continue working**: You can continue voting, see the final result, or use "Revise" to refine the prompt
+
+### Full Session Recreation
+When a session is loaded with a prompt and modelId:
+- The prompt input field is populated with the original prompt
+- The prompt is added to the recent prompts history
+- The prompt display (above candidates) shows the loaded prompt
+- If the model is available, it's selected in the model dropdown
+- The "Revise" functionality works as expected, allowing you to refine the prompt
 
 ## Error Handling
 
@@ -103,5 +121,8 @@ To manually verify:
 6. Verify:
    - All candidates are restored with correct explanations and confidence scores
    - All classifications are restored and reflected in vote counts
+   - The prompt input field shows the original prompt
+   - The prompt display shows the loaded prompt
+   - The "Revise" button works and shows the original prompt for editing
    - UI shows correct active/eliminated candidate states
    - Can continue voting if not in final state

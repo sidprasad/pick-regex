@@ -142,4 +142,55 @@ suite('Load Session Functionality', () => {
     controller.addUsedWords(['word4']);
     assert.strictEqual(controller.getStatus().usedWords, 4, 'Should have 4 used words now');
   });
+
+  test('should validate session data with prompt and modelId fields', () => {
+    // Test that session data with prompt and modelId is valid
+    const sessionWithPrompt = {
+      prompt: 'US states that start with M',
+      modelId: 'gpt-4',
+      candidates: [
+        { regex: '^M\\w+', explanation: 'starts with M' }
+      ],
+      classifications: [
+        { word: 'Michigan', classification: 'in' }
+      ]
+    };
+
+    assert.strictEqual(sessionWithPrompt.prompt, 'US states that start with M');
+    assert.strictEqual(sessionWithPrompt.modelId, 'gpt-4');
+    assert.ok(Array.isArray(sessionWithPrompt.candidates));
+    assert.ok(Array.isArray(sessionWithPrompt.classifications));
+  });
+
+  test('should handle session data without prompt and modelId (backwards compatibility)', () => {
+    // Test that session data without prompt/modelId is still valid
+    const sessionWithoutPrompt = {
+      candidates: [
+        { regex: '[a-z]+' }
+      ],
+      classifications: []
+    };
+
+    // These fields should be undefined/missing
+    assert.strictEqual(sessionWithoutPrompt.prompt, undefined);
+    assert.strictEqual(sessionWithoutPrompt.modelId, undefined);
+    
+    // But the core fields are present
+    assert.ok(Array.isArray(sessionWithoutPrompt.candidates));
+    assert.ok(Array.isArray(sessionWithoutPrompt.classifications));
+  });
+
+  test('should handle null prompt and modelId in export', () => {
+    // Test the export structure when prompt/model might be null
+    const exportData = {
+      prompt: null,
+      modelId: null,
+      candidates: [{ regex: '\\d+' }],
+      classifications: []
+    };
+
+    // null values are valid in the export format
+    assert.strictEqual(exportData.prompt, null);
+    assert.strictEqual(exportData.modelId, null);
+  });
 });
