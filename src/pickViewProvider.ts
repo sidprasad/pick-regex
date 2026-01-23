@@ -1022,6 +1022,10 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      // Extract prompt and modelId if present
+      const loadedPrompt = typeof data.prompt === 'string' ? data.prompt : '';
+      const loadedModelId = typeof data.modelId === 'string' ? data.modelId : '';
+
       // Extract candidates
       const candidatePatterns: Array<{ pattern: string; explanation?: string; confidence?: number }> = [];
       const equivalenceMap = new Map<string, string[]>();
@@ -1078,8 +1082,11 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
       this.controller.reset(false);
       this.sendMessage({ type: 'status', message: 'Loading session...' });
 
+      // Use the loaded prompt if available, otherwise use a default
+      const promptToUse = loadedPrompt || 'Loaded session';
+
       await this.controller.generateCandidates(
-        'Loaded session',
+        promptToUse,
         candidatePatterns,
         equivalenceMap
       );
@@ -1100,7 +1107,9 @@ export class PickViewProvider implements vscode.WebviewViewProvider {
         type: 'sessionLoaded',
         status,
         candidateCount: candidatePatterns.length,
-        classificationCount: classifications.length
+        classificationCount: classifications.length,
+        prompt: loadedPrompt || undefined,
+        modelId: loadedModelId || undefined
       });
 
       // If we reached final state, handle it

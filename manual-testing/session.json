@@ -1,53 +1,49 @@
 {
+  "prompt": "Unix filepaths",
+  "modelId": "gpt-4.1",
   "candidates": [
     {
       "regex": "(?:\\./|/)?(?:[\\w.-]+/)*[\\w.-]+",
-      "explanation": "Matches relative or absolute Unix filepaths, allowing dot, dash, and underscore in names. Handles paths like './file', '/usr/bin', or 'folder/file'.",
+      "explanation": "Matches relative or absolute Unix filepaths with directories and filenames using common characters (letters, digits, underscore, dot, dash). Does not allow spaces or special characters.",
       "confidence": 0.8
     },
     {
-      "regex": "/(?:[^/]+/)*[^/]+",
-      "explanation": "Matches absolute Unix filepaths starting with '/', with segments separated by '/'. Does not match relative paths.",
+      "regex": "(?:/|\\./|\\../)?(?:[^/]+/)*[^/]+",
+      "explanation": "Allows any non-slash characters in path segments, supporting relative (./, ../) and absolute (/), and filenames with spaces or special characters except '/'.",
       "confidence": 0.7
     },
     {
-      "regex": "(?:[\\w.-]+/)*[\\w.-]+",
-      "explanation": "Matches relative filepaths without leading './' or '/', allowing multiple segments. Does not match absolute paths.",
-      "confidence": 0.7,
-      "equivalents": [
-        "(?:\\./)?(?:[\\w.-]+/)*[\\w.-]+(?:\\.[\\w]+)?"
-      ]
+      "regex": "(?:/|\\./|\\../)?(?:[^/]+/)*[^/]*",
+      "explanation": "Matches absolute or relative paths, allowing empty filenames or directories, and any character except '/'. Handles trailing slashes and empty segments.",
+      "confidence": 0.7
     },
     {
-      "regex": "(?:/|\\./)?(?:[^/]+/)*[^/]+",
-      "explanation": "Matches both absolute and relative filepaths, allowing any character except '/' in segments. More permissive than others.",
+      "regex": "/(?:[\\w.-]+/)*[\\w.-]+",
+      "explanation": "Strictly matches absolute Unix filepaths starting with '/', with segments of word characters, dots, or dashes. No support for spaces or special characters.",
       "confidence": 0.6
     }
   ],
   "classifications": [
     {
-      "word": "./a",
+      "word": "./a/a\u0000/",
       "classification": "in",
       "matchingRegexes": [
-        "(?:\\./|/)?(?:[\\w.-]+/)*[\\w.-]+",
-        "(?:[\\w.-]+/)*[\\w.-]+",
-        "(?:/|\\./)?(?:[^/]+/)*[^/]+"
+        "(?:/|\\./|\\../)?(?:[^/]+/)*[^/]*"
       ]
     },
     {
-      "word": "/a\u0000",
+      "word": ".a/a/\u0000",
       "classification": "in",
       "matchingRegexes": [
-        "/(?:[^/]+/)*[^/]+",
-        "(?:/|\\./)?(?:[^/]+/)*[^/]+"
+        "(?:/|\\./|\\../)?(?:[^/]+/)*[^/]+",
+        "(?:/|\\./|\\../)?(?:[^/]+/)*[^/]*"
       ]
     },
     {
-      "word": "/a/a\u0000",
+      "word": "./a/",
       "classification": "out",
       "matchingRegexes": [
-        "/(?:[^/]+/)*[^/]+",
-        "(?:/|\\./)?(?:[^/]+/)*[^/]+"
+        "(?:/|\\./|\\../)?(?:[^/]+/)*[^/]*"
       ]
     }
   ]

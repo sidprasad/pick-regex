@@ -328,6 +328,8 @@
         let diffMode = diffToggle ? diffToggle.checked : false;
         let latestWordHistory = Array.isArray(viewState.wordHistory) ? viewState.wordHistory : [];
         let latestCandidates = [];
+        let latestActivePrompt = '';
+        let latestActiveModelId = '';
         let historyStatusTimeout = null;
 
         // Keep last shown pair/status for re-rendering when toggles change
@@ -710,6 +712,8 @@
                     promptInput.value = newPrompt;
                     addPromptToHistory(newPrompt);
                     updatePromptDisplay(newPrompt);
+                    latestActivePrompt = newPrompt;
+                    latestActiveModelId = newModelId;
                     const modelChanged = previousModelId && previousModelId !== newModelId;
                     vscode.postMessage({
                         type: 'refineCandidates',
@@ -782,6 +786,8 @@
                         promptInput.value = newPrompt;
                         addPromptToHistory(newPrompt);
                         updatePromptDisplay(newPrompt);
+                        latestActivePrompt = newPrompt;
+                        latestActiveModelId = newModelId;
                         const modelChanged = previousModelId && previousModelId !== newModelId;
                         vscode.postMessage({
                             type: 'refineCandidates',
@@ -829,6 +835,8 @@
                         promptInput.value = newPrompt;
                         addPromptToHistory(newPrompt);
                         updatePromptDisplay(newPrompt);
+                        latestActivePrompt = newPrompt;
+                        latestActiveModelId = newModelId;
                         const modelChanged = previousModelId && previousModelId !== newModelId;
                         vscode.postMessage({
                             type: 'refineCandidates',
@@ -878,6 +886,8 @@
                 promptInput.value = newPrompt;
                 addPromptToHistory(newPrompt);
                 updatePromptDisplay(newPrompt);
+                latestActivePrompt = newPrompt;
+                latestActiveModelId = newModelId;
                 const modelChanged = previousModelId && previousModelId !== newModelId;
                 vscode.postMessage({
                     type: 'refineCandidates',
@@ -1199,6 +1209,8 @@
             if (prompt) {
                 addPromptToHistory(prompt);
                 updatePromptDisplay(prompt);
+                latestActivePrompt = prompt;
+                latestActiveModelId = selectedModelId;
                 vscode.postMessage({ type: 'generateCandidates', prompt: prompt, modelId: selectedModelId });
                 previousModelId = selectedModelId;
                 showSection('loading');
@@ -2232,6 +2244,8 @@
 
             // Build the full export structure
             const exportData = {
+                prompt: latestActivePrompt || null,
+                modelId: latestActiveModelId || null,
                 candidates: latestCandidates.map(function(candidate) {
                     const candidateInfo = {
                         regex: candidate.pattern,
@@ -2700,6 +2714,42 @@
                 updateStatus(message.status);
             }
             
+            // Populate the prompt if one was loaded, or clear it for legacy sessions
+            if (message.prompt) {
+                if (promptInput) {
+                    promptInput.value = message.prompt;
+                }
+                latestActivePrompt = message.prompt;
+                addPromptToHistory(message.prompt);
+                updatePromptDisplay(message.prompt);
+            } else {
+                // Clear prompt state for legacy sessions without a prompt
+                // to avoid cross-session contamination
+                latestActivePrompt = '';
+                if (promptInput) {
+                    promptInput.value = '';
+                }
+            }
+            
+            // Set the model if one was loaded and is available, or clear it for legacy sessions
+            if (message.modelId) {
+                latestActiveModelId = message.modelId;
+                // Check if the model is available and update selection
+                const modelAvailable = availableModels.some(function(m) { return m.id === message.modelId; });
+                if (modelAvailable && modelSelect) {
+                    modelSelect.value = message.modelId;
+                    updateSelectedModel(message.modelId);
+                }
+            } else {
+                // Clear model state for legacy sessions without a modelId
+                latestActiveModelId = '';
+                // Reset model select to the first available model (or leave unchanged if none)
+                if (modelSelect && availableModels.length > 0) {
+                    modelSelect.value = availableModels[0].id;
+                    updateSelectedModel(availableModels[0].id);
+                }
+            }
+            
             // Show success message
             const candidateText = message.candidateCount === 1 ? 'candidate' : 'candidates';
             const classificationText = message.classificationCount === 1 ? 'classification' : 'classifications';
@@ -2708,7 +2758,8 @@
             setHistoryCopyStatus(successMsg);
             
             log('info', 'Session loaded: ' + message.candidateCount + ' candidates, ' + 
-                message.classificationCount + ' classifications');
+                message.classificationCount + ' classifications' + 
+                (message.prompt ? ', prompt: "' + message.prompt.substring(0, 50) + '"' : ''));
         }
 
         // Functions no longer need to be global since we use addEventListener instead of inline handlers
