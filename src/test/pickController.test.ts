@@ -1279,6 +1279,45 @@ suite('PickController Test Suite', () => {
         'State should be FINAL_RESULT');
     });
 
+    test('Final regex requires configured minimum positive votes', async () => {
+      const patterns = ['[a-z]+', '[0-9]+'];
+      await controller.generateCandidates('test', patterns);
+
+      controller.setThreshold(1);
+      controller.setMinimumPositiveVotesToSelect(2);
+
+      controller.classifyDirectWords([
+        { word: 'abc', classification: WordClassification.ACCEPT }
+      ]);
+
+      assert.strictEqual(controller.getActiveCandidateCount(), 1,
+        'Only one candidate should remain after elimination');
+      assert.strictEqual(controller.getFinalRegex(), null,
+        'Final regex should remain null until minimum positive votes are met');
+      assert.strictEqual(controller.getState(), PickState.VOTING,
+        'State should remain VOTING until minimum positive votes are met');
+    });
+
+    test('Final regex is selected when minimum positive votes are met', async () => {
+      const patterns = ['[a-z]+', '[0-9]+'];
+      await controller.generateCandidates('test', patterns);
+
+      controller.setThreshold(3);
+      controller.setMinimumPositiveVotesToSelect(2);
+      controller.setMaxClassifications(2);
+
+      controller.classifyDirectWords([
+        { word: 'abc', classification: WordClassification.ACCEPT },
+        { word: 'def', classification: WordClassification.ACCEPT }
+      ]);
+
+      const finalRegex = controller.getFinalRegex();
+      assert.ok(finalRegex !== null,
+        'Final regex should be selected when minimum positive votes are met');
+      assert.strictEqual(controller.getState(), PickState.FINAL_RESULT,
+        'State should be FINAL_RESULT when minimum positive votes are met');
+    });
+
     test('Reclassifying same word repeatedly should not advance to next pair', async () => {
       // Regression test: updating classification shouldn't skip to next pair
       // if both words haven't been classified yet

@@ -65,6 +65,7 @@ export class PickController {
   private maxClassifications = 50;
   private maxPairsWithoutProgress = 2;
   private maxSuggestedEdgeCases = 2;
+  private minPositiveVotesToSelect = 1;
   private useLLMGeneratedWords = true;
   private searchTimeoutMs = 2000;
   private searchPoolSize = 30;
@@ -79,8 +80,17 @@ export class PickController {
     this.maxSuggestedEdgeCases = this.clampSuggestedEdgeCaseLimit(
       config.get<number>('maxSuggestedEdgeCases', 2)
     );
+    this.minPositiveVotesToSelect = this.clampMinimumPositiveVotesToSelect(
+      config.get<number>('minPositiveVotesToSelect', 1)
+    );
     this.useLLMGeneratedWords = config.get<boolean>('useLLMGeneratedWords', true);
-    logger.info(`Initialized PickController with elimination threshold ${this.thresholdVotes}, max classifications ${this.maxClassifications}, max stale pairs ${this.maxPairsWithoutProgress}, use LLM words: ${this.useLLMGeneratedWords}`);
+    logger.info(
+      `Initialized PickController with elimination threshold ${this.thresholdVotes}, ` +
+      `max classifications ${this.maxClassifications}, ` +
+      `max stale pairs ${this.maxPairsWithoutProgress}, ` +
+      `min positive votes ${this.minPositiveVotesToSelect}, ` +
+      `use LLM words: ${this.useLLMGeneratedWords}`
+    );
   }
 
   private clampSuggestedEdgeCaseLimit(value: number | undefined): number {
@@ -89,6 +99,18 @@ export class PickController {
     }
 
     return Math.min(6, Math.max(0, Math.trunc(value)));
+  }
+
+  private clampMinimumPositiveVotesToSelect(value: number | undefined): number {
+    if (value === undefined || Number.isNaN(value)) {
+      return 1;
+    }
+
+    return Math.max(1, Math.trunc(value));
+  }
+
+  private hasMinimumPositiveVotes(candidate: CandidateRegex): boolean {
+    return candidate.positiveVotes >= this.minPositiveVotesToSelect;
   }
 
   private prepareSuggestedWordsQueue(suggestedWords: string[]): void {
@@ -543,18 +565,18 @@ export class PickController {
     if (activeCount === 1) {
       logger.info(`checkFinalState: Branch - activeCount === 1`);
       // Check if user has accepted a word that matches this regex
-      const remainingRegex = activeCandidates[0];
-      const hasAcceptedMatchingWord = this.wordHistory.some(
-        record => 
-          record.classification === WordClassification.ACCEPT && 
-          record.matchingRegexes.includes(remainingRegex)
-      );
+      const remainingPattern = activeCandidates[0];
+      const remainingCandidate = this.candidates.find(candidate => candidate.pattern === remainingPattern);
+      const positiveVotes = remainingCandidate?.positiveVotes ?? 0;
+      const hasMinimumPositiveVotes = positiveVotes >= this.minPositiveVotesToSelect;
       
-      if (hasAcceptedMatchingWord) {
-        // User has accepted a word IN the remaining regex - we're done!
+      if (hasMinimumPositiveVotes) {
+        // User has accepted enough matching words for the remaining regex - we're done!
         this.state = PickState.FINAL_RESULT;
-        this.finalRegex = remainingRegex;
-        logger.info(`Converged to single candidate: "${remainingRegex}"`);
+        this.finalRegex = remainingPattern;
+        logger.info(
+          `Converged to single candidate: "${remainingPattern}" with ${positiveVotes} positive vote(s).`
+        );
       } else if (this.state === PickState.FINAL_RESULT) {
         // Was in final state but now we need more votes - reopen voting
         this.state = PickState.VOTING;
@@ -579,7 +601,7 @@ export class PickController {
       } else {
         logger.info(
           `Reached maximum classifications (${totalClassifications}/${this.maxClassifications}). ` +
-            'No candidate has received a positive vote; treating as no valid regex.'
+            `No candidate has reached the minimum positive vote threshold (${this.minPositiveVotesToSelect}); treating as no valid regex.`
         );
       }
     } else if (activeCount > 1 && this.state === PickState.FINAL_RESULT) {
@@ -600,8 +622,10 @@ export class PickController {
    * Select the best candidate from active or all candidates
    */
   private selectBestCandidate(): string | null {
-    const positiveActive = this.candidates.filter(c => !c.eliminated && c.positiveVotes > 0);
-    const positiveAny = this.candidates.filter(c => c.positiveVotes > 0);
+    const positiveActive = this.candidates.filter(
+      c => !c.eliminated && this.hasMinimumPositiveVotes(c)
+    );
+    const positiveAny = this.candidates.filter(c => this.hasMinimumPositiveVotes(c));
 
     if (positiveActive.length === 0 && positiveAny.length === 0) {
       return null;
@@ -851,31 +875,7 @@ export class PickController {
    * Manually finish and select the final regex
    */
   finishSelection(): void {
-    const activeCandidates = this.getActiveCandidates();
-    
-    if (activeCandidates.length === 0) {
-      // Pick best from eliminated candidates
-      const best = this.candidates.reduce((prev, curr) => {
-        if (curr.positiveVotes > prev.positiveVotes) {
-          return curr;
-        }
-        if (curr.positiveVotes === prev.positiveVotes && curr.negativeVotes < prev.negativeVotes) {
-          return curr;
-        }
-        return prev;
-      });
-      this.finalRegex = best.pattern;
-    } else if (activeCandidates.length === 1) {
-      // Select the remaining candidate
-      this.finalRegex = activeCandidates[0];
-    } else {
-      // Multiple candidates - pick the one with most positive votes
-      const activeDetails = this.candidates.filter(c => !c.eliminated);
-      const best = activeDetails.reduce((prev, curr) => 
-        curr.positiveVotes > prev.positiveVotes ? curr : prev
-      );
-      this.finalRegex = best.pattern;
-    }
+    this.finalRegex = this.selectBestCandidate();
     
     this.state = PickState.FINAL_RESULT;
   }
@@ -958,6 +958,21 @@ export class PickController {
    */
   setMaxPairsWithoutProgress(limit: number): void {
     this.maxPairsWithoutProgress = Math.max(1, Math.trunc(limit));
+  }
+
+  /**
+   * Set the minimum number of positive votes required to select a final regex
+   */
+  setMinimumPositiveVotesToSelect(limit: number): void {
+    this.minPositiveVotesToSelect = this.clampMinimumPositiveVotesToSelect(limit);
+    logger.info(`Updated minimum positive votes to select to ${this.minPositiveVotesToSelect}`);
+  }
+
+  /**
+   * Get the minimum number of positive votes required to select a final regex
+   */
+  getMinimumPositiveVotesToSelect(): number {
+    return this.minPositiveVotesToSelect;
   }
 
   /**
