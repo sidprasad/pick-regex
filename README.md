@@ -3,6 +3,7 @@
 [![CI](https://github.com/sidprasad/pick-regex/actions/workflows/ci.yml/badge.svg)](https://github.com/sidprasad/pick-regex/actions/workflows/ci.yml) 
 [![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/SiddharthaPrasad.pick-regex?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.pick-regex)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/sidprasad/pick-regex)
 
 # What it is
 
@@ -51,11 +52,23 @@ All settings appear under the `pick` section in VS Code Settings.
 
 ---
 
+# Try it in GitHub Codespaces
+
+The fastest way to try PICK is in a GitHub Codespace — no local setup required:
+
+1. Click the **"Open in GitHub Codespaces"** badge above (or go to [codespaces.new/sidprasad/pick-regex](https://codespaces.new/sidprasad/pick-regex))
+2. The Codespace comes with PICK and GitHub Copilot pre-installed
+3. GitHub Copilot Free (included with any GitHub account, no paid subscription needed) provides the language models PICK uses
+4. When prompted, click **"Allow"** to grant PICK access to language models
+5. Open the PICK sidebar from the activity bar and start building regexes
+
+---
+
 # Prerequisites
 
 PICK requires a language model extension to be installed and enabled in VS Code. We recommend:
 
-- **GitHub Copilot**: Install from the VS Code Marketplace and sign in with your GitHub account.
+- **GitHub Copilot**: Install from the VS Code Marketplace and sign in with your GitHub account. GitHub Copilot Free (included with any GitHub account) is sufficient.
 
 When you first use PICK, VS Code will prompt you to grant permission for the extension to use Language Models. **You must click "Allow" for PICK to work.** If you accidentally dismiss this prompt, PICK will show a clear error message explaining how to proceed.
 

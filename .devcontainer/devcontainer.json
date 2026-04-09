@@ -1,0 +1,12 @@
+{
+  "name": "PICK: Regex Builder",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "SiddharthaPrasad.pick-regex",
+        "github.copilot"
+      ]
+    }
+  }
+}
